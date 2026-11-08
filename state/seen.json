@@ -1,0 +1,217 @@
+{
+ "jobs": {
+  "workday:Flex:WD228976": {
+   "first_seen": "2026-11-08",
+   "baseline": true,
+   "last_seen": "2026-11-08"
+  },
+  "workday:Flex:WD230884": {
+   "first_seen": "2026-11-08",
+   "baseline": true,
+   "last_seen": "2026-11-08"
+  },
+  "workday:Flex:WD231552": {
+   "first_seen": "2026-11-08",
+   "baseline": true,
+   "last_seen": "2026-11-08"
+  },
+  "workday:Flex:WD229135": {
+   "first_seen": "2026-11-08",
+   "baseline": true,
+   "last_seen": "2026-11-08"
+  },
+  "workday:Jabil:J2470435": {
+   "first_seen": "2026-11-08",
+   "baseline": true,
+   "last_seen": "2026-11-08"
+  },
+  "workday:Avnet:JR-023909": {
+   "first_seen": "2026-11-08",
+   "baseline": true,
+   "last_seen": "2026-11-08"
+  },
+  "workday:HP Inc.:3165460": {
+   "first_seen": "2026-11-08",
+   "baseline": true,
+   "last_seen": "2026-11-08"
+  },
+  "workday:AstraZeneca:R-262125": {
+   "first_seen": "2026-11-08",
+   "baseline": true,
+   "last_seen": "2026-11-08"
+  },
+  "ashby:Kueski:e1261953-7bcc-45db-a54e-fc2e0bdfbc89": {
+   "first_seen": "2026-11-08",
+   "baseline": true,
+   "last_seen": "2026-11-08"
+  },
+  "workday:Citi:26996393": {
+   "first_seen": "2026-11-08",
+   "baseline": true,
+   "last_seen": "2026-11-08"
+  },
+  "oracle_hcm:JPMorgan Chase:210802450": {
+   "first_seen": "2026-11-08",
+   "baseline": true,
+   "last_seen": "2026-11-08"
+  },
+  "greenhouse:Flexport:7651413": {
+   "first_seen": "2026-11-08",
+   "baseline": true,
+   "last_seen": "2026-11-08"
+  }
+ },
+ "initialized": true,
+ "subscribers": {
+  "lucas": {
+   "emailed": {
+    "workday:Avnet:JR-023909": {
+     "date": "2026-11-08",
+     "sig": "avnet|mexico country manager shared services|"
+    },
+    "workday:Citi:26996393": {
+     "date": "2026-11-08",
+     "sig": "citi|banamex director banca corporativa guadalajara|"
+    },
+    "workday:Flex:WD229135": {
+     "date": "2026-11-08",
+     "sig": "flex|director facilities|"
+    },
+    "workday:HP Inc.:3165460": {
+     "date": "2026-11-08",
+     "sig": "hp inc.|director latam market commercial organization people leader|"
+    },
+    "workday:Flex:WD228976": {
+     "date": "2026-11-08",
+     "sig": "flex|director operations npi background|"
+    },
+    "workday:Jabil:J2470435": {
+     "date": "2026-11-08",
+     "sig": "jabil|business unit director|"
+    },
+    "workday:Flex:WD230884": {
+     "date": "2026-11-08",
+     "sig": "flex|director global account management|"
+    },
+    "workday:AstraZeneca:R-262125": {
+     "date": "2026-11-08",
+     "sig": "astrazeneca|director cyber security access management|"
+    },
+    "oracle_hcm:JPMorgan Chase:210802450": {
+     "date": "2026-11-08",
+     "sig": "jpmorgan chase|global financial crimes compliance payments latin america canada vice president|ccor lob/cf/country coverage"
+    },
+    "workday:Flex:WD231552": {
+     "date": "2026-11-08",
+     "sig": "flex|sr quality director|"
+    },
+    "ashby:Kueski:e1261953-7bcc-45db-a54e-fc2e0bdfbc89": {
+     "date": "2026-11-08",
+     "sig": "kueski|director of product management customer products platform|product"
+    },
+    "greenhouse:Flexport:7651413": {
+     "date": "2026-11-08",
+     "sig": "flexport|country manager mexico|"
+    }
+   },
+   "jobs": {
+    "workday:Flex:WD228976": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD230884": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD231552": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD229135": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Jabil:J2470435": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Avnet:JR-023909": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Micron:JR114201": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3167635": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3165460": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:AstraZeneca:R-256344": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:AstraZeneca:R-262125": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "ashby:Kueski:e1261953-7bcc-45db-a54e-fc2e0bdfbc89": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Citi:26996393": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "oracle_hcm:JPMorgan Chase:210802450": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "greenhouse:Flexport:7651413": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    }
+   },
+   "initialized": true,
+   "relationship": {
+    "edition": 1,
+    "streak_days": 1,
+    "last_briefing_date": "2026-11-08",
+    "total_roles_surfaced": 12,
+    "total_cvs_tailored": 3,
+    "recent_angle_ids": [
+     26
+    ],
+    "recent_headlines": [
+     "Turn Ambition Into Pipeline Today."
+    ],
+    "recent_story_beats": [
+     "Ed. #1 (2026-11-08): Lucy framed 'Proof Is Scarce' around Avnet (Mexico Country Manager, Shared Services) and asked Lucas for one 60-second application."
+    ],
+    "last_micro_challenge": "Preview your first attached .docx in Gmail to feel how sharp your wins look on 1 page—then fire it straight into Avnet's queue.",
+    "last_spotlight_company": "Avnet",
+    "last_briefing_source": "vault",
+    "recent_spotlight_keys": []
+   }
+  }
+ }
+}
