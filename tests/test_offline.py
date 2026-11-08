@@ -213,6 +213,12 @@ class TitleAndLocation(unittest.TestCase):
         self.assertEqual(lc("Guadalajara, Mexico"), "jalisco")
         self.assertEqual(lc("Zapopan, JAL"), "jalisco")
         self.assertEqual(lc("Tonalá, Jalisco"), "jalisco")
+        self.assertEqual(lc("El Salto, Mexico"), "jalisco")
+        self.assertEqual(lc("San Pedro Tlaquepaque, MEX"), "jalisco")
+        self.assertEqual(lc("Tlajomulco de Zúñiga"), "jalisco")
+        self.assertEqual(lc("Amatitán, Mexico"), "jalisco")
+        self.assertEqual(lc("Atotonilco el Alto"), "jalisco")
+        self.assertEqual(lc("Lagos de Moreno, MX"), "jalisco")
         self.assertEqual(lc("Remote - Mexico"), "remote_mx")
         self.assertEqual(lc("Remote (Mexico); Austin, TX"), "remote_mx")
         self.assertEqual(lc("Mexico"), "mx_country")
@@ -220,6 +226,33 @@ class TitleAndLocation(unittest.TestCase):
         self.assertIsNone(lc("Monterrey, Nuevo Leon"))
         self.assertIsNone(lc("Remote - United States"))
         self.assertIsNone(lc("Remote - LATAM"))
+
+    def test_companies_json_integrity(self):
+        companies = fj.load_companies()
+        self.assertGreaterEqual(len(companies), 100)
+        seen_names = set()
+        seen_targets = set()
+        for c in companies:
+            name = c.get("name", "").strip()
+            ats = c.get("ats", "").strip()
+            self.assertTrue(name)
+            self.assertIn(ats, fj.FETCHERS, f"Unsupported ATS for {name}: {ats}")
+            self.assertNotIn(name.lower(), seen_names, f"Duplicate company name: {name}")
+            seen_names.add(name.lower())
+            if ats in ("greenhouse", "lever", "ashby", "workable", "smartrecruiters"):
+                self.assertTrue(c.get("board"), f"Missing board for {name}")
+                target_id = (ats, c["board"].lower())
+            elif ats == "workday":
+                self.assertTrue(c.get("tenant") and c.get("wd") and c.get("site"), f"Missing Workday fields for {name}")
+                target_id = (ats, c["tenant"].lower(), c["wd"].lower(), c["site"].lower())
+            elif ats == "oracle_hcm":
+                self.assertTrue(c.get("host") and c.get("site"), f"Missing Oracle HCM fields for {name}")
+                target_id = (ats, c["host"].lower(), c["site"].lower())
+            elif ats == "eightfold":
+                self.assertTrue(c.get("host") and c.get("domain"), f"Missing Eightfold fields for {name}")
+                target_id = (ats, c["host"].lower(), c["domain"].lower())
+            self.assertNotIn(target_id, seen_targets, f"Duplicate board target for {name}: {target_id}")
+            seen_targets.add(target_id)
 
 
 GH = {"jobs": [
@@ -534,6 +567,83 @@ class EndToEnd(unittest.TestCase):
         self.assertEqual(fj.workday_posted("Posted 3 Days Ago", t), "2026-11-02")
         self.assertIsNone(fj.workday_posted("Posted 30+ Days Ago", t))
 
+    def test_oracle_hcm_eightfold_and_workday_fallbacks(self):
+        def router(url, payload=None, retries=2):
+            if "myworkdayjobs.com/wday/cxs/acme/OldSite/jobs" in url:
+                raise error.HTTPError(url, 404, "Not Found", {}, None)
+            if "myworkdayjobs.com/wday/cxs/acme/NewSite/jobs" in url:
+                return {"total": 1, "jobPostings": [
+                    {"title": "Director, Plant Ops", "externalPath": "/job/El-Salto/Dir_JR9",
+                     "locationsText": "El Salto, Jalisco", "postedOn": "Posted Today", "bulletFields": ["JR9"]}
+                ]}
+            if "oraclecloud.com" in url and "siteNumber=CX_BAD" in url:
+                raise error.HTTPError(url, 404, "Not Found", {}, None)
+            if "oraclecloud.com" in url and "recruitingCEJobRequisitions?" in url:
+                return {"items": [{"TotalJobsCount": 1, "requisitionList": [{
+                    "Id": "26001",
+                    "Title": "Director, Cloud Engineering",
+                    "PrimaryLocation": "Zapopan, Jalisco, Mexico",
+                    "secondaryLocations": [{"Name": "Guadalajara, Mexico"}],
+                    "PostedDate": "2026-11-04",
+                    "WorkplaceType": "Hybrid",
+                    "Department": "OCI",
+                }]}]}
+            if "oraclecloud.com" in url and "recruitingCEJobRequisitionDetails" in url:
+                return {"items": [{"ExternalDescriptionStr": "<p>Lead OCI Zapopan cloud engineering.</p>"}]}
+            if "qualcomm.eightfold.ai/api/pcsx/search" in url:
+                return {"data": {"count": 1, "positions": [{
+                    "id": "ef101",
+                    "name": "Director, Silicon Validation",
+                    "locations": ["Guadalajara, Jalisco, Mexico"],
+                    "department": "Hardware",
+                    "postedTs": 1793750400,  # epoch seconds -> 2026-11-04
+                    "workLocationOption": "hybrid",
+                    "positionUrl": "/careers/job/ef101",
+                }]}}
+            if "qualcomm.eightfold.ai/api/pcsx/position_details" in url:
+                return {"data": {"jobDescription": "<div>Silicon validation leadership in GDL.</div>"}}
+            if "legacy.eightfold.ai/api/pcsx/search" in url:
+                raise error.HTTPError(url, 403, "Forbidden", {}, None)
+            if "legacy.eightfold.ai/api/apply/v2/jobs" in url:
+                return {"count": 1, "positions": [{
+                    "id": "leg1",
+                    "name": "Head of Supply Chain",
+                    "locations": ["Tlajomulco, Jalisco"],
+                    "t_create": 1793750400,
+                    "job_description": "Supply chain leadership.",
+                }]}
+            raise AssertionError("unexpected url " + url)
+
+        fj.http_json = router
+        wd_jobs = fj.fetch_workday(
+            {"name": "AcmeWD", "ats": "workday", "tenant": "acme", "wd": "wd5",
+             "site": "OldSite", "fallback_sites": ["NewSite"], "search_terms": ["El Salto"]},
+            today=date(2026, 11, 5),
+        )
+        self.assertEqual(len(wd_jobs), 1)
+        self.assertEqual(wd_jobs[0]["posted_at"], "2026-11-05")
+
+        ora_jobs = fj.fetch_oracle_hcm({
+            "name": "Oracle", "ats": "oracle_hcm", "host": "eeho.fa.us2.oraclecloud.com",
+            "site": "CX_BAD", "fallback_sites": ["CX_1001"], "search_terms": ["Zapopan"],
+        })
+        self.assertEqual(len(ora_jobs), 1)
+        self.assertIn("Zapopan", ora_jobs[0]["location"])
+        self.assertIn("OCI", fj.enrich_job_description(ora_jobs[0]))
+
+        ef_jobs = fj.fetch_eightfold({
+            "name": "Qualcomm", "ats": "eightfold", "host": "qualcomm.eightfold.ai", "domain": "qualcomm.com",
+        })
+        self.assertEqual(len(ef_jobs), 1)
+        self.assertEqual(ef_jobs[0]["posted_at"], "2026-11-04")
+        self.assertIn("Silicon validation", fj.enrich_job_description(ef_jobs[0]))
+
+        leg_jobs = fj.fetch_eightfold({
+            "name": "LegacyEF", "ats": "eightfold", "host": "legacy.eightfold.ai", "domain": "legacy.com",
+        })
+        self.assertEqual(len(leg_jobs), 1)
+        self.assertEqual(leg_jobs[0]["title"], "Head of Supply Chain")
+
     @patch("fetch_jobs.call_gemini_daily_motivation")
     def test_daily_insider_motivation_genai_and_vault(self, mock_daily_mot):
         """Daily 'Us vs. The System' motivation renders via Gemini when available and falls back cleanly."""
@@ -559,6 +669,89 @@ class EndToEnd(unittest.TestCase):
             headline, body = fj.generate_daily_insider_note(sub, sample_jobs[0], 1, 1, 1, date(2026, 11, 5))
             self.assertTrue(headline)
             self.assertIn("Luis", body)
+
+    def test_30_days_unique_dopamine_messages_and_anti_repeat(self):
+        """Every single day across 30 consecutive days—and even multiple runs on the same day—
+        produces a 100% distinct headline, message, subject spark, and partnership note."""
+        from datetime import timedelta
+        sub = {"id": "monica", "name": "Mónica Muñoz", "recipient_email": "monica.munoz.san@gmail.com", "cv_file": "cvs/monica.md"}
+        sample_job = {"key": "k1", "title": "Senior Manager, Change Management", "company": "HPE", "location": "Zapopan", "loc_class": "jalisco", "url": "https://example.com/1", "posted_at": "2026-11-05"}
+        sub_state = {}
+        seen_headlines = set()
+        seen_messages = set()
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("GEMINI_API_KEY", None)
+            start = date(2026, 11, 1)
+            for d in range(30):
+                cur_day = start + timedelta(days=d)
+                rel_ctx = fj.peek_relationship_context(sub_state, 3, 2, cur_day, board_count=106)
+                pack = fj.generate_daily_briefing_pack(sub, sample_job, 2, 1, 3, cur_day, rel_ctx=rel_ctx, cvs_today_count=2)
+                self.assertNotIn(pack["headline"], seen_headlines, f"Repeated headline on day {d + 1}")
+                self.assertNotIn(pack["message"], seen_messages, f"Repeated message on day {d + 1}")
+                seen_headlines.add(pack["headline"])
+                seen_messages.add(pack["message"])
+                fj.commit_relationship_state(sub_state, rel_ctx, pack, [sample_job], cur_day)
+
+        self.assertEqual(len(seen_headlines), 30)
+        self.assertEqual(sub_state["relationship"]["edition"], 30)
+        self.assertEqual(sub_state["relationship"]["streak_days"], 30)
+        self.assertEqual(sub_state["relationship"]["total_roles_surfaced"], 90)
+        self.assertEqual(sub_state["relationship"]["total_cvs_tailored"], 60)
+
+        # Even 3 runs on the EXACT same day produce 3 completely different angles/headlines
+        same_day_state = {}
+        same_day_headlines = set()
+        for _ in range(3):
+            rel_ctx = fj.peek_relationship_context(same_day_state, 1, 1, date(2026, 11, 8))
+            pack = fj.generate_daily_briefing_pack(sub, sample_job, 1, 1, 1, date(2026, 11, 8), rel_ctx=rel_ctx, cvs_today_count=1)
+            same_day_headlines.add(pack["headline"])
+            fj.commit_relationship_state(same_day_state, rel_ctx, pack, [sample_job], date(2026, 11, 8))
+        self.assertEqual(len(same_day_headlines), 3)
+
+    @patch("smtplib.SMTP_SSL")
+    def test_relationship_streak_and_quiet_day_spotlight(self, mock_smtp_ssl):
+        """When zero brand-new postings arrive overnight, Lucy keeps daily connection alive by
+        spotlighting top unclaimed roles (rotating them each quiet day) and incrementing Edition & Streak."""
+        mock_server = MagicMock()
+        mock_smtp_ssl.return_value.__enter__.return_value = mock_server
+        env = {"GMAIL_USER": "sender@gmail.com", "GMAIL_APP_PASSWORD": "app-secret-password"}
+
+        # Day 1 (Nov 5): Baseline -> Briefing #1 + Welcome milestone
+        with patch.dict(os.environ, env):
+            code, _ = self.run_refresh(date(2026, 11, 5), send_email=True)
+        self.assertEqual(code, 0)
+        msg1 = mock_server.send_message.call_args_list[-1][0][0]
+        self.assertIn("Lucy #1:", msg1["Subject"])
+        html1 = msg1.get_body(preferencelist=("html",)).get_content()
+        self.assertIn("Briefing #1", html1)
+        self.assertIn("Lucy&rsquo;s Corner:", html1)
+        self.assertIn("Welcome to Your Unfair Advantage", html1)
+
+        # Day 2 (Nov 6): Zero new postings -> Quiet-Market Momentum Spotlight (#2, 2d Streak, 3 roles)
+        with patch.dict(os.environ, env):
+            code, _ = self.run_refresh(date(2026, 11, 6), send_email=True)
+        self.assertEqual(code, 0)
+        msg2 = mock_server.send_message.call_args_list[-1][0][0]
+        self.assertIn("Lucy #2:", msg2["Subject"])
+        self.assertNotEqual(msg1["Subject"], msg2["Subject"])
+        html2 = msg2.get_body(preferencelist=("html",)).get_content()
+        self.assertIn("2d Streak", html2)
+        self.assertIn("Quiet-Market Momentum Spotlight", html2)
+        plain2 = msg2.get_body(preferencelist=("plain",)).get_content()
+
+        # Day 3 (Nov 7): Another quiet day -> Briefing #3 (3d Streak + 3-Briefing Spark milestone + rotated spotlight roles)
+        with patch.dict(os.environ, env):
+            code, _ = self.run_refresh(date(2026, 11, 7), send_email=True)
+        self.assertEqual(code, 0)
+        msg3 = mock_server.send_message.call_args_list[-1][0][0]
+        self.assertIn("Lucy #3:", msg3["Subject"])
+        html3 = msg3.get_body(preferencelist=("html",)).get_content()
+        self.assertIn("3d Streak", html3)
+        self.assertIn("3-Briefing Spark", html3)
+        plain3 = msg3.get_body(preferencelist=("plain",)).get_content()
+        # Spotlighted roles rotate rather than repeating the exact same 3 roles
+        self.assertNotEqual(plain2, plain3)
 
     @patch("smtplib.SMTP_SSL")
     def test_email_failure_rolls_back_subscriber_state(self, mock_smtp_ssl):
