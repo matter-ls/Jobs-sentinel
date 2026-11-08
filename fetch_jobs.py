@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
 """
 job-radar: pulls public job feeds (Greenhouse, Lever, Ashby, Workable,
-SmartRecruiters, Workday), keeps director-level roles in Jalisco (plus
-remote-Mexico roles), builds a static page at docs/index.html, and emails
-daily relevant openings to the configured recipient.
+SmartRecruiters, Workday), keeps matching roles per subscriber profile,
+builds a static page at docs/index.html, and emails personalized daily
+digests to one or multiple subscribers based on their individual preferences.
 
-  python3 fetch_jobs.py            normal run (fetch, filter, write page + state, send email if configured)
-  python3 fetch_jobs.py --check    test every company board and report problems
-  python3 fetch_jobs.py --demo     build out/demo.html from fake data (no network)
+  python3 fetch_jobs.py                     normal run (fetch, filter, write page + state, email all active subscribers)
+  python3 fetch_jobs.py --subscriber lucas  only process email for subscriber 'lucas'
+  python3 fetch_jobs.py --check             test every company board and report problems
+  python3 fetch_jobs.py --demo              build out/demo.html from fake data (no network)
 
 Standard library only. Python 3.9+.
 """
 from __future__ import annotations
 
 import argparse
+import copy
 import html
 import json
 import os
@@ -44,7 +46,7 @@ CFG_DEFAULTS = {
 }
 
 LOC_LABELS = {
-    "jalisco": "Jalisco",
+    "jalisco": "Target City / Region",
     "remote_mx": "Remote · Mexico",
     "mx_country": "Mexico · city not listed",
 }
@@ -96,6 +98,45 @@ def load_config(root=ROOT):
 
 def load_companies(root=ROOT):
     return json.loads((Path(root) / "companies.json").read_text(encoding="utf-8"))["companies"]
+
+
+def get_subscribers(cfg, only_id=None):
+    """Return list of enabled subscriber configs, merging each with global defaults."""
+    raw_subs = cfg.get("subscribers")
+    if not raw_subs:
+        # Backward-compatible single-subscriber fallback from top-level config
+        raw_subs = [{
+            "id": "default",
+            "name": "Default",
+            "recipient_email": cfg.get("recipient_email", "lucasschollmatter@gmail.com"),
+            "enabled": True,
+        }]
+    resolved = []
+    for idx, sub in enumerate(raw_subs):
+        if not sub.get("enabled", True):
+            continue
+        sub_id = sub.get("id") or sub.get("recipient_email") or f"sub_{idx + 1}"
+        if only_id and sub_id != only_id:
+            continue
+        merged = {**cfg, **sub}
+        merged["id"] = sub_id
+        merged["name"] = sub.get("name") or sub_id
+        # Allow 'locations' as a friendly alias for 'jalisco_locations' per subscriber
+        if "locations" in sub and "jalisco_locations" not in sub:
+            merged["jalisco_locations"] = sub["locations"]
+        resolved.append(merged)
+    return resolved
+
+
+def collect_workday_search_terms(cfg):
+    """Union default Workday search terms with any extra search terms from active subscribers."""
+    default_terms = ["Guadalajara", "Zapopan", "Jalisco", "El Salto", "Tonala"]
+    seen = {t.lower(): t for t in default_terms}
+    for sub in get_subscribers(cfg):
+        for term in sub.get("workday_search_terms") or []:
+            if term.lower() not in seen:
+                seen[term.lower()] = term
+    return list(seen.values())
 
 
 def http_json(url, payload=None, retries=2):
@@ -227,11 +268,12 @@ def workday_posted(text, today):
     return None
 
 
-def fetch_workday(c, today=None):
+def fetch_workday(c, today=None, extra_terms=None):
     host = f"{c['tenant']}.{c['wd']}.myworkdayjobs.com"
     api = f"https://{host}/wday/cxs/{c['tenant']}/{c['site']}/jobs"
     today, found = today or today_utc(), {}
-    for term in c.get("search_terms", ["Guadalajara", "Zapopan", "Jalisco", "El Salto", "Tonala"]):
+    default_terms = extra_terms or ["Guadalajara", "Zapopan", "Jalisco", "El Salto", "Tonala"]
+    for term in c.get("search_terms", default_terms):
         offset, total = 0, None
         while offset < 600:
             d = http_json(api, {"appliedFacets": {}, "limit": 20, "offset": offset,
@@ -264,12 +306,14 @@ FETCHERS = {
 }
 
 
-def fetch_one(c, today=None):
+def fetch_one(c, today=None, extra_terms=None):
     try:
         fn = FETCHERS.get(c.get("ats"))
         if fn is None:
             return c, None, f"unknown ats '{c.get('ats')}'"
-        return c, (fn(c, today=today) if fn is fetch_workday else fn(c)), None
+        if fn is fetch_workday:
+            return c, fn(c, today=today, extra_terms=extra_terms), None
+        return c, fn(c), None
     except KeyError as e:
         return c, None, f"missing field {e} in companies.json"
     except error.HTTPError as e:
@@ -280,8 +324,9 @@ def fetch_one(c, today=None):
 
 
 def fetch_all(companies, cfg, today=None):
+    extra_terms = collect_workday_search_terms(cfg)
     with ThreadPoolExecutor(max_workers=int(cfg["max_workers"])) as ex:
-        return list(ex.map(lambda c: fetch_one(c, today=today), companies))
+        return list(ex.map(lambda c: fetch_one(c, today=today, extra_terms=extra_terms), companies))
 
 
 # --------------------------------------------------------------------------
@@ -289,11 +334,12 @@ def fetch_all(companies, cfg, today=None):
 # --------------------------------------------------------------------------
 
 def build_rules(cfg):
-    jal = "|".join(re.escape(norm(x)) for x in cfg["jalisco_locations"])
+    locs = cfg.get("locations") or cfg.get("jalisco_locations") or []
+    jal = "|".join(re.escape(norm(x)) for x in locs)
     return {
         "inc": [re.compile(p, re.I) for p in cfg["title_include"]],
         "exc": [re.compile(p, re.I) for p in cfg["title_exclude"]],
-        "jal": re.compile(rf"\b({jal})\b"),
+        "jal": re.compile(rf"\b({jal})\b") if jal else re.compile(r"(?!x)x"),
     }
 
 
@@ -329,12 +375,12 @@ def select(jobs, rules, cfg):
 
 
 # --------------------------------------------------------------------------
-# state: what have we seen before?
+# state: what have we seen before? (Global + Per-Subscriber)
 # --------------------------------------------------------------------------
 
 def update_state(jobs, state, today, retention_days):
-    """Stamp first_seen on each job. The very first run is a 'baseline': nothing
-    found then counts as newly discovered (otherwise you'd get an alert for everything)."""
+    """Stamp first_seen on each job in the given state dict. The very first run
+    for a state dict is a 'baseline': nothing found then counts as newly discovered."""
     seen = state.setdefault("jobs", {})
     baseline = not state.get("initialized")
     for j in jobs:
@@ -485,35 +531,34 @@ def alert_markdown(new_jobs, today):
 
 
 def select_jobs_for_email(jobs, baseline, cfg):
-    """Choose which jobs to include in the daily email digest."""
+    """Choose which jobs to include in a subscriber's daily email digest."""
     mode = cfg.get("email_mode", "new_or_discovered")
     if mode == "all":
         return [j for j in jobs if not j.get("stale")]
     if baseline:
         if cfg.get("email_on_baseline", True):
-            # On the very first run, send roles flagged is_new (or all non-stale if none have dates)
-            new_roles = [j for j in jobs if j.get("is_new") and not j.get("stale")]
-            return new_roles or [j for j in jobs if not j.get("stale")]
+            return [j for j in jobs if not j.get("stale")]
         return []
     if mode == "discovered_only":
         return [j for j in jobs if j.get("discovered_now")]
-    # Default 'new_or_discovered': newly discovered roles on this run
     return [j for j in jobs if j.get("discovered_now")]
 
 
-def build_email_message(jobs_to_send, all_jobs_count, cfg, today, sender_email):
-    """Construct a multipart plain-text + HTML EmailMessage."""
-    recipient = cfg.get("recipient_email", "lucasschollmatter@gmail.com")
+def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_email):
+    """Construct a multipart plain-text + HTML EmailMessage for a subscriber."""
+    recipient = sub_cfg.get("recipient_email", "lucasschollmatter@gmail.com")
+    sub_name = sub_cfg.get("name") or recipient
     date_str = today.isoformat()
     msg = EmailMessage()
-    msg["Subject"] = f"Jobs Sentinel: {len(jobs_to_send)} Relevant Director Opening(s) ({date_str})"
+    msg["Subject"] = f"Jobs Sentinel ({sub_name}): {len(jobs_to_send)} Relevant Opening(s) ({date_str})"
     msg["From"] = sender_email
     msg["To"] = recipient
 
-    # Plain-text version
     txt_lines = [
+        f"Hi {sub_name},",
+        "",
         f"Jobs Sentinel Daily Digest — {date_str}",
-        f"{len(jobs_to_send)} new/relevant role(s) ({all_jobs_count} total active roles tracked):",
+        f"{len(jobs_to_send)} new/relevant role(s) matching your preferences ({all_jobs_count} total active roles matched):",
         "",
     ]
     for j in jobs_to_send:
@@ -525,7 +570,6 @@ def build_email_message(jobs_to_send, all_jobs_count, cfg, today, sender_email):
         txt_lines.append("")
     msg.set_content("\n".join(txt_lines))
 
-    # HTML version
     rows_html = []
     for j in jobs_to_send:
         loc_tag = html.escape(LOC_LABELS.get(j.get("loc_class"), j.get("loc_class", "")))
@@ -550,9 +594,9 @@ def build_email_message(jobs_to_send, all_jobs_count, cfg, today, sender_email):
 <html>
 <body style="font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#1c1917;background:#fafaf9;padding:20px;">
   <div style="max-width:760px;margin:0 auto;background:#ffffff;border:1px solid #e7e5e4;border-radius:12px;padding:24px;">
-    <h2 style="margin:0 0 4px;font-size:20px;">Jobs Sentinel Daily Digest</h2>
+    <h2 style="margin:0 0 4px;font-size:20px;">Jobs Sentinel Daily Digest &middot; {html.escape(sub_name)}</h2>
     <p style="margin:0 0 18px;color:#78716c;font-size:14px;">
-      {date_str} &middot; <strong>{len(jobs_to_send)}</strong> highlighted opening(s) ({all_jobs_count} total matching roles tracked)
+      {date_str} &middot; <strong>{len(jobs_to_send)}</strong> highlighted opening(s) matching your profile ({all_jobs_count} total active matches)
     </p>
     <table style="width:100%;border-collapse:collapse;font-size:14px;text-align:left;">
       <thead>
@@ -575,10 +619,11 @@ def build_email_message(jobs_to_send, all_jobs_count, cfg, today, sender_email):
     return msg
 
 
-def send_email_digest(jobs_to_send, all_jobs_count, cfg, today):
-    """Send the daily digest via Gmail/SMTP if credentials are configured."""
+def send_email_digest(jobs_to_send, all_jobs_count, sub_cfg, today):
+    """Send a single subscriber's daily digest via Gmail/SMTP if credentials are configured."""
+    sub_name = sub_cfg.get("name") or sub_cfg.get("recipient_email", "subscriber")
     if not jobs_to_send:
-        print("No new roles to email today.")
+        print(f"  [{sub_name}] No new roles to email today.")
         return False
 
     smtp_user = os.environ.get("GMAIL_USER") or os.environ.get("SMTP_USER")
@@ -587,16 +632,45 @@ def send_email_digest(jobs_to_send, all_jobs_count, cfg, today):
     smtp_port = int(os.environ.get("SMTP_PORT", "465"))
 
     if not smtp_user or not smtp_password:
-        print("Email skipped: GMAIL_USER / GMAIL_APP_PASSWORD environment variables not set.")
+        print(f"  [{sub_name}] Email skipped: GMAIL_USER / GMAIL_APP_PASSWORD environment variables not set.")
         return False
 
-    msg = build_email_message(jobs_to_send, all_jobs_count, cfg, today, smtp_user)
+    msg = build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, smtp_user)
     with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=25) as server:
         server.login(smtp_user, smtp_password)
         server.send_message(msg)
 
-    print(f"Sent email digest ({len(jobs_to_send)} roles) to {msg['To']}.")
+    print(f"  [{sub_name}] Sent email digest ({len(jobs_to_send)} roles) to {msg['To']}.")
     return True
+
+
+def process_subscribers(fetched, state, cfg, today, send_email=True, only_id=None):
+    """Filter fetched jobs for each active subscriber, update their personal seen
+    state in state['subscribers'][sub_id], and send each subscriber's email."""
+    subscribers = get_subscribers(cfg, only_id=only_id)
+    sub_states = state.setdefault("subscribers", {})
+    retention = int(cfg["state_retention_days"])
+
+    for sub_cfg in subscribers:
+        sub_id = sub_cfg["id"]
+        sub_rules = build_rules(sub_cfg)
+        sub_matched = list({j["key"]: copy.deepcopy(j) for j in select(fetched, sub_rules, sub_cfg)}.values())
+
+        sub_state = sub_states.setdefault(sub_id, {})
+        sub_baseline = update_state(sub_matched, sub_state, today, retention)
+        new_days = int(sub_cfg.get("new_days", cfg["new_days"]))
+        for j in sub_matched:
+            j["is_new"] = flag_new(j, today, new_days)
+            j["eff_date"] = j.get("posted_at") or j["first_seen"]
+        sub_matched.sort(key=lambda j: (j["company"].lower(), j["title"].lower()))
+        sub_matched.sort(key=lambda j: j["eff_date"], reverse=True)
+
+        if send_email:
+            to_email = select_jobs_for_email(sub_matched, sub_baseline, sub_cfg)
+            try:
+                send_email_digest(to_email, len(sub_matched), sub_cfg, today)
+            except Exception as e:
+                print(f"  warning: email delivery failed for {sub_id}: {type(e).__name__}: {e}", file=sys.stderr)
 
 
 def write_outputs(root, cfg, jobs, state, today, stamp):
@@ -622,7 +696,7 @@ def write_outputs(root, cfg, jobs, state, today, stamp):
 # commands
 # --------------------------------------------------------------------------
 
-def refresh(cfg, companies, root=ROOT, today=None, send_email=True):
+def refresh(cfg, companies, root=ROOT, today=None, send_email=True, subscriber_id=None):
     today = today or today_utc()
     rules = build_rules(cfg)
     results = fetch_all(companies, cfg, today=today)
@@ -639,7 +713,7 @@ def refresh(cfg, companies, root=ROOT, today=None, send_email=True):
 
     root = Path(root)
     state = load_json(root / "state" / "seen.json", {})
-    baseline = update_state(jobs, state, today, int(cfg["state_retention_days"]))
+    update_state(jobs, state, today, int(cfg["state_retention_days"]))
 
     # A board that failed this time keeps its last known roles, marked stale.
     failed_names = {c["name"] for c, _ in failed}
@@ -655,20 +729,15 @@ def refresh(cfg, companies, root=ROOT, today=None, send_email=True):
     jobs.sort(key=lambda j: (j["company"].lower(), j["title"].lower()))
     jobs.sort(key=lambda j: j["eff_date"], reverse=True)
 
+    # Process per-subscriber filtering, state updates, and email digests
+    process_subscribers(fetched, state, cfg, today, send_email=send_email, only_id=subscriber_id)
+
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     fresh = write_outputs(root, cfg, jobs, state, today, stamp)
     ok = len(results) - len(failed)
-    print(f"Fetched {ok}/{len(results)} boards. {len(jobs)} matching roles, "
+    print(f"Fetched {ok}/{len(results)} boards. {len(jobs)} matching roles on main board, "
           f"{sum(1 for j in jobs if j['is_new'])} marked NEW, {len(fresh)} first seen this run.")
     print(f"Page: {root / 'docs' / 'index.html'}")
-
-    if send_email:
-        to_email = select_jobs_for_email(jobs, baseline, cfg)
-        try:
-            send_email_digest(to_email, len(jobs), cfg, today)
-        except Exception as e:
-            print(f"  warning: email delivery failed: {type(e).__name__}: {e}", file=sys.stderr)
-
     return 0
 
 
@@ -716,14 +785,19 @@ def main(argv=None):
     ap.add_argument("--demo", action="store_true", help="build out/demo.html from fake data")
     ap.add_argument("--no-email", action="store_true", help="skip sending email digest")
     ap.add_argument("--email-all", action="store_true", help="email all current matching roles")
+    ap.add_argument("--subscriber", help="only send email for a specific subscriber id")
     args = ap.parse_args(argv)
     cfg = load_config()
     if args.email_all:
         cfg["email_mode"] = "all"
+        for sub in cfg.get("subscribers") or []:
+            sub["email_mode"] = "all"
     if args.demo:
         return demo(cfg)
     companies = load_companies()
-    return check(cfg, companies) if args.check else refresh(cfg, companies, send_email=not args.no_email)
+    if args.check:
+        return check(cfg, companies)
+    return refresh(cfg, companies, send_email=not args.no_email, subscriber_id=args.subscriber)
 
 
 if __name__ == "__main__":

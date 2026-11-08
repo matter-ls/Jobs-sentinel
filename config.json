@@ -1,5 +1,5 @@
 {
-  "_note": "title_include / title_exclude are regexes written WITHOUT accents. To widen the net add patterns such as \"\\\\bsenior manager\\\\b\" or \"\\\\bsubdirector(a)?\\\\b\".",
+  "_note": "Global defaults apply to the static web page (docs/index.html) and act as fallback defaults for any subscriber in 'subscribers' who omits a field. Add as many people as you want to 'subscribers'!",
   "page_title": "Openings",
   "recipient_email": "lucasschollmatter@gmail.com",
   "email_on_baseline": true,
@@ -40,5 +40,68 @@
   "include_country_only": true,
   "new_days": 7,
   "max_workers": 8,
-  "state_retention_days": 120
+  "state_retention_days": 120,
+  "subscribers": [
+    {
+      "id": "lucas",
+      "name": "Lucas",
+      "recipient_email": "lucasschollmatter@gmail.com",
+      "enabled": true,
+      "email_on_baseline": true,
+      "email_mode": "new_or_discovered"
+    },
+    {
+      "id": "luis",
+      "name": "Luis Gallegos",
+      "recipient_email": "luisgallegosp@gmail.com",
+      "enabled": true,
+      "email_on_baseline": true,
+      "email_mode": "new_or_discovered",
+      "title_include": [
+        "\\b(rpa|robotic process automation|intelligent automation|hyperautomation|process automation|business automation)\\b",
+        "\\bautomation (consultant|analyst|lead|leader|manager|architect|specialist|engineer|developer|coe|program|project|delivery|strategist)\\b",
+        "\\b(senior|sr|lead|principal|staff) automation\\b",
+        "\\b(power platform|power apps|power automate|low[- ]code|blue prism|automation anywhere|uipath)\\b",
+        "\\b(business|process) (process |systems )?(analyst|consultant|architect|manager|lead|leader|specialist|partner)\\b",
+        "\\banalista (sr |senior )?de (procesos|negocio)\\b",
+        "\\bprocess (improvement|optimization|excellence|engineering|re-?engineering|transformation|governance)\\b",
+        "\\b(operational|operations|business|process) excellence\\b",
+        "\\bcontinuous improvement\\b",
+        "\\bmejora continua\\b",
+        "\\bdigital transformation\\b",
+        "\\btransformacion digital\\b",
+        "\\b(gbs|shared services|it|digital|automation|business|technical|enterprise|transformation) (project|program|portfolio|delivery) (lead|leader|manager|director|head|specialist)\\b",
+        "\\b(senior|sr|lead|staff|principal) (project|program|portfolio|delivery) (lead|leader|manager)\\b",
+        "\\b(project|program|portfolio) management (lead|leader|manager|office|specialist)\\b",
+        "\\b(agile|scrum) (lead|leader|master|delivery|coach|manager)\\b"
+      ],
+      "title_exclude": [
+        "\\bassistant to\\b",
+        "\\bexecutive assistant\\b",
+        "\\bdirector'?s? assistant\\b",
+        "\\bintern(ship)?\\b",
+        "\\bpracticante\\b",
+        "\\bbecari[oa]\\b",
+        "\\b(junior|jr)\\b",
+        "\\b(qa|quality assurance|test|testing|sdet|cypress|selenium|appium)\\b.*\\bautomation\\b",
+        "\\bautomation\\b.*\\b(qa|quality assurance|test|testing|sdet)\\b",
+        "\\bmarketing automation\\b",
+        "\\b(industrial|plc|scada|controls|building|packaging|warehouse) automation\\b"
+      ],
+      "locations": [
+        "guadalajara",
+        "zapopan",
+        "tlaquepaque",
+        "tonala",
+        "tlajomulco",
+        "el salto",
+        "puerto vallarta",
+        "jalisco",
+        "gdl",
+        "jal"
+      ],
+      "include_remote_mexico": true,
+      "include_country_only": true
+    }
+  ]
 }
