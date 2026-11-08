@@ -212,6 +212,276 @@
     "last_briefing_source": "vault",
     "recent_spotlight_keys": []
    }
+  },
+  "monica": {
+   "emailed": {
+    "workday:Avnet:JR-024235": {
+     "date": "2026-11-08",
+     "sig": "avnet|customer operations manager|"
+    },
+    "greenhouse:Clara:5219531007": {
+     "date": "2026-11-08",
+     "sig": "clara|customer success manager guadalajara hybrid remote|"
+    },
+    "workday:Flex:WD229837": {
+     "date": "2026-11-08",
+     "sig": "flex|program management manager|"
+    },
+    "workday:Flex:WD229814": {
+     "date": "2026-11-08",
+     "sig": "flex|program management manager npi experience|"
+    },
+    "workday:Hewlett Packard Enterprise:1212456": {
+     "date": "2026-11-08",
+     "sig": "hewlett packard enterprise|people care transformation improvement scalability product manager|"
+    },
+    "workday:HP Inc.:3167363": {
+     "date": "2026-11-08",
+     "sig": "hp inc.|privacy program manager|"
+    },
+    "workday:Flex:WD230517": {
+     "date": "2026-11-08",
+     "sig": "flex|program manager|"
+    },
+    "workday:Flex:WD232022": {
+     "date": "2026-11-08",
+     "sig": "flex|program managment manager|"
+    },
+    "workday:HP Inc.:3168031": {
+     "date": "2026-11-08",
+     "sig": "hp inc.|delivery performance program manager global delivery operations services supply chain|"
+    },
+    "workday:Jabil:J2467745": {
+     "date": "2026-11-08",
+     "sig": "jabil|sr operations project manager|"
+    },
+    "workday:Hewlett Packard Enterprise:1218212": {
+     "date": "2026-11-08",
+     "sig": "hewlett packard enterprise|performance management programs insights project manager|"
+    },
+    "workday:Plexus:R043187": {
+     "date": "2026-11-08",
+     "sig": "plexus|r d project manager sr|"
+    }
+   },
+   "jobs": {
+    "workday:Flex:WD230517": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD232022": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD231224": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD228021": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD230318": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD229836": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD229837": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD229814": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD224772": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Jabil:J2467745": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Jabil:J2464258": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Jabil:J2467574": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Jabil:J2467589": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Plexus:R043187": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Plexus:R043298": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Plexus:R043297": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Plexus:R043299": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Plexus:R043314": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Avnet:JR-024815": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Avnet:JR-024304": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Avnet:JR-024235": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3164137": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3168031": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3169771": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3170316": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3170314": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3165014": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3168723": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3167363": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Hewlett Packard Enterprise:1212456": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Hewlett Packard Enterprise:1216400": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Hewlett Packard Enterprise:1218212": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "greenhouse:Toshiba Global Commerce Solutions:5285456007": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "greenhouse:Toshiba Global Commerce Solutions:5277588007": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "greenhouse:Wizeline:7614922": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "greenhouse:Wizeline:7905176": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "greenhouse:Clara:5219531007": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "greenhouse:Backbase:8225999": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Arrive Logistics:89f8c295-f687-4b32-9970-d6f9e3107303": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    }
+   },
+   "initialized": true,
+   "relationship": {
+    "edition": 1,
+    "streak_days": 1,
+    "last_briefing_date": "2026-11-08",
+    "total_roles_surfaced": 12,
+    "total_cvs_tailored": 3,
+    "recent_angle_ids": [
+     6
+    ],
+    "recent_headlines": [
+     "One Surgical Shot Beats A Year of 'Someday'."
+    ],
+    "recent_story_beats": [
+     "Ed. #1 (2026-11-08): Lucy framed 'Job Descriptions Are Wish Lists' around Avnet (Customer Operations Manager) and asked Mónica for one 60-second application."
+    ],
+    "last_micro_challenge": "Zero overthinking allowed today: open the top card for Avnet, verify your General Role Direction headline on the .docx, and hit submit.",
+    "last_spotlight_company": "Avnet",
+    "last_briefing_source": "vault",
+    "recent_spotlight_keys": []
+   }
   }
  }
 }
