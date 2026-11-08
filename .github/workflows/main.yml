@@ -22,6 +22,7 @@ on:
           - lucas
           - luis
           - ewerson
+          - monica
       check_only:
         description: "Only run `--check` (board health report). No emails, no commit."
         required: false
