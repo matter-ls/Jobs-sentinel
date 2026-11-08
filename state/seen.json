@@ -69,6 +69,11 @@
    "first_seen": "2026-11-08",
    "baseline": false,
    "last_seen": "2026-11-08"
+  },
+  "workday:Avnet:JR-023909": {
+   "first_seen": "2026-11-08",
+   "baseline": false,
+   "last_seen": "2026-11-08"
   }
  },
  "initialized": true,
@@ -164,20 +169,27 @@
      "first_seen": "2026-11-08",
      "baseline": false,
      "last_seen": "2026-11-08"
+    },
+    "workday:Avnet:JR-023909": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
     }
    },
    "initialized": true,
    "relationship": {
-    "edition": 1,
+    "edition": 2,
     "streak_days": 1,
     "last_briefing_date": "2026-11-08",
-    "total_roles_surfaced": 18,
-    "total_cvs_tailored": 3,
+    "total_roles_surfaced": 37,
+    "total_cvs_tailored": 6,
     "recent_angle_ids": [
-     26
+     26,
+     27
     ],
     "recent_headlines": [
-     "Turn Ambition Into Pipeline Today."
+     "Turn Ambition Into Pipeline Today.",
+     "Stop Discounting Skills That Feel Easy to You."
     ],
     "recent_spotlight_keys": []
    }
