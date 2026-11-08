@@ -17,6 +17,10 @@ on:
         default: ""
         type: string
 
+concurrency:
+  group: jobs-sentinel-main
+  cancel-in-progress: true
+
 permissions:
   contents: write
   issues: write
@@ -40,6 +44,7 @@ jobs:
 
       - name: Fetch jobs, update board, and email digest
         env:
+          PYTHONUNBUFFERED: "1"
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           INPUT_EMAIL_ALL: ${{ github.event.inputs.email_all }}
@@ -69,6 +74,6 @@ jobs:
             echo "No state changes to commit."
           else
             git commit -m "chore: update job radar state [skip ci]"
-            git pull --rebase origin main
+            git pull --rebase -X theirs origin main
             git push
           fi
