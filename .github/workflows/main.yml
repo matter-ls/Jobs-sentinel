@@ -1,0 +1,63 @@
+name: Refresh job board & send daily email
+
+on:
+  schedule:
+    # Runs daily at 13:00 UTC (7:00 AM CST in Guadalajara/Zapopan)
+    - cron: "0 13 * * *"
+  workflow_dispatch:
+    inputs:
+      email_all:
+        description: "Send all matching roles in email (not just newly discovered)"
+        required: false
+        default: "false"
+        type: boolean
+
+permissions:
+  contents: write
+  issues: write
+  pages: write
+  id-token: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run offline unit tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Fetch jobs, update board, and email digest
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: |
+          if [ "${{ github.event.inputs.email_all }}" = "true" ]; then
+            python3 fetch_jobs.py --email-all
+          else
+            python3 fetch_jobs.py
+          fi
+
+      - name: Upload static site artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-board-html
+          path: docs/
+
+      - name: Commit updated state and static page
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state/ docs/
+          if git diff --staged --quiet; then
+            echo "No state changes to commit."
+          else
+            git commit -m "chore: update job radar state [skip ci]"
+            git push
+          fi
