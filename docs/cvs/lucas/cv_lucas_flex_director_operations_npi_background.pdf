@@ -15,12 +15,12 @@ endobj
 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
 endobj
 6 0 obj
-<< /Length 6784 >>
+<< /Length 6788 >>
 stream
 BT /F2 17 Tf 1 0 0 1 48 750.0 Tm (Lucas Scholl Matter) Tj ET
 BT /F2 10 Tf 1 0 0 1 48 731.0 Tm (Target Role Direction: Director / Head of Function  -  Process Intelligence, Operational) Tj ET
 BT /F2 10 Tf 1 0 0 1 48 717.5 Tm (Excellence & Continuous Improvement) Tj ET
-BT /F2 9.5 Tf 1 0 0 1 48 704.0 Tm (Director, Operations \(NPI Background \) | Global Business Services \(GBS\) | Business Process) Tj ET
+BT /F2 9.5 Tf 1 0 0 1 48 704.0 Tm (Director, Operations \(NPI Background\) | Global Business Services \(GBS\) | Business Process) Tj ET
 BT /F2 9.5 Tf 1 0 0 1 48 691.0 Tm (Management \(BPM\) | Global Process Owner \(GPO\) Enablement) Tj ET
 BT /F1 8.5 Tf 1 0 0 1 48 678.0 Tm (Guadalajara / Zapopan, Jalisco, Mexico | +52 33 2960 9741 | lucasschollmatter@gmail.com | linkedin.com/in/lucasschollmatter) Tj ET
 0.7 w 48 670.0 m 564 670.0 l S
@@ -51,9 +51,9 @@ BT /F1 9.0 Tf 1 0 0 1 56 361.5 Tm (   kitting, logistics, and deployments\) to e
 BT /F1 9.0 Tf 1 0 0 1 56 349.5 Tm (   and rework loops - targeting $53M-$86M in annual fleet savings and sublinear headcount scaling) Tj ET
 BT /F1 9.0 Tf 1 0 0 1 56 337.5 Tm (   \(+5% YoY throughput per technician\).) Tj ET
 BT /F1 9.0 Tf 1 0 0 1 56 325.5 Tm (- Real-Time Constraint Engine \(Measured Work 3.0\): Drive the evolution of global operational) Tj ET
-BT /F1 9.0 Tf 1 0 0 1 56 313.5 Tm (   analytics from retrospective 24-48h reporting into a near-real-time \(<5-minute streaming) Tj ET
-BT /F1 9.0 Tf 1 0 0 1 56 301.5 Tm (   SLO\) in-shift constraint resolution and capacity optimization platform grounded in Eliyahu) Tj ET
-BT /F1 9.0 Tf 1 0 0 1 56 289.5 Tm (   Goldratt's Theory of Constraints and complexity-weighted Work Units.) Tj ET
+BT /F1 9.0 Tf 1 0 0 1 56 313.5 Tm (   analytics from retrospective 24-48h reporting into a near-real-time \(under 5-minute) Tj ET
+BT /F1 9.0 Tf 1 0 0 1 56 301.5 Tm (   streaming SLO\) in-shift constraint resolution and capacity optimization platform grounded in) Tj ET
+BT /F1 9.0 Tf 1 0 0 1 56 289.5 Tm (   Eliyahu Goldratt's Theory of Constraints and complexity-weighted Work Units.) Tj ET
 BT /F1 9.0 Tf 1 0 0 1 56 277.5 Tm (- Multi-Class Capacity & Resourcing Models: Designed a multi-class operational capacity model) Tj ET
 BT /F1 9.0 Tf 1 0 0 1 56 265.5 Tm (   covering incident response, build-out, and maintenance across specialized day shifts and) Tj ET
 BT /F1 9.0 Tf 1 0 0 1 56 253.5 Tm (   pooled night shifts - used across global campuses to size teams, set WIP policies, and replace) Tj ET
@@ -87,5 +87,5 @@ xref
 trailer
 << /Size 7 /Root 1 0 R >>
 startxref
-7286
+7290
 %%EOF

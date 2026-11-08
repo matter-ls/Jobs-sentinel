@@ -178,24 +178,26 @@
    },
    "initialized": true,
    "relationship": {
-    "edition": 5,
+    "edition": 6,
     "streak_days": 1,
     "last_briefing_date": "2026-11-08",
-    "total_roles_surfaced": 93,
-    "total_cvs_tailored": 15,
+    "total_roles_surfaced": 108,
+    "total_cvs_tailored": 18,
     "recent_angle_ids": [
      26,
      27,
      28,
      29,
-     30
+     30,
+     31
     ],
     "recent_headlines": [
      "Turn Ambition Into Pipeline Today.",
      "Stop Discounting Skills That Feel Easy to You.",
      "Every Shot Sharpens Your Executive Story.",
      "Play Asymmetric Offense.",
-     "Build Escape Velocity From Routine."
+     "Build Escape Velocity From Routine.",
+     "Write Your Own Promotion Slip."
     ],
     "recent_spotlight_keys": []
    }
