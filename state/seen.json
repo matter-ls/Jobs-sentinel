@@ -1395,18 +1395,26 @@
    },
    "initialized": true,
    "relationship": {
-    "edition": 1,
+    "edition": 2,
     "streak_days": 1,
     "last_briefing_date": "2026-11-08",
-    "total_roles_surfaced": 39,
-    "total_cvs_tailored": 3,
+    "total_roles_surfaced": 71,
+    "total_cvs_tailored": 6,
     "recent_angle_ids": [
-     6
+     6,
+     7
     ],
     "recent_headlines": [
-     "One Surgical Shot Beats A Year of 'Someday'."
+     "One Surgical Shot Beats A Year of 'Someday'.",
+     "Act Like the CEO of 'Me, Inc.' Today."
     ],
-    "recent_spotlight_keys": []
+    "recent_spotlight_keys": [],
+    "recent_story_beats": [
+     "Ed. #2 (2026-11-08): Lucy framed 'Six Seconds, One Decision' around Avnet (Customer Operations Manager) and asked Mónica for one 60-second application."
+    ],
+    "last_micro_challenge": "Set a 60-second timer right now: open Avnet's portal link, drop in your pre-built CV_*.docx, and log 1 fearless rep before 10 AM.",
+    "last_spotlight_company": "Avnet",
+    "last_briefing_source": "vault"
    }
   }
  }
