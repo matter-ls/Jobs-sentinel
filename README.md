@@ -1,6 +1,6 @@
 # job-radar (Jobs Sentinel)
 
-Pulls public job feeds from 106 verified Jalisco & Remote-Mexico employer career sites across 8 supported ATS platforms (Workday, Greenhouse, SmartRecruiters, Lever, Ashby, Oracle HCM, Eightfold, and Workable), keeps the roles that match each **subscriber profile** in `config.json` (director-level roles in Jalisco by default, plus remote-Mexico roles), builds a static searchable page (`docs/index.html`), optionally asks Gemini to tailor each subscriber's master CV (`cvs/*.md`) into an ATS-optimized `.docx` attachment for their top matches, and emails a personalised daily digest.
+Pulls public job feeds from 109 verified Jalisco & Remote-Mexico employer career sites across 9 supported ATS platforms (Workday, Greenhouse, SmartRecruiters, Oracle HCM, Eightfold, Lever, Ashby, BambooHR, and Workable), keeps the roles that match each **subscriber profile** in `config.json` (director-level roles in Jalisco by default, plus remote-Mexico roles), builds a static searchable page (`docs/index.html`), optionally asks Gemini to tailor each subscriber's master CV (`cvs/*.md`) into an ATS-optimized `.docx` attachment for their top matches, and emails a personalised daily digest.
 
 Uses standard-library Python 3.9+ with zero third-party package installs.
 
@@ -25,7 +25,7 @@ Exit codes: `0` ok · `1` nothing written (every board failed) · `2` outputs wr
    - `GMAIL_USER`: the Gmail address that sends the digest
    - `GMAIL_APP_PASSWORD`: the 16-character App Password
    - `GEMINI_API_KEY` *(optional)*: enables the tailored-CV feature. Without it the digest is still sent, just without CVs.
-4. *(Optional)* **Variables** tab – `GEMINI_MODEL` to override `gemini-2.5-flash`.
+4. *(Optional)* **Variables** tab – `GEMINI_MODEL` to override `gemini-3.8-flash` (the script also auto-falls back to `gemini-flash-latest` and queries `/v1beta/models` if a model version is ever retired).
 5. **Settings > Actions > General > Workflow permissions** – select **Read and write permissions** (the workflow commits `state/` and `docs/` back to the branch).
 6. If the default branch has a **branch protection / ruleset** that blocks pushes, either allow `github-actions[bot]` to bypass it or turn it off; otherwise the state commit fails.
 7. Open the **Actions** tab, select **Refresh job board & send daily email**, and click **Run workflow**. Tick `check_only` the first time to see which boards in `companies.json` respond before you spam anybody.
