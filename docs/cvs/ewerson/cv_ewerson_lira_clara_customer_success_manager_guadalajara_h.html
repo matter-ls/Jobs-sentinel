@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ewerson Lira — Minimalist CV</title>
+<style>
+  @page { size: A4; margin: 14mm 16mm; }
+  * { box-sizing: border-box; }
+  body {
+    font: 10pt/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #18181b;
+    background: #f4f4f5;
+    margin: 0;
+    padding: 24px 12px;
+  }
+  .sheet {
+    max-width: 780px;
+    margin: 0 auto;
+    background: #ffffff;
+    padding: 36px 42px;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+  }
+  .toolbar {
+    max-width: 780px;
+    margin: 0 auto 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 9pt;
+    color: #52525b;
+  }
+  .print-btn {
+    background: #0f766e;
+    color: #ffffff;
+    border: none;
+    padding: 7px 14px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 9pt;
+  }
+  h1 { font-size: 21pt; font-weight: 800; margin: 0; letter-spacing: -0.4px; color: #09090b; }
+  .direction { font-size: 10.5pt; font-weight: 700; color: #0f766e; margin: 4px 0 2px; }
+  .headline { font-size: 10pt; font-weight: 600; color: #27272a; margin: 0 0 5px; }
+  .contact { font-size: 9pt; color: #52525b; padding-bottom: 10px; border-bottom: 1.5px solid #18181b; margin-bottom: 12px; }
+  h2 {
+    font-size: 8.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: #0f766e;
+    margin: 14px 0 6px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid #e4e4e7;
+  }
+  .summary { font-size: 9.8pt; color: #27272a; margin: 0 0 8px; }
+  .skills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+  .skill-pill {
+    font-size: 8.8pt;
+    background: #f4f4f5;
+    color: #27272a;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid #e4e4e7;
+    font-weight: 500;
+  }
+  .job { margin-bottom: 10px; page-break-inside: avoid; }
+  .job-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+  .role { font-weight: 700; font-size: 10pt; color: #09090b; }
+  .company { font-weight: 600; color: #0f766e; }
+  .dates { font-size: 8.8pt; color: #71717a; white-space: nowrap; }
+  ul { margin: 3px 0 0 16px; padding: 0; }
+  li { margin-bottom: 3px; font-size: 9.5pt; color: #27272a; }
+  .edu { font-size: 9.5pt; margin-bottom: 4px; }
+  @media print {
+    body { background: #ffffff; padding: 0; }
+    .sheet { box-shadow: none; padding: 0; max-width: 100%; border-radius: 0; }
+    .toolbar { display: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="toolbar">
+    <span>Tailored by Lucy for: Customer Success Manager - Guadalajara (Hybrid/Remote) at Clara</span>
+    <button class="print-btn" onclick="window.print()">Save as PDF / Print</button>
+  </div>
+  <div class="sheet">
+    <h1>Ewerson Lira</h1>
+    <div class="direction">Target Role Direction: Manager &amp; Cross-Functional Delivery Lead — Data &amp; Analytics Strategy, Business Intelligence &amp; Decision Systems</div>
+    <div class="headline">Customer Success Manager - Guadalajara (Hybrid/Remote) | Inbound/Outbound sales motions · sales support · forecasting</div>
+    <div class="contact">Zapopan, Jalisco, Mexico | +52 33 2384 3980 | ewerson.lira@live.com | linkedin.com/in/ewerson-lira-26aab954</div>
+
+    <h2>Executive Summary</h2>
+    <p class="summary">International Business professional with more than 10 years of experience in global companies such as F5 Networks, IBM and Alcatel, across business development, business administration, sales operations and data analysis. Currently completing an Information Technology &amp; Systems Engineering degree. Proven strengths in leadership and team management, effective communication, decision making, teamwork and strategic planning. Trilingual: Spanish, Portuguese and English.</p>
+
+    <h2>Core Competencies &amp; Key Skills</h2>
+    <div class="skills"><span class='skill-pill'>Inbound/Outbound sales motions</span><span class='skill-pill'>sales support</span><span class='skill-pill'>forecasting</span><span class='skill-pill'>stakeholder management</span><span class='skill-pill'>advanced Excel</span><span class='skill-pill'>reports and dashboards for sales decision-making</span><span class='skill-pill'>Project Management</span><span class='skill-pill'>Team leadership (20+ agents)</span><span class='skill-pill'>Financial Management</span><span class='skill-pill'>pipeline generation</span></div>
+
+    <h2>Professional Experience</h2>
+    
+        <div class="job">
+          <div class="job-head">
+            <div><span class="role">Business Development Representative, LATAM</span> &mdash; <span class="company">F5 Networks</span> &middot; Guadalajara, Mexico</div>
+            <div class="dates">2022 – Present</div>
+          </div>
+          <ul><li>Execute inbound and outbound sales motions focused on quickly converting anonymous prospects into active customers.</li><li>Opened the LATAM market for Digital Sales and generated the largest BDR pipeline to date.</li></ul>
+        </div>
+        <div class="job">
+          <div class="job-head">
+            <div><span class="role">Business Operations Analyst</span> &mdash; <span class="company">IBM Global Services – Campus Tecnológico Guadalajara</span> &middot; Guadalajara, Mexico</div>
+            <div class="dates">2015 – 2021</div>
+          </div>
+          <ul><li>Responsible for sales operations support, stakeholder management, forecasting and opportunity quality analysis.</li><li>Built and maintained reports and dashboards that helped the sales team make better decisions.</li><li>Recognized as a Trusted Advisor by Sales Management, a distinction granted to only a few analysts in the organization.</li><li>Improved the quality of analysis across the entire organization by 20% through feedback and coaching.</li></ul>
+        </div>
+        <div class="job">
+          <div class="job-head">
+            <div><span class="role">Asset Management Analyst</span> &mdash; <span class="company">IBM Global Services – Campus Tecnológico Guadalajara</span> &middot; Guadalajara, Mexico</div>
+            <div class="dates">2014 – 2015</div>
+          </div>
+          <ul><li>Software license renewal analyst for LATAM and North America.</li></ul>
+        </div>
+        <div class="job">
+          <div class="job-head">
+            <div><span class="role">Manager – Trilingual Support</span> &mdash; <span class="company">Alcatel Mexico</span> &middot; Guadalajara, Mexico</div>
+            <div class="dates"></div>
+          </div>
+          <ul><li>Led customer-support teams for LATAM and North America; drafted and developed new business strategies.</li><li>Performed software validation to improve the market introduction of new device models.</li></ul>
+        </div>
+
+    <h2>Education &amp; Certifications</h2>
+    <div class='edu'><strong>Information Technology &amp; Systems Engineering</strong> &mdash; Universidad del Valle de México (UVM) (2019 – present)</div><div class='edu'><strong>International Business</strong> &mdash; Escuela Superior de Comercio Internacional (2013 – 2016)</div><div class='edu'><strong>Languages:</strong> Spanish (Native) &middot; Portuguese (Fluent) &middot; English (Professional &middot; ~80%)</div>
+  </div>
+</body>
+</html>

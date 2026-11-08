@@ -627,6 +627,141 @@
     }
    },
    "initialized": true
+  },
+  "monica": {
+   "jobs": {
+    "workday:Flex:WD230517": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD232022": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD231224": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD228021": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD230318": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD229836": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD229837": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD229814": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD224772": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "greenhouse:Backbase:8225999": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "greenhouse:Clara:5219531007": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Arrive Logistics:89f8c295-f687-4b32-9970-d6f9e3107303": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3164137": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3168031": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3169771": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3170316": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3170314": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3165014": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3168723": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3167363": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Jabil:J2467745": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Jabil:J2464258": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Jabil:J2467574": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Jabil:J2467589": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "greenhouse:Wizeline:7614922": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "greenhouse:Wizeline:7905176": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    }
+   },
+   "initialized": true
   }
  }
 }
