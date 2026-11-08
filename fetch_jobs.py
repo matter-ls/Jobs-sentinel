@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Jobs Sentinel - Multi-Subscriber Daily Digest
 """
 job-radar: pulls public job feeds (Greenhouse, Lever, Ashby, Workable,
 SmartRecruiters, Workday), keeps matching roles per subscriber profile,
@@ -544,74 +545,225 @@ def select_jobs_for_email(jobs, baseline, cfg):
     return [j for j in jobs if j.get("discovered_now")]
 
 
+def job_age_info(j, today):
+    """Return (days_old, is_hot, human_label) for a job relative to `today`.
+    A role is considered 🔥 HOT when posted (or first spotted) within 0–2 days."""
+    ref_str = j.get("posted_at") or j.get("first_seen") or today.isoformat()
+    try:
+        ref_date = date.fromisoformat(ref_str)
+        days = max(0, (today - ref_date).days)
+    except ValueError:
+        days = 0
+
+    has_posted = bool(j.get("posted_at"))
+    verb = "Posted" if has_posted else "Spotted"
+    if days == 0:
+        label = f"{verb} today"
+    elif days == 1:
+        label = f"{verb} 1 day ago"
+    else:
+        label = f"{verb} {days} days ago"
+
+    is_hot = days <= 2
+    return days, is_hot, label
+
+
+def _render_job_card_html(j, today):
+    """Render a single job card with 🔥 HOT styling for 0-2 day old roles."""
+    days, is_hot, age_label = job_age_info(j, today)
+    loc_tag = html.escape(LOC_LABELS.get(j.get("loc_class"), j.get("loc_class", "")))
+    title_esc = html.escape(j.get("title", "Untitled Role"))
+    company_esc = html.escape(j.get("company", ""))
+    loc_esc = html.escape(j.get("location") or loc_tag)
+    team_esc = html.escape(j.get("team", ""))
+    url_esc = html.escape(j.get("url", "#"))
+    age_esc = html.escape(age_label)
+
+    meta_parts = [f"<strong>{company_esc}</strong>", loc_esc]
+    if team_esc:
+        meta_parts.append(team_esc)
+    meta_html = " &middot; ".join(meta_parts)
+
+    if is_hot:
+        card_bg = "#fffaf5"
+        card_border = "#fed7aa"
+        left_border = "#f97316"
+        badge_html = (
+            f"<span style='display:inline-block;background:#ffedd5;color:#c2410c;"
+            f"font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;"
+            f"letter-spacing:0.3px;margin-right:6px;'>&#128293; HOT &middot; {age_esc.upper()}</span>"
+            f"<span style='display:inline-block;background:#fef3c7;color:#92400e;"
+            f"font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;"
+            f"margin-right:6px;'>&#128142; Lucy&rsquo;s Top Pick</span>"
+        )
+        btn_bg = "#ea580c"
+        btn_text = "Claim This Role &amp; Apply &#128640;"
+    else:
+        card_bg = "#ffffff"
+        card_border = "#e7e5e4"
+        left_border = "#0f766e"
+        status_pill = (
+            "<span style='display:inline-block;background:#ccfbf1;color:#0f766e;"
+            "font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;"
+            "margin-right:6px;'>&#10024; HANDPICKED</span>"
+            if j.get("is_new")
+            else ""
+        )
+        badge_html = (
+            f"{status_pill}"
+            f"<span style='display:inline-block;background:#f5f5f4;color:#57534e;"
+            f"font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;"
+            f"margin-right:6px;'>&#128197; {age_esc}</span>"
+        )
+        btn_bg = "#0f766e"
+        btn_text = "View Role &amp; Apply &rarr;"
+
+    loc_pill = (
+        f"<span style='display:inline-block;background:#f5f5f4;color:#78716c;"
+        f"font-size:11px;padding:3px 8px;border-radius:999px;'>&#128205; {loc_tag}</span>"
+    )
+
+    return f"""
+    <div style="background:{card_bg};border:1px solid {card_border};border-left:5px solid {left_border};border-radius:12px;padding:16px 18px;margin-bottom:12px;">
+      <div style="margin-bottom:8px;">
+        {badge_html}{loc_pill}
+      </div>
+      <div style="font-size:17px;font-weight:700;color:#1c1917;line-height:1.35;margin-bottom:4px;">
+        <a href="{url_esc}" style="color:#1c1917;text-decoration:none;">{title_esc}</a>
+      </div>
+      <div style="font-size:14px;color:#57534e;margin-bottom:14px;">
+        {meta_html}
+      </div>
+      <div>
+        <a href="{url_esc}" style="display:inline-block;background:{btn_bg};color:#ffffff;font-size:13px;font-weight:700;padding:9px 16px;border-radius:8px;text-decoration:none;">
+          {btn_text}
+        </a>
+      </div>
+    </div>"""
+
+
 def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_email):
-    """Construct a multipart plain-text + HTML EmailMessage for a subscriber."""
+    """Construct a fun, VIP 'Lucy — Your Personal Headhunter' multipart email."""
     recipient = sub_cfg.get("recipient_email", "lucasschollmatter@gmail.com")
     sub_name = sub_cfg.get("name") or recipient
     date_str = today.isoformat()
+
+    # Enrich and sort so 🔥 HOT roles (0-2 days old) appear first
+    enriched = []
+    for j in jobs_to_send:
+        days, is_hot, age_label = job_age_info(j, today)
+        enriched.append((not is_hot, days, j, is_hot, age_label))
+    enriched.sort(key=lambda item: (item[0], item[1], item[2].get("company", "").lower()))
+
+    hot_jobs = [item[2] for item in enriched if item[3]]
+    other_jobs = [item[2] for item in enriched if not item[3]]
+
     msg = EmailMessage()
-    msg["Subject"] = f"Jobs Sentinel ({sub_name}): {len(jobs_to_send)} Relevant Opening(s) ({date_str})"
-    msg["From"] = sender_email
+    hot_prefix = f"🔥 {len(hot_jobs)} HOT! " if hot_jobs else "🕵️‍♀️✨ "
+    msg["Subject"] = (
+        f"{hot_prefix}Lucy (Your Personal Headhunter): {len(jobs_to_send)} Relevant Opening(s) handpicked for {sub_name} ({date_str})"
+    )
+    msg["From"] = f"Lucy · Your Personal Headhunter <{sender_email}>"
     msg["To"] = recipient
 
+    # Plain-text version (keeps '- {title} at {company}' format for compatibility)
     txt_lines = [
-        f"Hi {sub_name},",
+        f"Hey {sub_name}! 👋✨",
         "",
-        f"Jobs Sentinel Daily Digest — {date_str}",
-        f"{len(jobs_to_send)} new/relevant role(s) matching your preferences ({all_jobs_count} total active roles matched):",
+        "It's Lucy — your personal headhunter who ACTUALLY works for you (no commission, no ghosting, just pure hustle!).",
+        "While you were doing your thing, I put on my detective hat, dug through a mountain of noisy career boards, and handpicked the coolest opportunities that match YOUR exact profile.",
+        "I'm your daily reminder to check where to apply today — and honestly, you're a total catch, so these companies are lucky to have you!",
+        "",
+        f"Lucy's VIP Shortlist — {date_str}",
+        f"🔥 {len(hot_jobs)} HOT role(s) posted in the last 1-2 days | 💎 {len(jobs_to_send)} role(s) handpicked today ({all_jobs_count} total active matches on your radar):",
         "",
     ]
-    for j in jobs_to_send:
+    for _, _, j, is_hot, age_label in enriched:
         loc_tag = LOC_LABELS.get(j.get("loc_class"), j.get("loc_class", ""))
-        posted = j.get("posted_at") or f"First seen {j.get('first_seen', date_str)}"
-        txt_lines.append(f"- {j['title']} at {j['company']}")
-        txt_lines.append(f"  Location: {j.get('location') or loc_tag} ({loc_tag}) | Date: {posted}")
+        hot_tag = "[🔥 HOT] " if is_hot else "[NEW] " if j.get("is_new") else ""
+        txt_lines.append(f"- {hot_tag}{j['title']} at {j['company']}")
+        txt_lines.append(f"  Location: {j.get('location') or loc_tag} ({loc_tag}) | {age_label} ({j.get('posted_at') or j.get('first_seen', date_str)})")
         txt_lines.append(f"  Apply: {j.get('url')}")
         txt_lines.append("")
+    txt_lines.extend([
+        f"Headhunter's orders, {sub_name}: I already did the heavy lifting and filtered out all the junk. Now pour yourself a coffee, pick 1 or 2 roles above, and hit apply!",
+        "",
+        "Cheering for you always,",
+        "Lucy 🕵️‍♀️💼",
+        "Your Personal Headhunter (who works exclusively for you!)",
+    ])
     msg.set_content("\n".join(txt_lines))
 
-    rows_html = []
-    for j in jobs_to_send:
-        loc_tag = html.escape(LOC_LABELS.get(j.get("loc_class"), j.get("loc_class", "")))
-        title_esc = html.escape(j.get("title", ""))
-        company_esc = html.escape(j.get("company", ""))
-        loc_esc = html.escape(j.get("location", ""))
-        url_esc = html.escape(j.get("url", "#"))
-        posted_esc = html.escape(j.get("posted_at") or f"Seen {j.get('first_seen', date_str)}")
-        rows_html.append(
-            f"<tr>"
-            f"<td style='padding:10px 8px;border-bottom:1px solid #e7e5e4;'><strong>{company_esc}</strong></td>"
-            f"<td style='padding:10px 8px;border-bottom:1px solid #e7e5e4;'>{title_esc}</td>"
-            f"<td style='padding:10px 8px;border-bottom:1px solid #e7e5e4;'>{loc_esc}<br>"
-            f"<span style='font-size:12px;color:#78716c;'>{loc_tag}</span></td>"
-            f"<td style='padding:10px 8px;border-bottom:1px solid #e7e5e4;font-size:13px;color:#78716c;'>{posted_esc}</td>"
-            f"<td style='padding:10px 8px;border-bottom:1px solid #e7e5e4;'>"
-            f"<a href='{url_esc}' style='color:#0f766e;font-weight:600;text-decoration:none;'>Open &rarr;</a></td>"
-            f"</tr>"
-        )
+    # HTML sections
+    sections_html = []
+    if hot_jobs:
+        hot_cards = "".join(_render_job_card_html(j, today) for j in hot_jobs)
+        sections_html.append(f"""
+        <div style="margin-bottom:24px;">
+          <div style="font-size:16px;font-weight:800;color:#c2410c;margin-bottom:4px;">
+            &#128293; Hot Off the Press (Posted in the Last 1&ndash;2 Days)
+          </div>
+          <div style="font-size:13px;color:#78716c;margin-bottom:12px;">
+            I spotted these right as they went live &mdash; apply now so your CV lands right at the top of the stack!
+          </div>
+          {hot_cards}
+        </div>""")
 
+    if other_jobs:
+        other_heading = (
+            "&#128142; More Handpicked Gems from My Search"
+            if hot_jobs
+            else "&#128142; Today&rsquo;s Handpicked Shortlist Just for You"
+        )
+        other_cards = "".join(_render_job_card_html(j, today) for j in other_jobs)
+        sections_html.append(f"""
+        <div style="margin-bottom:16px;">
+          <div style="font-size:16px;font-weight:800;color:#0f766e;margin-bottom:10px;">
+            {other_heading}
+          </div>
+          {other_cards}
+        </div>""")
+
+    sub_name_esc = html.escape(sub_name)
     html_body = f"""<!doctype html>
 <html>
-<body style="font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#1c1917;background:#fafaf9;padding:20px;">
-  <div style="max-width:760px;margin:0 auto;background:#ffffff;border:1px solid #e7e5e4;border-radius:12px;padding:24px;">
-    <h2 style="margin:0 0 4px;font-size:20px;">Jobs Sentinel Daily Digest &middot; {html.escape(sub_name)}</h2>
-    <p style="margin:0 0 18px;color:#78716c;font-size:14px;">
-      {date_str} &middot; <strong>{len(jobs_to_send)}</strong> highlighted opening(s) matching your profile ({all_jobs_count} total active matches)
-    </p>
-    <table style="width:100%;border-collapse:collapse;font-size:14px;text-align:left;">
-      <thead>
-        <tr style="border-bottom:2px solid #e7e5e4;color:#78716c;font-size:12px;text-transform:uppercase;">
-          <th style="padding:8px;">Company</th>
-          <th style="padding:8px;">Role</th>
-          <th style="padding:8px;">Location</th>
-          <th style="padding:8px;">Date</th>
-          <th style="padding:8px;">Link</th>
-        </tr>
-      </thead>
-      <tbody>
-        {''.join(rows_html)}
-      </tbody>
-    </table>
+<body style="margin:0;padding:20px 12px;font-family:system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1c1917;background:#f5f5f4;">
+  <div style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #e7e5e4;border-radius:16px;overflow:hidden;">
+    <div style="background:#0f172a;background:linear-gradient(135deg,#0f172a 0%,#134e4a 55%,#0f766e 100%);color:#ffffff;padding:28px 24px;">
+      <div style="display:inline-block;background:rgba(255,255,255,0.16);color:#5eead4;font-size:11px;font-weight:800;padding:4px 11px;border-radius:999px;letter-spacing:0.6px;margin-bottom:12px;">
+        &#128373;&#65039;&zwj;&#9792;&#65039; LUCY &middot; YOUR PERSONAL HEADHUNTER &middot; VIP CLIENT DOSSIER
+      </div>
+      <h1 style="margin:0 0 10px;font-size:22px;line-height:1.3;color:#ffffff;">
+        Hey {sub_name_esc}! &#128075;&#10024; I worked hard digging through the boards today &mdash; and I found some seriously cool opportunities for you.
+      </h1>
+      <p style="margin:0 0 12px;font-size:14px;line-height:1.55;color:#e2e8f0;">
+        It&rsquo;s <strong>Lucy</strong>, the personal headhunter that <em>actually works for you</em> (zero commission, zero fluff, 100% on your team). I&rsquo;m your daily reminder to check where to apply today!
+      </p>
+      <p style="margin:0 0 18px;font-size:14px;line-height:1.55;color:#cbd5e1;">
+        I just combed through dozens of career pages, tossed out all the irrelevant noise, and curated this VIP shortlist tailored to your exact background. Anything posted in the last 1&ndash;2 days is badged <strong>&#128293; HOT</strong> so you can beat the crowd!
+      </p>
+      <div>
+        <span style="display:inline-block;background:#ea580c;color:#ffffff;font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;margin-right:6px;margin-bottom:4px;">
+          &#128293; {len(hot_jobs)} Hot (1&ndash;2d)
+        </span>
+        <span style="display:inline-block;background:rgba(255,255,255,0.18);color:#ffffff;font-size:12px;font-weight:600;padding:5px 12px;border-radius:999px;margin-right:6px;margin-bottom:4px;">
+          &#128142; {len(jobs_to_send)} Handpicked Today
+        </span>
+        <span style="display:inline-block;background:rgba(255,255,255,0.12);color:#cbd5e1;font-size:12px;padding:5px 12px;border-radius:999px;margin-bottom:4px;">
+          &#128225; {all_jobs_count} Total Active Matches
+        </span>
+      </div>
+    </div>
+
+    <div style="padding:24px;">
+      {''.join(sections_html)}
+      <div style="margin-top:22px;padding:18px;background:#fafaf9;border:1px dashed #d6d3d1;border-radius:12px;font-size:13px;line-height:1.5;color:#44403c;">
+        <div style="font-weight:800;font-size:14px;color:#0f766e;margin-bottom:4px;">
+          &#128140; A quick note from Lucy, your personal headhunter:
+        </div>
+        I already did the heavy lifting and filtered out all the junk so you don&rsquo;t have to scroll for hours. Pour yourself a coffee &#9749;, pick 1 or 2 roles above, and send that application today, <strong>{sub_name_esc}</strong> &mdash; these companies would be lucky to have you! &#128170;&#128640;
+      </div>
+    </div>
   </div>
 </body>
 </html>"""
