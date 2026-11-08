@@ -178,11 +178,11 @@
    },
    "initialized": true,
    "relationship": {
-    "edition": 7,
+    "edition": 8,
     "streak_days": 1,
     "last_briefing_date": "2026-11-08",
-    "total_roles_surfaced": 123,
-    "total_cvs_tailored": 21,
+    "total_roles_surfaced": 138,
+    "total_cvs_tailored": 24,
     "recent_angle_ids": [
      26,
      27,
@@ -190,7 +190,8 @@
      29,
      30,
      31,
-     0
+     0,
+     1
     ],
     "recent_headlines": [
      "Turn Ambition Into Pipeline Today.",
@@ -199,9 +200,16 @@
      "Play Asymmetric Offense.",
      "Build Escape Velocity From Routine.",
      "Write Your Own Promotion Slip.",
-     "Stop Paying the 3% Comfort Tax."
+     "Stop Paying the 3% Comfort Tax.",
+     "Don't Wait in Somebody Else's Queue."
     ],
-    "recent_spotlight_keys": []
+    "recent_spotlight_keys": [],
+    "recent_story_beats": [
+     "Ed. #8 (2026-11-08): Lucy framed 'Their Robot, Our Translator' around Avnet (Mexico Country Manager, Shared Services) and asked Lucas for one 60-second application."
+    ],
+    "last_micro_challenge": "Set a 60-second timer right now: open Avnet's portal link, drop in your pre-built CV_*.docx, and log 1 fearless rep before 10 AM.",
+    "last_spotlight_company": "Avnet",
+    "last_briefing_source": "vault"
    }
   },
   "luis": {
