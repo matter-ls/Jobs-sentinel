@@ -6,7 +6,7 @@
   "email_mode": "new_or_discovered",
   "daily_top_when_quiet": true,
   "quiet_spotlight_count": 3,
-  "llm_model": "gemini-2.5-flash",
+  "llm_model": "gemini-3.8-flash",
   "max_tailored_cvs": 3,
   "title_include": [
     "\\bdirector(a)?\\b",
