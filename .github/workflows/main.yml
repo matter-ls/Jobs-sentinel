@@ -2,14 +2,15 @@ name: Refresh job board & send daily email
 
 on:
   schedule:
-    # Shifted to 13:17 UTC (7:17 AM CST in Guadalajara/Zapopan) to avoid top-of-the-hour queue delays.
-    - cron: "17 13 * * *"
+    # Runs daily at 13:00 UTC (7:00 AM CST in Guadalajara/Zapopan; Mexico has no DST).
+    # NOTE: scheduled runs only fire on the repository's default branch.
+    - cron: "0 13 * * *"
   workflow_dispatch:
     inputs:
       email_all:
         description: "Send all matching roles in email (not just newly discovered)"
         required: false
-        default: false
+        default: true
         type: boolean
       subscriber:
         description: "Target subscriber (select 'all' to run for everyone)"
@@ -28,6 +29,8 @@ on:
         default: false
         type: boolean
 
+# Never cancel an in-flight run: emails are sent before state/seen.json is committed,
+# so killing a run mid-flight would cause duplicate emails on the next run.
 concurrency:
   group: jobs-sentinel-${{ github.ref }}
   cancel-in-progress: false
@@ -44,32 +47,33 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
-      - name: Run offline unit tests
-        run: python3 -m unittest discover -s tests -v
+      - name: Run offline unit & syntax tests
+        run: python3 -W error::SyntaxWarning -m unittest discover -s tests -v
 
       - name: Check every company board (check_only mode)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.check_only == true }}
+        if: ${{ inputs.check_only == true }}
         run: python3 fetch_jobs.py --check
 
       - name: Fetch jobs, tailor CVs with Gemini, and send emails
         id: refresh
-        if: ${{ github.event_name == 'schedule' || inputs.check_only != true }}
+        if: ${{ inputs.check_only != true }}
         env:
           PYTHONUNBUFFERED: "1"
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
-          # IMPORTANT: On schedule, inputs.email_all is null -> must default to 'false' so only NEW jobs are emailed!
-          INPUT_EMAIL_ALL: ${{ github.event_name == 'workflow_dispatch' && inputs.email_all == true && 'true' || 'false' }}
-          INPUT_SUBSCRIBER: ${{ inputs.subscriber || 'all' }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || secrets.GEMINI_MODEL }}
+          INPUT_EMAIL_ALL: ${{ inputs.email_all }}
+          INPUT_SUBSCRIBER: ${{ inputs.subscriber }}
         run: |
           args=()
           if [ "$INPUT_EMAIL_ALL" = "true" ]; then
@@ -78,7 +82,6 @@ jobs:
           if [ -n "$INPUT_SUBSCRIBER" ] && [ "$INPUT_SUBSCRIBER" != "all" ]; then
             args+=(--subscriber "$INPUT_SUBSCRIBER")
           fi
-          echo "Running: python3 fetch_jobs.py ${args[*]}"
           set +e
           python3 fetch_jobs.py "${args[@]}"
           rc=$?
@@ -88,13 +91,16 @@ jobs:
             echo "--- Generated Tailored CVs (.docx / .pdf / .html) ---"
             ls -lh out/cvs/
           fi
+          # 0 = all good; 2 = board & state written, but >=1 subscriber email failed
+          # (that subscriber's state was rolled back so they will be retried next run).
           if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ]; then
             exit "$rc"
           fi
 
       - name: Upload static site & tailored CVs artifact
-        if: ${{ github.event_name == 'schedule' || inputs.check_only != true }}
-        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && inputs.check_only != true && steps.refresh.outcome == 'success' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
         with:
           name: job-board-and-tailored-cvs
           path: |
@@ -104,31 +110,55 @@ jobs:
           retention-days: 14
 
       - name: Commit updated state and static page
-        if: ${{ github.event_name == 'schedule' || inputs.check_only != true }}
+        if: ${{ !cancelled() && inputs.check_only != true && steps.refresh.outcome == 'success' }}
         env:
           BRANCH: ${{ github.ref_name }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           mkdir -p state docs
-          git add -A -- state docs
-          if git diff --staged --quiet; then
-            echo "No state changes to commit."
-            exit 0
-          fi
-          git commit -m "chore: update job radar state $(date -u +%F) [skip ci]"
-          for attempt in 1 2 3; do
-            if git pull --rebase -X theirs origin "$BRANCH" && git push origin "HEAD:$BRANCH"; then
+
+          # Snapshot generated state/ and docs/ so retries can reset cleanly onto origin/$BRANCH
+          # without ever hitting binary (.docx/.pdf) or JSON rebase conflicts.
+          SNAP_DIR="${RUNNER_TEMP:-/tmp}/radar_state_snapshot"
+          rm -rf "$SNAP_DIR"
+          mkdir -p "$SNAP_DIR"
+          cp -a state "$SNAP_DIR/state"
+          cp -a docs "$SNAP_DIR/docs"
+
+          for attempt in 1 2 3 4; do
+            if [ "$attempt" -gt 1 ]; then
+              echo "Syncing with origin/$BRANCH before retry #$attempt..."
+              git rebase --abort 2>/dev/null || true
+              git merge --abort 2>/dev/null || true
+              git fetch origin "$BRANCH"
+              git reset --hard "origin/$BRANCH"
+              rm -rf state docs
+              cp -a "$SNAP_DIR/state" state
+              cp -a "$SNAP_DIR/docs" docs
+            fi
+
+            git add -A -- state docs
+            if git diff --staged --quiet; then
+              echo "No state or docs changes to commit."
               exit 0
             fi
-            echo "Push attempt $attempt failed, retrying in 10s..."
-            sleep 10
+
+            git commit -m "chore: update job radar state $(date -u +%F) [skip ci]"
+            if git push origin "HEAD:$BRANCH"; then
+              echo "State and docs pushed cleanly on attempt #$attempt."
+              exit 0
+            fi
+
+            echo "Push attempt #$attempt failed, retrying in $((attempt * 5))s..."
+            sleep $((attempt * 5))
           done
-          echo "::error::Could not push state after 3 attempts."
+
+          echo "::error::Could not push state after 4 attempts."
           exit 1
 
       - name: Fail workflow if any subscriber email failed
-        if: ${{ steps.refresh.outputs.exit_code == '2' }}
+        if: ${{ !cancelled() && steps.refresh.outputs.exit_code == '2' }}
         run: |
           echo "::error::One or more subscriber email digests failed to send (their state was rolled back for retry). Check the 'Fetch jobs' step log."
           exit 1
