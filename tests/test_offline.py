@@ -720,6 +720,126 @@ class EndToEnd(unittest.TestCase):
             self.assertTrue(headline)
             self.assertIn("Luis", body)
 
+    def test_ai_partner_briefing_prompt_quality_gate_and_continuity(self):
+        """Lucy's daily briefing is AI-first: the prompt is grounded in real overnight facts, the
+        spotlight employer's ATS, the candidate's real craft and the story so far; every draft passes
+        a quality gate (forbidden dishonest vocabulary, placeholders, near-duplicate headlines) with
+        exactly one revision retry; the email renders chapter, intel and sign-off; memory persists."""
+        sub_luis = next(s for s in fj.get_subscribers(CFG) if s["id"] == "luis")
+        top_job = {
+            "key": "workday:Flex:JR1", "ats": "workday", "title": "Automation Program Lead", "company": "Flex",
+            "location": "Zapopan, Jalisco, Mexico", "loc_class": "jalisco", "url": "https://flex.wd1.myworkdayjobs.com/x/JR1",
+            "posted_at": "2026-11-08", "cv_filename": "CV_Luis_Gallegos_Flex_Automation_Program_Lead.docx",
+        }
+        sub_state = {"relationship": {
+            "edition": 6, "streak_days": 6, "last_briefing_date": "2026-11-07",
+            "total_roles_surfaced": 40, "total_cvs_tailored": 12,
+            "recent_headlines": ["Their Robot Is Now Our Doorman"],
+            "recent_story_beats": ["Ed. #6 (2026-11-07): Lucy framed 'Speed Is A Status Signal' around HPE and asked Luis for one application."],
+            "last_micro_challenge": "Open HPE's portal and upload the attached CV before 10 AM.",
+            "last_spotlight_company": "HPE",
+        }}
+        rel_ctx = fj.peek_relationship_context(sub_state, 3, 2, date(2026, 11, 8), board_count=109, sub_id="luis")
+        self.assertEqual(rel_ctx["edition"], 7)
+        self.assertEqual(rel_ctx["last_spotlight_company"], "HPE")
+
+        # 1. The prompt is fully grounded (facts, ATS intel, craft, continuity, avoid-list, arc, language)
+        snapshot = fj.extract_cv_identity_snapshot(sub_luis)
+        self.assertIn("Identity:", snapshot)
+        self.assertIn("Current chapter:", snapshot)
+        self.assertNotIn("@", snapshot)
+        prompt = fj.compose_partner_briefing_prompt(
+            sub_luis, top_job, rel_ctx, date(2026, 11, 8),
+            fj.PARTNER_STORY_BEATS[rel_ctx["angle_id"]], fj.WEEKDAY_CADENCE[date(2026, 11, 8).weekday()],
+            snapshot, 2, 1, 3, 2, False, language="English",
+        )
+        for needle in (
+            "Chapter II: Building the Habit", "Briefing edition together: #7", "Spotlight hiring employer: 'Flex'",
+            "Their screening tool for this role: Workday", "CV_Luis_Gallegos_Flex_Automation_Program_Lead.docx",
+            "Yesterday's spotlight employer: HPE", "Yesterday's micro-challenge:", "Speed Is A Status Signal",
+            "RECENT_HEADLINES_TO_AVOID: 'Their Robot Is Now Our Doorman'", "Language to write in: English",
+            "109 across 9 ATS platforms", "First name: Luis",
+        ):
+            self.assertIn(needle, prompt)
+        self.assertIn("Us vs. Their Machine", fj.DAILY_MOTIVATION_SYSTEM_PROMPT)
+        self.assertIn("FORBIDDEN vocabulary", fj.DAILY_MOTIVATION_SYSTEM_PROMPT)
+        self.assertEqual(len(fj.PARTNER_STORY_BEATS), len(fj.DAILY_INSIDER_VAULT))
+
+        # 2. Quality gate: dishonest vocabulary, placeholders and near-duplicate headlines are rejected
+        good = {
+            "subject_spark": "Flex Just Blinked", "chapter_title": "The Doorman Switches Sides",
+            "headline": "Flex Built A Gate. We Brought The Key.",
+            "message": "Luis, Flex runs its screening through an automated parser that ranks structure and keywords long before a human reads a name. Last night we rebuilt your automation and process-excellence record in that exact dialect, so the machine that was designed to say no now opens the door. Your Word CV is attached; the gate is already half open.",
+            "their_ai_vs_our_ai": "Workday parses your CV into fields and recruiters filter by exact skill terms; your attached CV uses a single clean column with your real RPA and Power Platform vocabulary so it parses perfectly.",
+            "connection_ps": "Seventh morning in a row together, Luis: 109 portals swept, HPE yesterday, Flex today, and I will keep the radar warm.",
+            "micro_challenge": "Open the Flex posting, upload CV_Luis_Gallegos_Flex_Automation_Program_Lead.docx, and hit submit before your first meeting.",
+            "partner_signoff": "Shoulder to shoulder. Lucy",
+            "story_beat": "Lucy framed Flex's parser as a doorman and sent Luis after the Automation Program Lead role.",
+        }
+        ok, _ = fj._briefing_pack_quality(good, "Luis", rel_ctx["recent_headlines"])
+        self.assertTrue(ok)
+        bad_vocab = dict(good, message=good["message"] + " We hack their system every night.")
+        ok, reason = fj._briefing_pack_quality(bad_vocab, "Luis", rel_ctx["recent_headlines"])
+        self.assertFalse(ok)
+        self.assertIn("forbidden vocabulary", reason)
+        ok, reason = fj._briefing_pack_quality(dict(good, headline="Their Robot Is Now Our Doorman"), "Luis", rel_ctx["recent_headlines"])
+        self.assertFalse(ok)
+        ok, reason = fj._briefing_pack_quality(dict(good, connection_ps="Hello {first_name}"), "Luis", [])
+        self.assertFalse(ok)
+        self.assertIn("template braces", reason)
+
+        # 3. One revision round: first draft uses forbidden vocabulary -> rejected -> revised draft accepted
+        calls = []
+
+        def scripted_gemini(prompt_text, **kwargs):
+            calls.append(prompt_text)
+            if len(calls) == 1:
+                return dict(good, headline="We Cheat Their Filter Daily")
+            return dict(good)
+
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "valid-key"}), patch("fetch_jobs._invoke_gemini_json", side_effect=scripted_gemini):
+            pack = fj.generate_daily_briefing_pack(sub_luis, top_job, 2, 1, 3, date(2026, 11, 8), rel_ctx=rel_ctx, cvs_today_count=2)
+        self.assertEqual(len(calls), 2)
+        self.assertIn("REVISION NOTE", calls[1])
+        self.assertIn("forbidden vocabulary", calls[1])
+        self.assertEqual(pack["briefing_source"], "gemini")
+        self.assertTrue(pack["briefing_revised"])
+        self.assertEqual(pack["headline"], good["headline"])
+        self.assertEqual(pack["chapter_title"], "The Doorman Switches Sides")
+        self.assertEqual(pack["partner_signoff"], "Shoulder to shoulder. Lucy")
+        self.assertEqual(pack["spotlight_company"], "Flex")
+
+        # 4. The email renders chapter, Their-AI-vs-Our-AI intel and the sign-off (HTML + plain text)
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "valid-key"}), patch("fetch_jobs._invoke_gemini_json", return_value=dict(good)):
+            msg = fj.build_email_message([dict(top_job)], 3, sub_luis, date(2026, 11, 8), "sender@gmail.com", sub_state=sub_state, board_count=109)
+        html_part = msg.get_body(preferencelist=("html",)).get_content()
+        plain_part = msg.get_body(preferencelist=("plain",)).get_content()
+        self.assertIn("Chapter 7: The Doorman Switches Sides", html_part)
+        self.assertIn("Their AI vs. Our AI:", html_part)
+        self.assertIn("Shoulder to shoulder. Lucy", html_part)
+        self.assertIn("Flex Built A Gate. We Brought The Key.", html_part)
+        self.assertIn("Us vs. Their Machine · Chapter 7", plain_part)
+        self.assertIn("Their AI vs. Our AI:", plain_part)
+        self.assertIn("Flex Just Blinked", msg["Subject"])
+
+        # 5. Continuity memory persists story beats, last micro-challenge and last spotlight employer
+        fj.commit_relationship_state(sub_state, rel_ctx, pack, [top_job], date(2026, 11, 8))
+        rel = sub_state["relationship"]
+        self.assertEqual(rel["edition"], 7)
+        self.assertEqual(rel["last_spotlight_company"], "Flex")
+        self.assertEqual(rel["last_briefing_source"], "gemini")
+        self.assertTrue(rel["recent_story_beats"][-1].startswith("Ed. #7 (2026-11-08):"))
+        self.assertIn("doorman", rel["recent_story_beats"][-1])
+        self.assertIn(good["headline"], rel["recent_headlines"])
+
+        # 6. Two rejected drafts (or Gemini outage) fall back to the deterministic vault, never crash
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "valid-key"}), patch("fetch_jobs._invoke_gemini_json", return_value=dict(good, message="We hack and cheat " * 6)):
+            vault_pack = fj.generate_daily_briefing_pack(sub_luis, top_job, 2, 1, 3, date(2026, 11, 8), rel_ctx=rel_ctx, cvs_today_count=2)
+        self.assertEqual(vault_pack["briefing_source"], "vault")
+        self.assertIn("Luis", vault_pack["message"])
+        self.assertIn("Workday", vault_pack["their_ai_vs_our_ai"])
+        self.assertTrue(vault_pack["partner_signoff"].endswith("Lucy"))
+
     def test_30_days_unique_dopamine_messages_and_anti_repeat(self):
         """Every single day across 30 consecutive days—and even multiple runs on the same day—
         produces a 100% distinct headline, message, subject spark, and partnership note."""
