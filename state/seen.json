@@ -178,18 +178,20 @@
    },
    "initialized": true,
    "relationship": {
-    "edition": 2,
+    "edition": 3,
     "streak_days": 1,
     "last_briefing_date": "2026-11-08",
-    "total_roles_surfaced": 37,
-    "total_cvs_tailored": 6,
+    "total_roles_surfaced": 56,
+    "total_cvs_tailored": 9,
     "recent_angle_ids": [
      26,
-     27
+     27,
+     28
     ],
     "recent_headlines": [
      "Turn Ambition Into Pipeline Today.",
-     "Stop Discounting Skills That Feel Easy to You."
+     "Stop Discounting Skills That Feel Easy to You.",
+     "Every Shot Sharpens Your Executive Story."
     ],
     "recent_spotlight_keys": []
    }
@@ -545,9 +547,143 @@
      "first_seen": "2026-11-08",
      "baseline": true,
      "last_seen": "2026-11-08"
+    },
+    "workday:Plexus:R043187": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Plexus:R043298": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Plexus:R043297": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Plexus:R043299": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Plexus:R043314": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Plexus:R043450": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Avnet:JR-024468": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Hewlett Packard Enterprise:1212304": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Hewlett Packard Enterprise:1215663": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Hewlett Packard Enterprise:1216388": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Hewlett Packard Enterprise:1209525": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Hewlett Packard Enterprise:1216400": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Hewlett Packard Enterprise:1217234": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Hewlett Packard Enterprise:1218212": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "greenhouse:Toshiba Global Commerce Solutions:5285456007": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "greenhouse:Toshiba Global Commerce Solutions:5277588007": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Ciena:R031786": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "smartrecruiters:Bosch:744000159934670": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Brown-Forman (Casa Herradura):JR-00010525": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Brown-Forman (Casa Herradura):JR-00010460": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Mondelēz International:R-180617": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Workday:JR-0111212": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Workday:JR-0109544": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "greenhouse:Twilio:8261245": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
     }
    },
-   "initialized": true
+   "initialized": true,
+   "relationship": {
+    "edition": 1,
+    "streak_days": 1,
+    "last_briefing_date": "2026-11-08",
+    "total_roles_surfaced": 94,
+    "total_cvs_tailored": 3,
+    "recent_angle_ids": [
+     21
+    ],
+    "recent_headlines": [
+     "Momentum Is A Choice You Make Before 9 AM."
+    ],
+    "recent_spotlight_keys": []
+   }
   },
   "ewerson": {
    "jobs": {
@@ -725,9 +861,323 @@
      "first_seen": "2026-11-08",
      "baseline": true,
      "last_seen": "2026-11-08"
+    },
+    "workday:Avnet:JR-024300": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "oracle_hcm:Oracle:349534": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "oracle_hcm:Oracle:348712": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Hewlett Packard Enterprise:1215541": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Hewlett Packard Enterprise:1216218": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Hewlett Packard Enterprise:1202638": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Hewlett Packard Enterprise:1215915": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Hewlett Packard Enterprise:1210324": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:09cb455d-8096-4219-ad46-8b688830dade": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:0c383068-8b0e-4d94-93e2-d0e71b1a5cdf": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:0de59690-6e9a-4b80-aa7b-b505b4955761": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:14e34169-02f3-452c-99db-52e0d3562315": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:14e8bc84-7898-449c-b981-3ddde45436cd": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:27ab8b7e-efd3-489b-9318-c45d493ec6e9": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:35d073ea-6302-4de1-8fb6-878ac28bfe7d": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:4a3138a6-7058-451b-9671-eec72906277a": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:4de6841a-f405-431c-9c67-28e69c41f6a4": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:6791086d-6ceb-48cc-914a-fb1a06737805": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:70c55648-431f-4576-9d19-c0c7ced75c69": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:9dc9433f-46a9-4c5e-9a6d-d1d79c64a61c": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:a01631eb-2f8f-4a10-a3c2-f799e8f1fbb1": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:a231b88c-3aba-448b-84ce-899ff38483a0": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:c82cf23f-a8fc-4b59-abfc-3ba1f7ad9dd9": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:cb0b584f-f77d-43bd-818c-1861eaa7d366": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:d001cd45-7ba8-4a92-9474-7c38706d3e88": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:e0018061-4769-41ab-8156-d70bbc8e9cb7": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:ea5f5f95-e910-4b71-9c2f-b5ae89e3a90a": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:eade08b7-2b00-4e7f-b962-452f7f45627b": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:03debffb-8c6a-424e-8861-f4e28c3fd619": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:323dc8b5-b242-4e78-b454-dc3ae1537be7": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:3b4a0dd4-151e-4223-8f9e-6c85ea793ed1": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:7078f0d4-d4aa-4868-9e53-dccf60f735b8": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:709d8704-765e-401e-8d0f-460748dbf572": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:79257f3c-3f68-4910-b073-035502c0c499": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:90361d78-de56-412d-8efe-dbf1620427ff": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:95a5fb79-21f7-4903-94c8-0c6df004a85e": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:9ac78392-bf9e-4f4b-aa7b-bf8d0ee460a8": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:a068cf17-9437-42f7-8cc0-99eca0852ee0": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:a1e40789-e77a-46f5-a75b-09600f578b9c": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:a3b079ed-b918-43bb-927f-360a358d5ab0": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:aa67ca8f-59da-40e2-b951-c3974490d7db": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:ae6af482-2dbe-4e61-908d-e7127a01c69d": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:b0aa6b76-2198-430f-8f0a-e07cca702510": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:c4266080-b67a-4a44-aa2c-c3b0eb6ce2a9": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:dffe0f79-92a6-4e24-9c0f-93b61a94db31": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:f6ee9870-f0da-4743-90b2-4f8bf16a1af7": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:fb27c5d4-ad79-4fb9-949d-e6a361723794": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "lever:Bluelight Consulting:feeb453c-0f4c-4c5e-bcbb-22202c1cf75e": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "oracle_hcm:Honeywell:160672": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Abbott:31165905": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Abbott:31162276": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Abbott:31158150": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "greenhouse:Paystand:8165060003": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "greenhouse:Stripe:8096790": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Citi:24717412": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Workday:JR-0110997": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Workday:JR-0110306": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Workday:JR-0111166": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Workday:JR-0111001": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Workday:JR-0111004": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
     }
    },
-   "initialized": true
+   "initialized": true,
+   "relationship": {
+    "edition": 1,
+    "streak_days": 1,
+    "last_briefing_date": "2026-11-08",
+    "total_roles_surfaced": 66,
+    "total_cvs_tailored": 3,
+    "recent_angle_ids": [
+     29
+    ],
+    "recent_headlines": [
+     "Play Asymmetric Offense."
+    ],
+    "recent_spotlight_keys": []
+   }
   },
   "monica": {
    "jobs": {
@@ -860,9 +1310,88 @@
      "first_seen": "2026-11-08",
      "baseline": true,
      "last_seen": "2026-11-08"
+    },
+    "workday:Plexus:R043187": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Plexus:R043298": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Plexus:R043297": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Plexus:R043299": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Plexus:R043314": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Avnet:JR-024815": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Avnet:JR-024304": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Avnet:JR-024235": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Hewlett Packard Enterprise:1212456": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Hewlett Packard Enterprise:1216400": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Hewlett Packard Enterprise:1218212": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "greenhouse:Toshiba Global Commerce Solutions:5285456007": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "greenhouse:Toshiba Global Commerce Solutions:5277588007": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
     }
    },
-   "initialized": true
+   "initialized": true,
+   "relationship": {
+    "edition": 1,
+    "streak_days": 1,
+    "last_briefing_date": "2026-11-08",
+    "total_roles_surfaced": 39,
+    "total_cvs_tailored": 3,
+    "recent_angle_ids": [
+     6
+    ],
+    "recent_headlines": [
+     "One Surgical Shot Beats A Year of 'Someday'."
+    ],
+    "recent_spotlight_keys": []
+   }
   }
  }
 }
