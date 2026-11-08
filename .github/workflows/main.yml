@@ -2,9 +2,8 @@ name: Refresh job board & send daily email
 
 on:
   schedule:
-    # Runs daily at 13:00 UTC (7:00 AM CST in Guadalajara/Zapopan; Mexico has no DST).
-    # NOTE: scheduled runs only fire on the repository's default branch.
-    - cron: "0 13 * * *"
+    # Shifted to 13:17 UTC (7:17 AM CST in Guadalajara/Zapopan) to avoid top-of-the-hour queue delays.
+    - cron: "17 13 * * *"
   workflow_dispatch:
     inputs:
       email_all:
@@ -29,8 +28,6 @@ on:
         default: false
         type: boolean
 
-# Do NOT cancel an in-flight run: emails are sent before state/seen.json is committed,
-# so killing a run mid-flight would cause duplicate emails on the next run.
 concurrency:
   group: jobs-sentinel-${{ github.ref }}
   cancel-in-progress: false
@@ -47,31 +44,34 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Run offline unit tests
         run: python3 -m unittest discover -s tests -v
 
+      # Safe fallback check: explicitly check if it's true (will skip on schedule where inputs is null)
       - name: Check every company board (check_only mode)
-        if: ${{ inputs.check_only == true }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.check_only == true }}
         run: python3 fetch_jobs.py --check
 
+      # Safe fallback check: will run on schedule (since event is not check_only) or if manual check_only is false
       - name: Fetch jobs, tailor CVs with Gemini, and send emails
         id: refresh
-        if: ${{ inputs.check_only != true }}
+        if: ${{ github.event_name == 'schedule' || inputs.check_only != true }}
         env:
           PYTHONUNBUFFERED: "1"
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
-          INPUT_EMAIL_ALL: ${{ inputs.email_all }}
-          INPUT_SUBSCRIBER: ${{ inputs.subscriber }}
+          # Fallback values for when 'inputs' is null (on schedule event)
+          INPUT_EMAIL_ALL: ${{ inputs.email_all || 'true' }}
+          INPUT_SUBSCRIBER: ${{ inputs.subscriber || 'all' }}
         run: |
           args=()
           if [ "$INPUT_EMAIL_ALL" = "true" ]; then
@@ -89,15 +89,13 @@ jobs:
             echo "--- Generated Tailored CVs (.docx / .pdf / .html) ---"
             ls -lh out/cvs/
           fi
-          # 0 = all good; 2 = board & state written, but >=1 subscriber email failed
-          # (that subscriber's state was rolled back so they'll be retried next run).
           if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ]; then
             exit "$rc"
           fi
 
       - name: Upload static site & tailored CVs artifact
-        if: ${{ inputs.check_only != true }}
-        uses: actions/upload-artifact@v7
+        if: ${{ github.event_name == 'schedule' || inputs.check_only != true }}
+        uses: actions/upload-artifact@v4
         with:
           name: job-board-and-tailored-cvs
           path: |
@@ -107,7 +105,7 @@ jobs:
           retention-days: 14
 
       - name: Commit updated state and static page
-        if: ${{ inputs.check_only != true }}
+        if: ${{ github.event_name == 'schedule' || inputs.check_only != true }}
         env:
           BRANCH: ${{ github.ref_name }}
         run: |
