@@ -1,6 +1,6 @@
 # job-radar (Jobs Sentinel)
 
-Pulls public job feeds from company career sites (Greenhouse, Lever, Ashby, Workable, SmartRecruiters, and Workday), keeps the roles that match each **subscriber profile** in `config.json` (director-level roles in Jalisco by default, plus remote-Mexico roles), builds a static searchable page (`docs/index.html`), optionally asks Gemini to tailor each subscriber's master CV (`cvs/*.md`) to their top matches, and emails a personalised daily digest.
+Pulls public job feeds from 106 verified Jalisco & Remote-Mexico employer career sites across 8 supported ATS platforms (Workday, Greenhouse, SmartRecruiters, Lever, Ashby, Oracle HCM, Eightfold, and Workable), keeps the roles that match each **subscriber profile** in `config.json` (director-level roles in Jalisco by default, plus remote-Mexico roles), builds a static searchable page (`docs/index.html`), optionally asks Gemini to tailor each subscriber's master CV (`cvs/*.md`) into an ATS-optimized `.docx` attachment for their top matches, and emails a personalised daily digest.
 
 Uses standard-library Python 3.9+ with zero third-party package installs.
 

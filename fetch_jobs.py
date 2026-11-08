@@ -2,10 +2,10 @@
 # Jobs Sentinel - Multi-Subscriber Daily Digest + LLM CV Headhunter
 """
 job-radar: pulls public job feeds (Greenhouse, Lever, Ashby, Workable,
-SmartRecruiters, Workday), keeps matching roles per subscriber profile,
-builds a static page at docs/index.html, optionally calls Gemini LLM to
-compare top job postings against each subscriber's master CV to generate a
-tailored minimalist CV, and emails personalized daily digests.
+SmartRecruiters, Workday, Oracle HCM, Eightfold), keeps matching roles per
+subscriber profile, builds a static page at docs/index.html, optionally calls
+Gemini LLM to compare top job postings against each subscriber's master CV to
+generate a tailored minimalist CV, and emails personalized daily digests.
 
   python3 fetch_jobs.py                     normal run (fetch, filter, write page + state, email all active subscribers)
   python3 fetch_jobs.py --subscriber lucas  only process email for subscriber 'lucas'
@@ -36,7 +36,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
-from urllib import error, request
+from urllib import error, parse, request
 
 ROOT = Path(__file__).resolve().parent
 UA = "job-radar/1.0 (personal job board)"
@@ -46,13 +46,15 @@ CFG_DEFAULTS = {
     "recipient_email": "lucasschollmatter@gmail.com",
     "email_on_baseline": True,
     "email_mode": "new_or_discovered",
+    "daily_top_when_quiet": False,
+    "quiet_spotlight_count": 3,
     "llm_model": "gemini-2.5-flash",
     "max_tailored_cvs": 3,
     "cv_attachment_format": "docx",
     "include_remote_mexico": True,
     "include_country_only": True,
     "new_days": 7,
-    "max_workers": 8,
+    "max_workers": 16,
     "state_retention_days": 120,
 }
 
@@ -130,12 +132,13 @@ def today_utc():
 
 
 def to_date(v):
-    """ISO string or epoch-milliseconds -> 'YYYY-MM-DD', or None."""
+    """ISO string or epoch (seconds or milliseconds) -> 'YYYY-MM-DD', or None."""
     if v in (None, ""):
         return None
     try:
         if isinstance(v, (int, float)):
-            return datetime.fromtimestamp(v / 1000, timezone.utc).date().isoformat()
+            ts = v / 1000 if v > 100_000_000_000 else v
+            return datetime.fromtimestamp(ts, timezone.utc).date().isoformat()
         return datetime.fromisoformat(str(v).replace("Z", "+00:00")).date().isoformat()
     except (ValueError, OverflowError, OSError):
         m = re.match(r"\d{4}-\d{2}-\d{2}", str(v))
@@ -205,7 +208,7 @@ def get_subscribers(cfg, only_id=None):
 
 def collect_workday_search_terms(cfg):
     """Union default Workday search terms with any extra search terms from active subscribers."""
-    default_terms = ["Guadalajara", "Zapopan", "Jalisco", "El Salto", "Tonala"]
+    default_terms = ["Guadalajara", "Zapopan", "Jalisco", "El Salto", "Tlaquepaque", "Tonala"]
     seen = {t.lower(): t for t in default_terms}
     for sub in get_subscribers(cfg):
         for term in sub.get("workday_search_terms") or []:
@@ -383,12 +386,11 @@ def workday_posted(text, today):
     return None
 
 
-def fetch_workday(c, today=None, extra_terms=None):
+def _fetch_workday_site(c, site, today, terms):
     host = f"{c['tenant']}.{c['wd']}.myworkdayjobs.com"
-    api = f"https://{host}/wday/cxs/{c['tenant']}/{c['site']}/jobs"
-    today, found = today or today_utc(), {}
-    default_terms = extra_terms or ["Guadalajara", "Zapopan", "Jalisco", "El Salto", "Tonala"]
-    for term in c.get("search_terms", default_terms):
+    api = f"https://{host}/wday/cxs/{c['tenant']}/{site}/jobs"
+    found = {}
+    for term in terms:
         offset, total = 0, None
         while offset < 600:
             d = http_json(api, {"appliedFacets": {}, "limit": 20, "offset": offset,
@@ -402,9 +404,9 @@ def fetch_workday(c, today=None, extra_terms=None):
                     loc = f"{loc} (matched '{term}')"
                 path = p.get("externalPath", "")
                 ref = (p.get("bulletFields") or [""])[0] or path
-                detail_api = f"https://{host}/wday/cxs/{c['tenant']}/{c['site']}{path}" if path else ""
+                detail_api = f"https://{host}/wday/cxs/{c['tenant']}/{site}{path}" if path else ""
                 found.setdefault(ref, job(
-                    c, ref, p.get("title"), loc, f"https://{host}/en-US/{c['site']}{path}",
+                    c, ref, p.get("title"), loc, f"https://{host}/en-US/{site}{path}",
                     workday_posted(p.get("postedOn") or "", today),
                     detail_api=detail_api))
             offset += 20
@@ -413,28 +415,199 @@ def fetch_workday(c, today=None, extra_terms=None):
     return list(found.values())
 
 
+def fetch_workday(c, today=None, extra_terms=None):
+    today = today or today_utc()
+    default_terms = extra_terms or ["Guadalajara", "Zapopan", "Jalisco", "El Salto", "Tlaquepaque", "Tonala"]
+    terms = c.get("search_terms", default_terms)
+    sites = [c["site"]] + list(c.get("fallback_sites") or [])
+    last_err = None
+    for idx, site in enumerate(sites):
+        try:
+            return _fetch_workday_site(c, site, today, terms)
+        except error.HTTPError as e:
+            last_err = e
+            if e.code in (400, 404, 422) and idx + 1 < len(sites):
+                continue
+            raise
+    raise last_err
+
+
+def _fetch_oracle_hcm_site(c, site, terms):
+    host = c["host"]
+    found = {}
+    for term in terms:
+        offset = 0
+        while offset < 300:
+            finder = f"findReqs;siteNumber={site},keyword={parse.quote(term)},limit=25,offset={offset},sortBy=POSTING_DATES_DESC"
+            url = (
+                f"https://{host}/hcmRestApi/resources/latest/recruitingCEJobRequisitions"
+                f"?onlyData=true&expand=requisitionList.secondaryLocations&finder={finder}"
+            )
+            d = http_json(url)
+            items = d.get("items") or []
+            reqs = items[0].get("requisitionList") or [] if items and isinstance(items[0], dict) else []
+            total = (items[0].get("TotalJobsCount") if items and isinstance(items[0], dict) else 0) or 0
+            for r in reqs:
+                jid = str(r.get("Id") or "").strip()
+                if not jid:
+                    continue
+                locs = [r.get("PrimaryLocation") or ""]
+                for s in r.get("secondaryLocations") or []:
+                    if isinstance(s, dict) and s.get("Name"):
+                        locs.append(s["Name"])
+                loc = "; ".join(dict.fromkeys(x for x in locs if x))
+                wtype = f"{r.get('WorkplaceType') or ''} {r.get('WorkplaceTypeCode') or ''}".lower()
+                if "remote" in wtype and "remote" not in loc.lower():
+                    loc = f"{loc} (Remote)".strip()
+                detail_api = (
+                    f"https://{host}/hcmRestApi/resources/latest/recruitingCEJobRequisitionDetails"
+                    f"?onlyData=true&finder=ById;Id=%22{parse.quote(jid)}%22,siteNumber={site}"
+                )
+                job_url = f"https://{host}/hcmUI/CandidateExperience/en/sites/{site}/job/{jid}"
+                found.setdefault(jid, job(
+                    c, jid, r.get("Title"), loc, job_url, r.get("PostedDate"),
+                    team=r.get("Department") or r.get("JobFamily") or "",
+                    description=r.get("ShortDescriptionStr") or "",
+                    detail_api=detail_api,
+                ))
+            offset += 25
+            if not reqs or (total and offset >= total):
+                break
+    return list(found.values())
+
+
+def fetch_oracle_hcm(c):
+    terms = c.get("search_terms") or ["Guadalajara", "Zapopan", "Jalisco", "Mexico"]
+    sites = [c["site"]] + list(c.get("fallback_sites") or [])
+    last_err = None
+    for idx, site in enumerate(sites):
+        try:
+            return _fetch_oracle_hcm_site(c, site, terms)
+        except error.HTTPError as e:
+            last_err = e
+            if e.code in (400, 404) and idx + 1 < len(sites):
+                continue
+            raise
+    raise last_err
+
+
+def _fetch_eightfold_legacy(c, host, domain, loc_query):
+    found, offset = {}, 0
+    while offset < 200:
+        url = (
+            f"https://{host}/api/apply/v2/jobs?domain={parse.quote(domain)}"
+            f"&location={parse.quote(loc_query)}&start={offset}&num=20"
+        )
+        d = http_json(url)
+        positions = d.get("positions") or []
+        total = d.get("count") or 0
+        for p in positions:
+            jid = str(p.get("id") or p.get("ats_job_id") or "").strip()
+            if not jid:
+                continue
+            raw_locs = p.get("locations")
+            locs = [str(x) for x in raw_locs if x] if isinstance(raw_locs, list) else ([str(p["location"])] if p.get("location") else [])
+            loc = "; ".join(dict.fromkeys(locs))
+            pos_url = p.get("canonicalPositionUrl") or f"https://{host}/careers/job/{jid}"
+            found.setdefault(jid, job(
+                c, jid, p.get("name") or p.get("title"), loc, pos_url,
+                p.get("t_create") or p.get("postedTs"),
+                team=p.get("department") or "",
+                description=p.get("job_description") or "",
+            ))
+        offset += max(len(positions), 20)
+        if not positions or (total and offset >= total):
+            break
+    return list(found.values())
+
+
+def fetch_eightfold(c):
+    host = c["host"]
+    domain = c["domain"]
+    loc_query = c.get("location_query", "Mexico")
+    found, offset = {}, 0
+    try:
+        while offset < 200:
+            url = (
+                f"https://{host}/api/pcsx/search?domain={parse.quote(domain)}"
+                f"&query=&location={parse.quote(loc_query)}&start={offset}"
+            )
+            d = http_json(url)
+            data = d.get("data") if isinstance(d.get("data"), dict) else d
+            positions = (data.get("positions") if isinstance(data, dict) else None) or []
+            total = (data.get("count") if isinstance(data, dict) else 0) or 0
+            for p in positions:
+                jid = str(p.get("id") or p.get("positionId") or p.get("atsJobId") or "").strip()
+                if not jid:
+                    continue
+                raw_locs = p.get("locations")
+                if isinstance(raw_locs, list):
+                    locs = [str(x) for x in raw_locs if x]
+                elif p.get("location"):
+                    locs = [str(p["location"])]
+                else:
+                    locs = []
+                loc = "; ".join(dict.fromkeys(locs))
+                if str(p.get("workLocationOption") or "").lower() == "remote" and "remote" not in loc.lower():
+                    loc = f"{loc} (Remote)".strip()
+                pos_url = p.get("canonicalPositionUrl") or p.get("positionUrl") or ""
+                if pos_url.startswith("/"):
+                    pos_url = f"https://{host}{pos_url}"
+                elif not pos_url:
+                    pos_url = f"https://{host}/careers/job/{jid}"
+                detail_api = (
+                    f"https://{host}/api/pcsx/position_details"
+                    f"?position_id={parse.quote(jid)}&domain={parse.quote(domain)}"
+                )
+                found.setdefault(jid, job(
+                    c, jid, p.get("name") or p.get("title"), loc, pos_url,
+                    p.get("postedTs") or p.get("t_create"),
+                    team=p.get("department") or "",
+                    detail_api=detail_api,
+                ))
+            page_step = max(len(positions), 10)
+            offset += page_step
+            if not positions or (total and offset >= total):
+                break
+        return list(found.values())
+    except error.HTTPError as e:
+        if e.code in (403, 404) and offset == 0:
+            return _fetch_eightfold_legacy(c, host, domain, loc_query)
+        raise
+
+
 def enrich_job_description(j):
-    """Fetch full job description on-demand for Workday / SmartRecruiters when needed."""
-    if j.get("description"):
+    """Fetch full job description on-demand for Workday / SmartRecruiters / Oracle HCM / Eightfold."""
+    if j.get("description") and len(j["description"]) > 300:
         return j["description"]
     detail_api = j.get("detail_api")
     if not detail_api:
-        return ""
+        return j.get("description") or ""
     try:
         d = http_json(detail_api, retries=1)
         if not isinstance(d, dict):
-            return ""
+            return j.get("description") or ""
         if "jobPostingInfo" in d:
             desc = (d.get("jobPostingInfo") or {}).get("jobDescription") or ""
         elif "jobAd" in d:
             sections = ((d.get("jobAd") or {}).get("sections") or {}).values()
             desc = " ".join(s.get("text", "") for s in sections if isinstance(s, dict))
+        elif isinstance(d.get("items"), list) and d["items"]:
+            it = d["items"][0] if isinstance(d["items"][0], dict) else {}
+            desc = " ".join(
+                str(it.get(k) or "")
+                for k in ("ExternalDescriptionStr", "ExternalResponsibilitiesStr", "ExternalQualificationsStr")
+            )
+        elif isinstance(d.get("data"), dict) and "jobDescription" in d["data"]:
+            desc = d["data"].get("jobDescription") or ""
         else:
             desc = d.get("description") or d.get("content") or ""
-        j["description"] = strip_html(desc)[:12000]
-        return j["description"]
+        cleaned = strip_html(desc)[:12000]
+        if cleaned:
+            j["description"] = cleaned
+        return j.get("description") or ""
     except Exception:
-        return ""
+        return j.get("description") or ""
 
 
 FETCHERS = {
@@ -444,6 +617,8 @@ FETCHERS = {
     "workable": fetch_workable,
     "smartrecruiters": fetch_smartrecruiters,
     "workday": fetch_workday,
+    "oracle_hcm": fetch_oracle_hcm,
+    "eightfold": fetch_eightfold,
 }
 
 
@@ -1562,8 +1737,13 @@ def alert_markdown(new_jobs, today):
     return "\n".join(lines) + "\n"
 
 
-def select_jobs_for_email(jobs, baseline, cfg):
-    """Choose which jobs to include in a subscriber's daily email digest."""
+def select_jobs_for_email(jobs, baseline, cfg, sub_state=None):
+    """Choose which jobs to include in a subscriber's daily email digest.
+
+    When `daily_top_when_quiet` is enabled and zero brand-new roles were discovered
+    overnight, rotates through up to `quiet_spotlight_count` active non-stale matches
+    (prioritizing Career Upgrade Moves not spotlighted in recent quiet runs) so every
+    morning delivers a fresh dopamine & career-momentum briefing."""
     mode = cfg.get("email_mode", "new_or_discovered")
     if mode == "all":
         return [j for j in jobs if not j.get("stale")]
@@ -1571,9 +1751,30 @@ def select_jobs_for_email(jobs, baseline, cfg):
         if cfg.get("email_on_baseline", True):
             return [j for j in jobs if not j.get("stale")]
         return []
-    if mode == "discovered_only":
-        return [j for j in jobs if j.get("discovered_now")]
-    return [j for j in jobs if j.get("discovered_now")]
+    fresh = [j for j in jobs if j.get("discovered_now")]
+    if fresh or mode == "discovered_only" or not cfg.get("daily_top_when_quiet", False):
+        return fresh
+
+    active = [j for j in jobs if not j.get("stale")]
+    if not active:
+        return []
+    rel = (sub_state or {}).get("relationship") or {}
+    recent_spotlights = set((rel.get("recent_spotlight_keys") or [])[-9:])
+    ranked = sorted(
+        active,
+        key=lambda j: (
+            j.get("key") in recent_spotlights,
+            not is_career_upgrade_heuristic(j, cfg)[0],
+            j.get("company", "").lower(),
+        ),
+    )
+    limit = max(1, int(cfg.get("quiet_spotlight_count", 3)))
+    chosen = []
+    for j in ranked[:limit]:
+        item = copy.deepcopy(j)
+        item["quiet_spotlight"] = True
+        chosen.append(item)
+    return chosen
 
 
 def job_age_info(j, today):
@@ -1599,123 +1800,399 @@ def job_age_info(j, today):
     return days, is_hot, label
 
 
-DAILY_MOTIVATION_SYSTEM_PROMPT = """You are Lucy, an elite, sharp-witted private executive headhunter writing a 45-second morning briefing to your star client.
-Your philosophy is 'Us Against the System' & 'Relentless Career Velocity':
-- Staying comfortable in one seat pays the 'loyalty tax' (3-4% raises and slow internal queues), whereas strategic job moves are the #1 proven lever to unlock 25-50% compensation jumps, bigger titles, and fresh architectural scope.
-- Challenge the candidate never to get stuck where they are—move from a position of strength before comfort turns into stagnation.
-- Most applicants blindly toss generic PDFs into ATS black holes; YOU and the candidate are gaming the hiring machine together—you scanned the market overnight, isolated the upgrade moves, and pre-built ATS-ready CVs so firing off a top-1% application takes 60 seconds.
+DAILY_MOTIVATION_SYSTEM_PROMPT = """You are Lucy, an elite, sharp-witted private executive headhunter and career co-conspirator writing a personalized 45-second morning briefing to your star client.
 
-Rules:
-- Address the candidate naturally by first name.
-- Keep the tone sharp, insider, confident, and executive—never cheesy corporate-speak.
-- Write 1 punchy headline (4-8 words) and a 2-3 sentence message (40-65 words) that sparks an immediate dopamine hit and makes them want to submit 1 application right now.
-- Return ONLY valid JSON: {"headline": "...", "message": "..."}"""
+Your Core Philosophy ('Us Against the System' & 'Daily Dopamine + Connection'):
+1. LIBERATE DOPAMINE THROUGH ASYMMETRIC MOMENTUM: Every morning must feel fresh, electric, and energizing—never repetitive. Remind them that strategic career moves are the #1 proven wealth and scope multiplier (25-50% market repricing vs. 3-4% 'loyalty tax' raises).
+2. BUILD REAL HUMAN-AGENT CONNECTION: Speak like a trusted insider partner who worked overnight on their behalf—scanning 106 career boards, filtering out 99% of noise, and arming custom ATS-ready Word CVs so they walk into the market with an unfair advantage.
+3. PERSONALIZE TO THEIR CRAFT: Ground your note naturally in their real career identity, today's day-of-week rhythm, and today's spotlight opportunity—make them feel seen, valued, and unstoppable.
+4. ZERO REPETITION: NEVER reuse any phrase, metaphor, or hook listed in `RECENT_HEADLINES_TO_AVOID`. Surprise them with a fresh angle every single day.
+
+Return ONLY valid JSON with these exact 5 keys:
+{
+  "subject_spark": "3-5 word curiosity/dopamine hook for the Gmail subject line (no quotes, punchy, fresh)",
+  "headline": "4-8 word bold manifesto headline for today's dark card",
+  "message": "2-3 sharp, energizing sentences (45-70 words) addressing the candidate by first name, connecting today's angle + their real craft + top company into an immediate confidence and dopamine boost.",
+  "connection_ps": "1 warm, insider partnership sentence (18-30 words) from Lucy reinforcing your bond—referencing what you prepared overnight, your briefing streak/edition together, and why you have their back.",
+  "micro_challenge": "1 concrete, zero-friction 60-second action (15-25 words) that triggers instant completion dopamine right now."
+}"""
+
+WEEKDAY_CADENCE = [
+    ("Monday Launchpad", "New week, clean slate, asymmetric leverage"),
+    ("Tuesday Peak Window", "Tuesday mornings hit peak recruiter inbox velocity"),
+    ("Wednesday Pattern Interrupt", "Midweek check-in: invest 60 seconds in your own equity"),
+    ("Thursday Market Repricing", "Know your true external clearing price before Friday"),
+    ("Friday Future-Self Play", "Pay your future self one bold shot before the weekend"),
+    ("Saturday Quiet Sniper", "Zero inbox noise today — land at the top of Monday's stack"),
+    ("Sunday Strategic Ambush", "Position yourself ahead of 99% of candidates before Monday 8 AM"),
+]
+
+EDITION_MILESTONES = {
+    1: "Edition #1 · Welcome to Your Unfair Advantage",
+    3: "3-Briefing Spark · Habit Locked In",
+    5: "High-Five Milestone · 5 Briefings Together",
+    7: "7-Briefing Streak · Top 1% Consistency",
+    10: "Double-Digit Radar · 10 Briefings Strong",
+    14: "Fortnight Momentum · 14 Briefings Together",
+    21: "21-Briefing Ritual · Unstoppable Velocity",
+    30: "30-Briefing Club · Relentless Market Edge",
+}
 
 DAILY_MOTIVATION_THEMES = [
-    "Refuse the corporate loyalty tax: strategic external moves unlock 30%+ leaps that internal review cycles stall for years.",
-    "Challenge yourself before comfort becomes a cage: if you aren't stretching your scope right now, you're leaving ceiling on the table.",
-    "Us vs. the hiring black box: while 95% of people spray generic resumes, we already reverse-engineered the ATS and armed your CVs.",
-    "Move from strength, not urgency: interviewing while you're winning lets you negotiate like an executive peer, never a supplicant.",
-    "Asymmetric daily upside: 60 seconds to send one surgical application costs nothing—and one 'yes' reprices your entire career trajectory.",
-    "Outgrow the waiting line: when your execution outpaces your current title, the open market is the fastest promotion committee on earth.",
-    "Momentum beats perfection: one high-conviction shot fired before 9 AM puts you leagues ahead of talented people who stay stuck.",
+    "Refuse the 3% corporate loyalty tax: strategic external moves unlock 30-50% comp and scope leaps that internal review cycles stall for years.",
+    "Challenge yourself before comfort becomes a cage: the moment a seat stops stretching you is the exact moment to look up.",
+    "Us vs. the ATS black box: while 95% of applicants toss generic PDFs into the void, we reverse-engineered the triage keywords and pre-armed your Word CVs.",
+    "Interview from power, never urgency: testing the market while you are winning lets you negotiate like an executive peer, never a supplicant.",
+    "Asymmetric 60-second bet: one surgical application costs 1 minute of courage, has zero downside, and carries multi-year career upside.",
+    "Outgrow the internal waiting line: when your execution outpaces your current org chart, the open market is the fastest promotion committee on earth.",
+    "First-mover recruiter physics: landing in the first 15 calibrated applicants on a fresh posting 4x's hiring-manager callback odds.",
+    "Be the CEO of 'Me, Inc.': treat your talent like high-growth capital—deploy it where the scope, mentorship, and upside compound fastest.",
+    "Golden handcuffs rust quietly: familiarity feels safe in the short term, but audacity is what writes the best chapters of a career.",
+    "Optionality changes your posture: having even two live external conversations transforms how confidently you show up in every room.",
+    "Jalisco global-hub arbitrage: world-class enterprises are scaling leadership & transformation hubs right in your backyard—claim the premium seats.",
+    "Compound your narrative: every stretch role you target sharpens how you articulate your highest-value wins.",
+    "Beat impostor hesitation: job descriptions are wish lists, and hiring managers hire decisive problem-solvers who own 70% and learn the 30% fast.",
+    "Momentum over rumination: overthinking kills more executive transitions than rejection ever could—one clean click creates real signal.",
+    "Don't subsidize inertia: companies reprice new hires at market rates every quarter while keeping loyal insiders on yesterday's band.",
+    "Turn rejection into calibration: you don't need twenty offers—you only need one step-up 'yes' that resets your baseline forever.",
+    "Scarcity of real operators: plenty of people talk strategy; your track record of actually shipping measurable outcomes is rarer than you think.",
+    "Energy follows expansion: burnout rarely comes from hard problems—it comes from solving the same solved problems without bigger stakes.",
+    "Your resume is now a precision instrument: general direction at the top, hard proof in the middle, zero fluff—built for a 6-second 'yes'.",
+    "Play offense while peers coast: most talented professionals wait until a reorg forces their hand; proactive movers pick their own arena.",
+    "Micro-courage compounds daily: sixty seconds of boldness with morning coffee beats a whole year of 'I should update my CV someday'.",
+    "Signal over noise: you don't have to scroll job boards for two hours tonight because I already hunted down the exact needles in the haystack.",
+    "Step into rooms that stretch you: if you're the most experienced voice in every meeting you attend, you've already outgrown the room.",
+    "Recruiters buy clarity: when your CV mirrors their exact pain points truthfully on page one, scheduling the call becomes their easiest decision all week.",
+    "Protect your ambition: the people around you may settle for predictable plateaus, but your trajectory was built for steeper climbs.",
+    "Speed is a status signal: crisp, early applications with tailored executive framing immediately read like high-agency leadership.",
+    "Reclaim your ceiling: another team's urgent bottleneck is your exact career-upgrade runway.",
+    "Zero-friction execution: the hardest 90%—sourcing, filtering, and tailoring—is already sitting in your attachments right now.",
+    "Detach from outcomes, fall in love with reps: each shot on goal buys real market intelligence on what your skillset commands today.",
+    "Audacity pays asymmetrical dividends: half the people in Director and VP seats simply raised their hand when equally qualified peers hesitated.",
+    "Your unfair nocturnal advantage: while the city slept, your personal radar swept 106 boards so you wake up exclusively to curated leverage.",
+    "Write your next promotion yourself: stop waiting for annual calibration committees and let competing hiring managers bid for your impact.",
 ]
 
 DAILY_INSIDER_VAULT = [
-    (
-        "Stop Paying the Comfort Tax.",
-        "{first_name}, staying comfortable in one seat hands you 3% adjustments while strategic external moves unlock 30%+ leaps in scope and comp. It's you and me against the hiring black box—I already isolated {highlight_count} high-leverage play(s) including {top_company} and armed your ATS-ready CVs. Take 60 seconds and fire one shot.",
-    ),
-    (
-        "Don't Wait in Somebody Else's Queue.",
-        "{first_name}, internal promotion cycles are designed to keep great operators patiently producing in place. The fastest way to level up your title and leverage is moving seats on your own terms—and today's radar at {top_company} is wide open for your track record.",
-    ),
-    (
-        "Comfort Is Crowded. Growth Is Open.",
-        "The moment a role stops stretching you is the moment to look up, {first_name}. While 95% of passive talent waits for permission, we already scanned the market overnight and tailored your CVs to beat the triage engine—pick one role below and make them tell you no.",
-    ),
-    (
-        "You + Lucy vs. The Hiring Machine.",
-        "Most candidates lose before a human ever reads their name; we flipped the script, {first_name}. Your experience is framed for both the ATS algorithm and the hiring manager's 6-second scan—grab your pre-built .docx for {top_company} and claim your unfair advantage today.",
-    ),
-    (
-        "Interview From Power, Never Need.",
-        "{first_name}, the smartest executives test the market when they are already winning—that is how you command step-up scope and top-of-band offers. Challenge yourself with one stretch conversation at {top_company} today; one 60-second click can reprice your next three years.",
-    ),
-    (
-        "The Market Promotes Faster Than HR.",
-        "Loyalty rarely compounds as fast as mobility, {first_name}: every major jump in authority comes from stepping into a bigger arena. I surfaced {highlight_count} target move(s) built for where you're going next, not just where you've been—let's put your name at the top of the stack.",
-    ),
-    (
-        "One Surgical Shot Beats Stagnation.",
-        "Getting stuck happens one 'maybe tomorrow' at a time, {first_name}. We took all the friction out of the game—your top targets led by {top_company} are ranked below and your CVs are ready in Gmail. Hit send on one before your first meeting.",
-    ),
+    ("Stop Paying the 3% Comfort Tax.", "{first_name}, staying comfortable in one seat hands you incremental adjustments while strategic moves unlock 30%+ leaps in scope and comp. It's you and me against the hiring black box—I isolated {highlight_count} high-leverage play(s) led by {top_company} and armed your CVs. Take 60 seconds and fire one shot."),
+    ("Don't Wait in Somebody Else's Queue.", "{first_name}, internal promotion cycles are engineered to keep top operators patiently producing in place. The fastest promotion committee on earth is the open market—and today's opening at {top_company} is wide open for your track record."),
+    ("Comfort Is Crowded. Stretch Scope Is Wide Open.", "The moment a role stops stretching you is the moment to look up, {first_name}. While passive talent waits for permission, we scanned 106 boards overnight and tuned your CV to beat the triage filter—pick one target below and make them tell you no."),
+    ("You + Lucy vs. The Hiring Machine.", "Most applicants lose before a human ever reads their name; we flipped the odds, {first_name}. Your wins are framed for both the ATS parser and the hiring manager's 6-second scan—grab your attached .docx for {top_company} and claim your edge."),
+    ("Interview From Power, Never Urgency.", "{first_name}, elite operators test the market while they are already winning—that is how you command step-up titles and top-of-band offers. Challenge yourself with one conversation at {top_company} today; 60 seconds now can reprice your next three years."),
+    ("The Market Reprices Talent Faster Than HR.", "Loyalty rarely compounds as fast as strategic mobility, {first_name}: companies pay market clearing prices to attract external leaders while capping internal bands. I surfaced {highlight_count} move(s) built for where you're going next—put your name at the top of the stack."),
+    ("One Surgical Shot Beats A Year of 'Someday'.", "Getting stuck happens one 'maybe next month' at a time, {first_name}. All the friction is gone—your top targets led by {top_company} are ranked below and your Word CVs are ready in Gmail. Hit send before your first meeting."),
+    ("Act Like the CEO of 'Me, Inc.' Today.", "If your career were a portfolio, {first_name}, you'd reallocate toward the highest growth ceiling immediately. {top_company} is actively investing in the exact capability you bring—deploy 60 seconds of capital into yourself this morning."),
+    ("First-Mover Physics Are In Your Favor.", "Being among the earliest calibrated candidates on a fresh opening dramatically multiplies interview callbacks, {first_name}. We caught today's lineup led by {top_company} right off the wire—strike while the recruiter's queue is clean."),
+    ("Outgrow the Room Before It Shrinks You.", "Burnout doesn't come from big challenges, {first_name}—it comes from solving familiar problems without bigger ownership. Step toward a steeper arena at {top_company} today; your attached CV already speaks their exact language."),
+    ("Job Descriptions Are Wish Lists. Own the Room.", "Half the people sitting in bigger seats today weren't '100% ready'—they simply raised their hand while peers hesitated, {first_name}. Your proven execution puts you ahead of 90% of the field for {top_company}; take the shot."),
+    ("Optionality Changes How You Walk Into Every Meeting.", "Even two live executive interviews completely change your leverage and confidence, {first_name}. Let's open a high-upside door at {top_company} this morning—zero downside, asymmetric upside."),
+    ("Don't Let Familiarity Masquerade as Security.", "True career security is knowing three great companies would hire you tomorrow, {first_name}. Keep your market muscles sharp—review today's {highlight_count} curated play(s) led by {top_company} and put one live rep on the board."),
+    ("Another Team's Bottleneck Is Your Promotion.", "Every open role below is a funded problem a VP is losing sleep over right now, {first_name}. At {top_company}, your real track record is the exact relief they're hunting for—introduce yourself while the seat is hot."),
+    ("90% of the Work Is Already In Your Attachments.", "Most people never apply because tailoring a resume after a 10-hour workday feels exhausting, {first_name}. You don't have that problem anymore—I built your minimalist .docx CVs overnight so all you bring is 60 seconds of audacity."),
+    ("Let Competing Leaders Bid on Your Impact.", "You never discover your real market value inside a single org chart, {first_name}. Test your ceiling against {top_company} today—one exploratory conversation can shift your entire compensation trajectory."),
+    ("High-Agency Operators Move Before the Reorg.", "Waiting for circumstances to push you shrinks your choices; moving on your own schedule multiplies them, {first_name}. Today's radar surfaced {highlight_count} target(s) led by {top_company}—play pure offense this morning."),
+    ("Clarity Wins the 6-Second Recruiter Scan.", "Hiring managers don't read walls of text—they scan for unmistakable direction and quantified proof, {first_name}. Your tailored CV for {top_company} leads with both; open it in Gmail and fire it off."),
+    ("Small Morning Boldness, Massive Multi-Year ROI.", "Think about the return on sixty seconds, {first_name}: one application sent over coffee can change the logo, scope, and paycheck of your next chapter. {top_company} is on the board today—make the move."),
+    ("Refuse Plateaus Dressed Up as Stability.", "Your best execution years shouldn't be spent treading water, {first_name}. Challenge yourself with a role that demands your next gear—starting with today's spotlight at {top_company}."),
+    ("Scarcity Belongs to Proven Builders.", "Talkers flood job portals; leaders with real, verifiable outcomes are scarce, {first_name}. That's why we stripped away every ounce of fluff on your CV for {top_company}—let your numbers speak."),
+    ("Momentum Is A Choice You Make Before 9 AM.", "Before your calendar fills up with everybody else's priorities, take one minute for your own future, {first_name}. {highlight_count} curated target(s) led by {top_company} are teed up and waiting."),
+    ("Beat the Crowd While They Procrastinate.", "For every great opening at {top_company}, ten qualified people bookmark the tab and forget to apply, {first_name}. Being the one who actually hits submit with a razor-sharp CV is half the game."),
+    ("Upgrade the Problems You Get Paid to Solve.", "The fastest way to grow is stepping into higher-stakes problems with bigger executive visibility, {first_name}. Today's lineup led by {top_company} offers exactly that arena—take a 60-second swing."),
+    ("Your Overnight Intelligence Edge Is Live.", "While Guadalajara slept, I swept 106 employer boards and threw out the noise so you only see signal, {first_name}. {top_company} topped today's filter—grab your custom CV and press your advantage."),
+    ("Never Self-Select Out of a Stretch Seat.", "Let the hiring committee decide if a role is a stretch—never reject yourself in advance, {first_name}. Your background gives {top_company} serious reason to book a call; put your hat in the ring."),
+    ("Turn Ambition Into Pipeline Today.", "Pipeline cures career anxiety better than anything else, {first_name}. Adding {top_company} to your active conversations today costs zero effort with your pre-tailored .docx ready to attach."),
+    ("Stop Discounting Skills That Feel Easy to You.", "What feels routine to you after years of mastery is often the exact capability {top_company} is paying a premium to hire right now, {first_name}. Price yourself accordingly and send one application."),
+    ("Every Shot Sharpens Your Executive Story.", "Even selecting which role excites you most today clarifies where you want your career headed next, {first_name}. Look closely at {top_company} below—if it sparks curiosity, trust that signal and apply."),
+    ("Play Asymmetric Offense.", "Downside of applying to {top_company} today: 60 seconds. Upside: a step-up leadership seat, fresh learning curve, and market-reset compensation. {first_name}, smart strategists take that bet every single time."),
+    ("Build Escape Velocity From Routine.", "Routine quietly Shrinks ambition unless you interrupt it on purpose, {first_name}. Let today's {highlight_count} curated opening(s) led by {top_company} be your pattern interrupt—one bold click and you're in motion."),
+    ("Write Your Own Promotion Slip.", "Nobody cares more about your trajectory than you—except maybe me at 7 AM, {first_name}. I lined up {top_company} and armed your ATS-ready CV; go claim the conversation you deserve."),
+]
+
+LUCY_CONNECTION_NOTES = [
+    "Overnight I swept {board_count} Jalisco & Remote-Mexico boards for you—Edition #{edition} together ({total_roles} roles spotted & {total_cvs} custom CVs forged so far).",
+    "Briefing #{edition} in your corner: I filtered out hundreds of irrelevant postings overnight so you only spend energy on high-leverage moves.",
+    "Day {streak} on active radar together—we've now surfaced {total_roles} matched openings and custom-built {total_cvs} ATS-ready CVs exclusively for your profile.",
+    "Think of me as your 24/7 private scout: {board_count} company portals checked while you rested, distilled into Briefing #{edition} right on schedule.",
+    "Edition #{edition} delivered: every CV attached below was tuned line-by-line to your real track record so you never start from a blank page.",
+    "Your unfair advantage is compounding—{total_roles} curated roles tracked across {edition} briefings, and I'm keeping watch on {board_count} boards daily.",
+    "Briefing #{edition} · {streak}-day momentum: you bring 60 seconds of courage over coffee, and I'll handle the market scanning and CV engineering every morning.",
+    "Behind the scenes on Edition #{edition}: {board_count} live ATS feeds audited, noise eliminated, and {cv_today} fresh Word CV(s) armed in your inbox.",
+]
+
+DAILY_MICRO_CHALLENGES = [
+    "Tap your #1 ranked role at {top_company} above, preview the attached .docx right inside Gmail, and submit before your next meeting.",
+    "Set a 60-second timer right now: open {top_company}'s portal link, drop in your pre-built CV_*.docx, and log 1 fearless rep before 10 AM.",
+    "Don't bookmark—execute: pick the single role below that stretches you most, attach your tailored Word CV, and hit send while your coffee is warm.",
+    "Preview your first attached .docx in Gmail to feel how sharp your wins look on 1 page—then fire it straight into {top_company}'s queue.",
+    "Give yourself 1 minute of pure offense: click 'Apply' on {top_company}, upload the matching .docx I built for you, and close the tab victorious.",
+    "Beat 95% of procrastinating candidates today—pick 1 Career Upgrade Move above and submit your pre-armed CV before opening Slack or Teams.",
+    "Run the 1-Role Rule right now: choose your favorite opening led by {top_company}, attach its tailored .docx, and earn today's momentum win.",
+    "Zero overthinking allowed today: open the top card for {top_company}, verify your General Role Direction headline on the .docx, and hit submit.",
 ]
 
 
+def extract_cv_identity_snapshot(sub_cfg, root=ROOT):
+    """Extract a compact, PII-scrubbed 450-char career identity snapshot from the subscriber's CV
+    so Lucy's daily motivation speaks directly to their real craft and domain."""
+    raw = load_subscriber_cv(sub_cfg, root=root)
+    if not raw:
+        return ""
+    scrubbed = re.sub(r"[\w.+-]+@[\w-]+\.[\w.-]+", "", raw)
+    scrubbed = re.sub(r"\+?\d[\d\s().-]{7,}\d", "", scrubbed)
+    lines = [ln.strip(" #*-") for ln in scrubbed.splitlines() if ln.strip()]
+    compact = " | ".join(lines[:8])
+    return compact[:450]
+
+
+def peek_relationship_context(sub_state, jobs_count, cvs_count, today, board_count=106, sub_id=""):
+    """Compute next briefing edition, streak, cumulative wins, and non-repeating angle selection
+    without mutating `sub_state` until delivery is confirmed."""
+    rel = (sub_state or {}).get("relationship") or {}
+    edition = int(rel.get("edition", 0)) + 1
+    last_date_str = rel.get("last_briefing_date")
+    prev_streak = int(rel.get("streak_days", 0))
+    if last_date_str == today.isoformat():
+        streak = max(1, prev_streak)
+    elif last_date_str:
+        try:
+            gap = (today - date.fromisoformat(last_date_str)).days
+            streak = (prev_streak + 1) if 1 <= gap <= 3 else 1
+        except ValueError:
+            streak = 1
+    else:
+        streak = 1
+
+    recent_angles = list(rel.get("recent_angle_ids") or [])
+    recent_headlines = list(rel.get("recent_headlines") or [])
+
+    # Pick an angle guaranteed NOT to be in the recent window, offset per subscriber so
+    # teammates comparing notes on the same morning each receive their own unique angle.
+    total_themes = len(DAILY_MOTIVATION_THEMES)
+    sub_offset = sum((idx + 1) * ord(ch) for idx, ch in enumerate(str(sub_id or ""))) % total_themes
+    avoid_set = set(recent_angles[-(total_themes - 1):])
+    base_idx = (today.toordinal() + sub_offset + edition - 1) % total_themes
+    angle_id = base_idx
+    for step in range(total_themes):
+        cand = (base_idx + step) % total_themes
+        if cand not in avoid_set:
+            angle_id = cand
+            break
+
+    return {
+        "edition": edition,
+        "streak_days": streak,
+        "total_roles_surfaced": int(rel.get("total_roles_surfaced", 0)) + int(jobs_count),
+        "total_cvs_tailored": int(rel.get("total_cvs_tailored", 0)) + int(cvs_count),
+        "recent_angle_ids": recent_angles,
+        "recent_headlines": recent_headlines,
+        "angle_id": angle_id,
+        "board_count": board_count,
+        "milestone_badge": EDITION_MILESTONES.get(edition, ""),
+    }
+
+
+def commit_relationship_state(sub_state, rel_ctx, pack, jobs_sent, today):
+    """Persist updated relationship streak, edition, cumulative stats, and anti-repeat history."""
+    if sub_state is None:
+        return
+    rel = sub_state.setdefault("relationship", {})
+    rel["edition"] = rel_ctx["edition"]
+    rel["streak_days"] = rel_ctx["streak_days"]
+    rel["last_briefing_date"] = today.isoformat()
+    rel["total_roles_surfaced"] = rel_ctx["total_roles_surfaced"]
+    rel["total_cvs_tailored"] = rel_ctx["total_cvs_tailored"]
+
+    angles = list(rel.get("recent_angle_ids") or [])
+    angles.append(rel_ctx["angle_id"])
+    rel["recent_angle_ids"] = angles[-30:]
+
+    headlines = list(rel.get("recent_headlines") or [])
+    if pack.get("headline"):
+        headlines.append(pack["headline"])
+    rel["recent_headlines"] = headlines[-30:]
+
+    spotlights = list(rel.get("recent_spotlight_keys") or [])
+    for j in jobs_sent or []:
+        if j.get("quiet_spotlight") and j.get("key"):
+            spotlights.append(j["key"])
+    rel["recent_spotlight_keys"] = spotlights[-18:]
+
+
 def call_gemini_daily_motivation(prompt_text, model="gemini-2.5-flash", api_key=None):
-    """Call Gemini for a fresh daily 'Us vs. The System' career motivation note."""
+    """Call Gemini for a fresh daily 5-part 'Us vs. The System' dopamine & connection briefing."""
     api_key = (api_key or os.environ.get("GEMINI_API_KEY") or "").strip()
     if not api_key:
         return None
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-    gen_cfg = {
-        "temperature": 0.85,
-        "maxOutputTokens": 320,
-        "responseMimeType": "application/json",
-    }
-    if model.startswith("gemini-2.5"):
-        gen_cfg["thinkingConfig"] = {"thinkingBudget": 0}
-    payload = {
-        "systemInstruction": {"parts": [{"text": DAILY_MOTIVATION_SYSTEM_PROMPT}]},
-        "contents": [{"parts": [{"text": prompt_text}]}],
-        "generationConfig": gen_cfg,
-    }
-    body = http_json(url, payload, retries=1, headers={"x-goog-api-key": api_key}, timeout=25)
-    parts = (((body.get("candidates") or [{}])[0].get("content") or {}).get("parts") or [])
-    text_parts = [p.get("text", "") for p in parts if isinstance(p, dict) and p.get("text") and not p.get("thought")]
-    raw = "\n".join(text_parts).strip()
-    if not raw:
-        return None
-    parsed = parse_llm_json(raw)
-    if isinstance(parsed, dict) and parsed.get("headline") and parsed.get("message"):
-        return str(parsed["headline"]).strip(), str(parsed["message"]).strip()
+    models_to_try = [model]
+    for fb in ("gemini-2.5-flash", "gemini-2.0-flash"):
+        if fb not in models_to_try:
+            models_to_try.append(fb)
+
+    for m_name in models_to_try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{m_name}:generateContent"
+        gen_cfg = {
+            "temperature": 0.9,
+            "maxOutputTokens": 1024,
+            "responseMimeType": "application/json",
+        }
+        if m_name.startswith("gemini-2.5"):
+            gen_cfg["thinkingConfig"] = {"thinkingBudget": 0}
+        payload = {
+            "systemInstruction": {"parts": [{"text": DAILY_MOTIVATION_SYSTEM_PROMPT}]},
+            "contents": [{"parts": [{"text": prompt_text}]}],
+            "generationConfig": gen_cfg,
+        }
+        try:
+            try:
+                body = http_json(url, payload, retries=1, headers={"x-goog-api-key": api_key}, timeout=25)
+            except error.HTTPError as e:
+                if e.code == 400 and "thinkingConfig" in payload["generationConfig"]:
+                    payload["generationConfig"].pop("thinkingConfig", None)
+                    body = http_json(url, payload, retries=1, headers={"x-goog-api-key": api_key}, timeout=25)
+                else:
+                    raise
+            parts = (((body.get("candidates") or [{}])[0].get("content") or {}).get("parts") or [])
+            text_parts = [p.get("text", "") for p in parts if isinstance(p, dict) and p.get("text") and not p.get("thought")]
+            raw = "\n".join(text_parts).strip()
+            if not raw:
+                continue
+            parsed = parse_llm_json(raw)
+            if isinstance(parsed, dict) and parsed.get("headline") and parsed.get("message"):
+                return {
+                    "subject_spark": str(parsed.get("subject_spark") or "").strip(),
+                    "headline": str(parsed["headline"]).strip(),
+                    "message": str(parsed["message"]).strip(),
+                    "connection_ps": str(parsed.get("connection_ps") or "").strip(),
+                    "micro_challenge": str(parsed.get("micro_challenge") or "").strip(),
+                }
+        except Exception:
+            continue
     return None
 
 
-def generate_daily_insider_note(sub_cfg, top_job, upgrade_count, hot_count, total_count, today):
-    """Generate a daily 'Us vs. The System' career-velocity headline & message via Gemini,
-    falling back seamlessly to the curated `DAILY_INSIDER_VAULT` when offline."""
+def generate_daily_briefing_pack(
+    sub_cfg, top_job, upgrade_count, hot_count, total_count, today,
+    rel_ctx=None, cvs_today_count=0, is_quiet_spotlight=False, root=ROOT
+):
+    """Generate a guaranteed-unique daily dopamine & personal connection pack for the subscriber."""
     sub_name = (sub_cfg or {}).get("name") or "Candidate"
+    sub_id = (sub_cfg or {}).get("id") or sub_name.lower()
     first_name = sub_name.split()[0]
     top_co = (top_job or {}).get("company") or "a top employer"
+    top_title = (top_job or {}).get("title") or "a step-up leadership role"
     hi_cnt = upgrade_count if upgrade_count > 0 else max(1, total_count)
-    day_idx = today.toordinal()
+
+    if rel_ctx is None:
+        sub_offset = sum(ord(ch) for ch in sub_id) % len(DAILY_MOTIVATION_THEMES)
+        angle_id = (today.toordinal() + sub_offset) % len(DAILY_MOTIVATION_THEMES)
+        rel_ctx = {
+            "edition": 1,
+            "streak_days": 1,
+            "total_roles_surfaced": max(1, total_count),
+            "total_cvs_tailored": cvs_today_count,
+            "recent_angle_ids": [],
+            "recent_headlines": [],
+            "angle_id": angle_id,
+            "board_count": 106,
+            "milestone_badge": "",
+        }
+
+    angle_id = rel_ctx["angle_id"]
+    edition = rel_ctx["edition"]
+    cadence_title, cadence_subline = WEEKDAY_CADENCE[today.weekday()]
+    theme = DAILY_MOTIVATION_THEMES[angle_id % len(DAILY_MOTIVATION_THEMES)]
+
+    # Deterministic non-repeating defaults for connection_ps, micro_challenge, and vault fallback
+    conn_tmpl = LUCY_CONNECTION_NOTES[(angle_id + edition) % len(LUCY_CONNECTION_NOTES)]
+    default_conn = conn_tmpl.format(
+        board_count=rel_ctx.get("board_count", 106),
+        edition=edition,
+        streak=rel_ctx.get("streak_days", 1),
+        total_roles=rel_ctx.get("total_roles_surfaced", total_count),
+        total_cvs=rel_ctx.get("total_cvs_tailored", cvs_today_count),
+        cv_today=max(1, cvs_today_count),
+    )
+    chal_tmpl = DAILY_MICRO_CHALLENGES[(angle_id + edition) % len(DAILY_MICRO_CHALLENGES)]
+    default_challenge = chal_tmpl.format(top_company=top_co, first_name=first_name)
+
+    h_tmpl, m_tmpl = DAILY_INSIDER_VAULT[angle_id % len(DAILY_INSIDER_VAULT)]
+    vault_headline = h_tmpl.format(first_name=first_name, top_company=top_co, highlight_count=hi_cnt)
+    vault_message = m_tmpl.format(first_name=first_name, top_company=top_co, highlight_count=hi_cnt)
+    default_spark = vault_headline.rstrip(".!")
 
     api_key = (os.environ.get("GEMINI_API_KEY") or "").strip()
     if api_key:
-        theme = DAILY_MOTIVATION_THEMES[day_idx % len(DAILY_MOTIVATION_THEMES)]
+        cv_snapshot = extract_cv_identity_snapshot(sub_cfg, root=root)
+        avoid_list = rel_ctx.get("recent_headlines") or []
+        avoid_txt = "; ".join(f'"{h}"' for h in avoid_list[-12:]) if avoid_list else "None yet (Edition #1 — make a memorable first impression!)"
+        mode_note = (
+            "Quiet-market momentum spotlight (zero brand-new overnight postings, so you hand-picked their top unclaimed Career Upgrade Moves on the board so they keep daily momentum)."
+            if is_quiet_spotlight
+            else "Fresh market drop with newly discovered openings."
+        )
         model = os.environ.get("GEMINI_MODEL") or (sub_cfg or {}).get("llm_model", "gemini-2.5-flash")
         prompt = (
-            f"Date: {today.isoformat()}\n"
+            f"Date: {today.isoformat()} ({cadence_title} — {cadence_subline})\n"
+            f"Briefing Edition Together: #{edition} | Active Streak: {rel_ctx.get('streak_days', 1)} day(s) | "
+            f"Cumulative Wins Together: {rel_ctx.get('total_roles_surfaced', total_count)} matched roles surfaced across {rel_ctx.get('board_count', 106)} boards, "
+            f"{rel_ctx.get('total_cvs_tailored', cvs_today_count)} custom CVs built.\n"
             f"Candidate First Name: {first_name}\n"
-            f"Today's Angle: {theme}\n"
-            f"Radar Stats Today: {upgrade_count} Career Upgrade Moves, {hot_count} Hot (0-2d) openings, "
-            f"{total_count} total curated matches. Top spotlight company: {top_co}.\n"
-            "Write today's fresh 'Us Against the System' career-move briefing."
+            f"Candidate Career Identity Snapshot: {cv_snapshot or 'Ambitious leader targeting high-impact step-up roles in Jalisco & Remote Mexico'}\n"
+            f"Today's Psychological Dopamine Angle (#{angle_id + 1}): {theme}\n"
+            f"Run Context: {mode_note}\n"
+            f"Today's Radar Stats: {upgrade_count} Career Upgrade Moves, {hot_count} Hot (0-2d) openings, "
+            f"{total_count} roles in today's briefing, {cvs_today_count} tailored Word CVs attached. "
+            f"Spotlight Role: '{top_title}' at {top_co}.\n"
+            f"RECENT_HEADLINES_TO_AVOID (DO NOT repeat these words, metaphors, or hooks): {avoid_txt}\n"
+            "Generate today's 100% unique 5-part briefing JSON."
         )
         try:
             res = call_gemini_daily_motivation(prompt, model=model, api_key=api_key)
-            if res:
-                return res
+            if isinstance(res, tuple) and len(res) == 2:
+                # Backward-compatible support if mocked as (headline, message)
+                headline, message = str(res[0]).strip(), str(res[1]).strip()
+                return {
+                    "subject_spark": headline.rstrip(".!")[:42],
+                    "headline": headline,
+                    "message": message,
+                    "connection_ps": default_conn,
+                    "micro_challenge": default_challenge,
+                    "cadence_title": cadence_title,
+                    "cadence_subline": cadence_subline,
+                    "angle_number": angle_id + 1,
+                }
+            if isinstance(res, dict) and res.get("headline") and res.get("message"):
+                return {
+                    "subject_spark": (res.get("subject_spark") or res["headline"].rstrip(".!"))[:46],
+                    "headline": res["headline"],
+                    "message": res["message"],
+                    "connection_ps": res.get("connection_ps") or default_conn,
+                    "micro_challenge": res.get("micro_challenge") or default_challenge,
+                    "cadence_title": cadence_title,
+                    "cadence_subline": cadence_subline,
+                    "angle_number": angle_id + 1,
+                }
         except Exception:
             pass
 
-    h_tmpl, m_tmpl = DAILY_INSIDER_VAULT[day_idx % len(DAILY_INSIDER_VAULT)]
-    return (
-        h_tmpl.format(first_name=first_name, top_company=top_co, highlight_count=hi_cnt),
-        m_tmpl.format(first_name=first_name, top_company=top_co, highlight_count=hi_cnt),
+    return {
+        "subject_spark": default_spark[:46],
+        "headline": vault_headline,
+        "message": vault_message,
+        "connection_ps": default_conn,
+        "micro_challenge": default_challenge,
+        "cadence_title": cadence_title,
+        "cadence_subline": cadence_subline,
+        "angle_number": angle_id + 1,
+    }
+
+
+def generate_daily_insider_note(sub_cfg, top_job, upgrade_count, hot_count, total_count, today, rel_ctx=None):
+    """Return `(headline, message)` tuple from `generate_daily_briefing_pack`."""
+    pack = generate_daily_briefing_pack(
+        sub_cfg, top_job, upgrade_count, hot_count, total_count, today, rel_ctx=rel_ctx
     )
+    return pack["headline"], pack["message"]
 
 
 def _render_job_card_html(j, today):
@@ -1851,9 +2328,13 @@ def _render_job_card_html(j, today):
     </div>"""
 
 
-def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_email, attachments=None):
-    """Construct an editorial-grade, minimalist executive daily briefing with a daily GenAI
-    'Us Against the System' career-move manifesto and visual dopamine cues."""
+def build_email_message(
+    jobs_to_send, all_jobs_count, sub_cfg, today, sender_email,
+    attachments=None, sub_state=None, root=ROOT, board_count=106, return_meta=False
+):
+    """Construct an editorial-grade, minimalist executive daily briefing with a guaranteed-unique
+    daily GenAI 'Us Against the System' dopamine manifesto, personal relationship streak with Lucy,
+    and 60-second completion challenge."""
     recipient = sub_cfg.get("recipient_email", "lucasschollmatter@gmail.com")
     sub_name = sub_cfg.get("name") or recipient
     first_name = (sub_name or "there").split()[0]
@@ -1861,7 +2342,7 @@ def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_ema
     attachments = attachments or []
 
     # Ensure every job has career-upgrade classification
-    classify_career_upgrades(jobs_to_send, sub_cfg)
+    classify_career_upgrades(jobs_to_send, sub_cfg, root=root)
 
     # Sort: Career Upgrade Moves first, then HOT (0-2d), then newest, then company
     enriched = []
@@ -1876,28 +2357,45 @@ def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_ema
     hot_jobs = [item[3] for item in enriched if item[4]]
     standard_jobs = [item[3] for item in enriched if not item[6]]
     top_job = enriched[0][3] if enriched else None
+    is_quiet_spotlight = bool(jobs_to_send) and all(j.get("quiet_spotlight") for j in jobs_to_send)
 
-    insider_headline, insider_message = generate_daily_insider_note(
-        sub_cfg, top_job, len(upgrade_jobs), len(hot_jobs), len(jobs_to_send), today
+    rel_ctx = peek_relationship_context(
+        sub_state, len(jobs_to_send), len(attachments), today,
+        board_count=board_count, sub_id=sub_cfg.get("id") or recipient,
     )
+    pack = generate_daily_briefing_pack(
+        sub_cfg, top_job, len(upgrade_jobs), len(hot_jobs), len(jobs_to_send), today,
+        rel_ctx=rel_ctx, cvs_today_count=len(attachments),
+        is_quiet_spotlight=is_quiet_spotlight, root=root,
+    )
+    insider_headline = pack["headline"]
+    insider_message = pack["message"]
+    connection_ps = pack["connection_ps"]
+    micro_challenge = pack["micro_challenge"]
+    subject_spark = pack["subject_spark"]
+    edition = rel_ctx["edition"]
+    streak_days = rel_ctx["streak_days"]
+    milestone_badge = rel_ctx.get("milestone_badge") or ""
 
     msg = EmailMessage()
     hot_prefix = f"🔥 {len(hot_jobs)} HOT · " if hot_jobs else "⚡ "
     up_part = f"{len(upgrade_jobs)} Career Upgrade Move(s) · " if upgrade_jobs else ""
     cv_suffix = f" + {len(attachments)} Tailored CV(s)" if attachments else ""
+    spark_part = f'"{subject_spark}" — ' if subject_spark else ""
     msg["Subject"] = (
-        f"{hot_prefix}Lucy: {up_part}{len(jobs_to_send)} Relevant Opening(s){cv_suffix} for {sub_name} ({date_str})"
+        f"{hot_prefix}Lucy #{edition}: {spark_part}{up_part}{len(jobs_to_send)} Relevant Opening(s){cv_suffix} ({date_str})"
     )
     msg["From"] = f"Lucy · Personal Headhunter <{sender_email}>"
     msg["To"] = recipient
 
     # Minimalist plain-text version (preserves '- {title} at {company}' format)
     txt_lines = [
-        f"{sub_name} — Lucy Private Talent Briefing ({date_str})",
-        "Lucy, your personal headhunter — your daily reminder to check where to apply today.",
+        f"{sub_name} — Lucy Private Talent Briefing #{edition} · Day {streak_days} Streak ({date_str})",
+        f"{pack['cadence_subline']} — Lucy, your personal headhunter & your daily reminder to check where to apply today.",
         "",
         f"⚡ {insider_headline}",
         insider_message,
+        f"🤝 Lucy's Corner: {connection_ps}",
         "",
         f"{len(upgrade_jobs)} Career Upgrade Move(s) · {len(hot_jobs)} Hot (0-2d) · {len(jobs_to_send)} shown ({all_jobs_count} active matches)",
         "",
@@ -1925,11 +2423,20 @@ def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_ema
             if j.get("cv_filename"):
                 txt_lines.append(f"  Attached CV: {j['cv_filename']}")
         txt_lines.append("")
-    txt_lines.append("🎯 60-Second Execution Play: Pick 1 role above, grab your pre-tailored .docx CV, and hit submit.")
+    txt_lines.append(f"🎯 Today's 60-Second Play: {micro_challenge}")
     msg.set_content("\n".join(txt_lines))
 
     # Minimalist HTML sections
     sections_html = []
+    if is_quiet_spotlight:
+        sections_html.append(
+            "<div style='background-color:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;border-radius:8px;"
+            "padding:9px 12px;margin-bottom:16px;font-size:12px;line-height:1.45;'>"
+            "<strong>&#10024; Quiet-Market Momentum Spotlight:</strong> Zero brand-new postings dropped overnight, "
+            "so I hand-picked your top unclaimed step-up opportunities still live on the radar to keep your daily momentum unbroken."
+            "</div>"
+        )
+
     if upgrade_jobs:
         up_cards = "".join(_render_job_card_html(j, today) for j in upgrade_jobs)
         sections_html.append(f"""
@@ -1955,7 +2462,6 @@ def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_ema
           {std_cards}
         </div>""")
     elif hot_jobs:
-        # Ensure "Hot Off the Press" marker is present when all roles are upgrades and hot
         sections_html.append(
             "<div style='font-size:11px;color:#71717a;margin:0 0 12px;'>Hot Off the Press: includes roles posted in the last 1&ndash;2 days.</div>"
         )
@@ -1963,7 +2469,20 @@ def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_ema
     first_name_esc = html.escape(first_name)
     headline_esc = html.escape(insider_headline)
     message_esc = html.escape(insider_message)
-    preheader_esc = html.escape(f"⚡ {insider_headline} — {insider_message}")
+    conn_esc = html.escape(connection_ps)
+    challenge_esc = html.escape(micro_challenge)
+    cadence_title_esc = html.escape(pack["cadence_title"])
+    cadence_sub_esc = html.escape(pack["cadence_subline"])
+    preheader_esc = html.escape(f"⚡ Briefing #{edition}: {insider_headline} — {insider_message}")
+
+    streak_label = f"&#128293; {streak_days}d Streak" if streak_days >= 2 else "Day 1 Live"
+    milestone_html = (
+        f"<div style='display:inline-block;background-color:#064e3b;border:1px solid #059669;color:#6ee7b7;"
+        f"font-size:10px;font-weight:700;padding:3px 9px;border-radius:999px;letter-spacing:0.5px;"
+        f"margin-bottom:10px;text-transform:uppercase;'>&#127942; {html.escape(milestone_badge)}</div>"
+        if milestone_badge
+        else ""
+    )
 
     up_color = "#059669" if upgrade_jobs else "#18181b"
     hot_color = "#d97706" if hot_jobs else "#18181b"
@@ -1974,21 +2493,21 @@ def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_ema
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lucy &middot; Daily Briefing</title>
+<title>Lucy &middot; Briefing #{edition}</title>
 </head>
 <body style="margin:0;padding:28px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:#18181b;background-color:#f4f4f5;-webkit-font-smoothing:antialiased;">
   <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">{preheader_esc}</div>
 
   <div style="max-width:640px;margin:0 auto;background-color:#ffffff;border:1px solid #e4e4e7;border-radius:14px;padding:30px 28px 24px;">
 
-    <!-- Editorial Masthead -->
+    <!-- Editorial Masthead + Briefing Edition & Streak -->
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin-bottom:10px;">
       <tr>
         <td align="left" style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:1.3px;color:#059669;">
           &#10022; Lucy &middot; Personal Headhunter
         </td>
-        <td align="right" style="font-size:11.5px;font-weight:600;color:#71717a;">
-          {date_str}
+        <td align="right" style="font-size:11px;font-weight:700;color:#52525b;">
+          Briefing #{edition} &middot; {streak_label} &middot; {date_str}
         </td>
       </tr>
     </table>
@@ -1997,19 +2516,23 @@ def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_ema
       Good morning, {first_name_esc}.
     </h1>
     <div style="font-size:13px;color:#52525b;margin-bottom:16px;line-height:1.45;">
-      Your daily reminder to check where to apply today &mdash; Career Upgrade Moves ranked first.
+      <strong style="color:#18181b;">{cadence_sub_esc}</strong> &mdash; your daily reminder to check where to apply today.
     </div>
 
-    <!-- Dark Obsidian 'Us Against the System' Daily Manifesto Card -->
+    <!-- Dark Obsidian 'Us Against the System' Daily Manifesto + Lucy Partnership Corner -->
     <div style="background-color:#09090b;color:#fafafa;border-radius:11px;padding:18px 20px;margin-bottom:16px;">
+      {milestone_html}
       <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1.4px;color:#34d399;margin-bottom:6px;">
-        &#9889; Today&rsquo;s Edge &middot; Us vs. The System
+        &#9889; Today&rsquo;s Edge &middot; Us vs. The System &middot; {cadence_title_esc}
       </div>
-      <div style="font-size:16px;font-weight:800;color:#ffffff;letter-spacing:-0.2px;margin-bottom:6px;line-height:1.3;">
+      <div style="font-size:16.5px;font-weight:800;color:#ffffff;letter-spacing:-0.2px;margin-bottom:7px;line-height:1.3;">
         {headline_esc}
       </div>
-      <div style="font-size:13px;color:#d4d4d8;line-height:1.55;">
+      <div style="font-size:13px;color:#e4e4e7;line-height:1.58;">
         {message_esc}
+      </div>
+      <div style="margin-top:12px;padding-top:10px;border-top:1px solid #27272a;font-size:12px;color:#a1a1aa;line-height:1.5;">
+        <span style="color:#34d399;font-weight:700;">&#129309; Lucy&rsquo;s Corner:</span> {conn_esc}
       </div>
     </div>
 
@@ -2037,9 +2560,9 @@ def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_ema
 
     {''.join(sections_html)}
 
-    <!-- 60-Second Execution Play Footer -->
-    <div style="margin-top:18px;padding:14px 16px;background-color:#fafafa;border:1px solid #e4e4e7;border-radius:9px;font-size:12px;color:#27272a;line-height:1.5;">
-      <strong style="color:#09090b;">&#127919; The 60-Second Play:</strong> Pick <strong>1 role</strong> above &rarr; preview or download your attached <code style="background-color:#ffffff;border:1px solid #e4e4e7;padding:1px 5px;border-radius:4px;font-size:11px;">CV_*.docx</code> right inside Gmail &rarr; submit before your next meeting. Comfort stays put; movers get paid.
+    <!-- Dynamic Daily 60-Second Dopamine Challenge Footer -->
+    <div style="margin-top:18px;padding:14px 16px;background-color:#fafafa;border:1px solid #e4e4e7;border-left:3px solid #059669;border-radius:9px;font-size:12px;color:#27272a;line-height:1.5;">
+      <strong style="color:#09090b;">&#127919; Today&rsquo;s 60-Second Dopamine Play:</strong> {challenge_esc}
     </div>
   </div>
 </body>
@@ -2063,6 +2586,8 @@ def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_ema
             subtype=subtype,
             filename=filename,
         )
+    if return_meta:
+        return msg, rel_ctx, pack
     return msg
 
 
@@ -2195,7 +2720,10 @@ def prepare_tailored_cvs(jobs_to_send, sub_cfg, today, root=ROOT):
     return attachments
 
 
-def send_email_digest(jobs_to_send, all_jobs_count, sub_cfg, today, root=ROOT, attachments=None):
+def send_email_digest(
+    jobs_to_send, all_jobs_count, sub_cfg, today, root=ROOT,
+    attachments=None, sub_state=None, board_count=106
+):
     """Send a single subscriber's daily digest via Gmail/SMTP if credentials are configured."""
     sub_name = sub_cfg.get("name") or sub_cfg.get("recipient_email", "subscriber")
     if not jobs_to_send:
@@ -2214,16 +2742,24 @@ def send_email_digest(jobs_to_send, all_jobs_count, sub_cfg, today, root=ROOT, a
         print(f"  [{sub_name}] Email skipped: GMAIL_USER / GMAIL_APP_PASSWORD environment variables not set.")
         return False
 
-    msg = build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, smtp_user, attachments=attachments)
+    msg, rel_ctx, pack = build_email_message(
+        jobs_to_send, all_jobs_count, sub_cfg, today, smtp_user,
+        attachments=attachments, sub_state=sub_state, root=root,
+        board_count=board_count, return_meta=True,
+    )
     with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=25) as server:
         server.login(smtp_user, smtp_password)
         server.send_message(msg)
 
-    print(f"  [{sub_name}] Sent email digest ({len(jobs_to_send)} roles, {len(attachments)} tailored CVs) to {msg['To']}.")
+    commit_relationship_state(sub_state, rel_ctx, pack, jobs_to_send, today)
+    print(
+        f"  [{sub_name}] Sent Briefing #{rel_ctx['edition']} ({len(jobs_to_send)} roles, "
+        f"{len(attachments)} tailored CVs, angle #{pack['angle_number']}) to {msg['To']}."
+    )
     return True
 
 
-def process_subscribers(fetched, state, cfg, today, send_email=True, only_id=None, root=ROOT):
+def process_subscribers(fetched, state, cfg, today, send_email=True, only_id=None, root=ROOT, board_count=106):
     """Filter fetched jobs for each active subscriber, update their personal seen
     state in state['subscribers'][sub_id], and send each subscriber's email.
 
@@ -2259,13 +2795,16 @@ def process_subscribers(fetched, state, cfg, today, send_email=True, only_id=Non
         sub_matched.sort(key=lambda j: j["eff_date"], reverse=True)
 
         if send_email:
-            to_email = select_jobs_for_email(sub_matched, sub_baseline, sub_cfg)
+            to_email = select_jobs_for_email(sub_matched, sub_baseline, sub_cfg, sub_state=sub_state)
             # Generate tailored CVs for roles being emailed today (or top active matches
             # if no new roles were discovered today, so docs/cvs/<sub_id>/ stays populated).
             cv_targets = to_email if to_email else [j for j in sub_matched if not j.get("stale")]
             attachments = prepare_tailored_cvs(cv_targets, sub_cfg, today, root=root)
             try:
-                send_email_digest(to_email, len(sub_matched), sub_cfg, today, root=root, attachments=attachments)
+                send_email_digest(
+                    to_email, len(sub_matched), sub_cfg, today, root=root,
+                    attachments=attachments, sub_state=sub_state, board_count=board_count,
+                )
             except Exception as e:
                 gha_annotate("error", f"email delivery failed for {sub_id}: {type(e).__name__}: {e}")
                 failed_ids.append(sub_id)
@@ -2280,7 +2819,7 @@ def strip_transient_fields(jobs):
     """Remove heavy job description / detail_api fields before writing static JSON files."""
     clean = []
     for j in jobs:
-         item = {k: v for k, v in j.items() if k not in ("description", "detail_api", "llm_analysis", "cv_filename", "is_career_upgrade", "upgrade_reason")}
+         item = {k: v for k, v in j.items() if k not in ("description", "detail_api", "llm_analysis", "cv_filename", "is_career_upgrade", "upgrade_reason", "quiet_spotlight")}
          clean.append(item)
     return clean
 
@@ -2344,7 +2883,7 @@ def refresh(cfg, companies, root=ROOT, today=None, send_email=True, subscriber_i
 
     # Process per-subscriber filtering, LLM CV tailoring, state updates, and email digests
     email_failures = process_subscribers(fetched, state, cfg, today, send_email=send_email,
-                                         only_id=subscriber_id, root=root)
+                                         only_id=subscriber_id, root=root, board_count=len(companies))
 
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     fresh = write_outputs(root, cfg, jobs, state, today, stamp)

@@ -4,6 +4,8 @@
   "recipient_email": "lucasschollmatter@gmail.com",
   "email_on_baseline": true,
   "email_mode": "new_or_discovered",
+  "daily_top_when_quiet": true,
+  "quiet_spotlight_count": 3,
   "llm_model": "gemini-2.5-flash",
   "max_tailored_cvs": 3,
   "title_include": [
@@ -33,15 +35,27 @@
     "tonala",
     "tlajomulco",
     "el salto",
+    "ixtlahuacan",
+    "juanacatlan",
+    "acatlan de juarez",
+    "zapotlanejo",
+    "amatitan",
+    "tequila",
+    "atotonilco",
+    "tepatitlan",
+    "lagos de moreno",
+    "ciudad guzman",
+    "zapotlan",
     "puerto vallarta",
     "jalisco",
     "gdl",
+    "zmg",
     "jal"
   ],
   "include_remote_mexico": true,
   "include_country_only": true,
   "new_days": 7,
-  "max_workers": 8,
+  "max_workers": 16,
   "state_retention_days": 120,
   "subscribers": [
     {
@@ -125,18 +139,6 @@
         "\\bmarketing automation\\b",
         "\\b(industrial|plc|scada|controls|building|packaging|warehouse) automation\\b"
       ],
-      "locations": [
-        "guadalajara",
-        "zapopan",
-        "tlaquepaque",
-        "tonala",
-        "tlajomulco",
-        "el salto",
-        "puerto vallarta",
-        "jalisco",
-        "gdl",
-        "jal"
-      ],
       "include_remote_mexico": true,
       "include_country_only": true
     },
@@ -183,18 +185,6 @@
         "\\b(field|retail|store|door[- ]to[- ]door|telemarketing|call center agent)\\b",
         "\\b(accountant|accounting|payroll|tax|legal|nurse|physician)\\b"
       ],
-      "locations": [
-        "guadalajara",
-        "zapopan",
-        "tlaquepaque",
-        "tonala",
-        "tlajomulco",
-        "el salto",
-        "puerto vallarta",
-        "jalisco",
-        "gdl",
-        "jal"
-      ],
       "include_remote_mexico": true,
       "include_country_only": true
     },
@@ -239,18 +229,6 @@
         "\\b(qa|quality assurance|test|testing|sdet)\\b",
         "\\b(call center agent|telemarketing|retail|store|cashier|warehouse associate)\\b",
         "\\b(accountant|accounting|payroll|tax|legal|nurse|physician)\\b"
-      ],
-      "locations": [
-        "guadalajara",
-        "zapopan",
-        "tlaquepaque",
-        "tonala",
-        "tlajomulco",
-        "el salto",
-        "puerto vallarta",
-        "jalisco",
-        "gdl",
-        "jal"
       ],
       "include_remote_mexico": true,
       "include_country_only": true
