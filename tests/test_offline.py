@@ -30,6 +30,37 @@ class TitleAndLocation(unittest.TestCase):
         for t in no:
             self.assertFalse(fj.is_director(t, RULES), t)
 
+    def test_lucas_cv_rules(self):
+        subs = {s["id"]: s for s in fj.get_subscribers(CFG)}
+        self.assertIn("lucas", subs)
+        lucas_cfg = subs["lucas"]
+        cv_txt = fj.load_subscriber_cv(lucas_cfg)
+        self.assertIn("Google", cv_txt)
+        self.assertIn("AstraZeneca", cv_txt)
+        self.assertIn("Wizeline", cv_txt)
+        self.assertIn("Celonis", cv_txt)
+        lucas_rules = fj.build_rules(lucas_cfg)
+        yes = [
+            "Director, Engineering",
+            "VP, Global Operations",
+            "Head of Process Excellence",
+            "Senior Manager, Process Mining — GBS",
+            "Sr. Manager, Data Analytics",
+            "Senior Technical Program Manager",
+            "Principal Process Mining Architect",
+            "Global Lead, Operational Excellence",
+        ]
+        no = [
+            "Software Engineer",
+            "Executive Assistant to the Director",
+            "Director Intern",
+            "Program Manager",
+        ]
+        for t in yes:
+            self.assertTrue(fj.is_director(t, lucas_rules), t)
+        for t in no:
+            self.assertFalse(fj.is_director(t, lucas_rules), t)
+
     def test_luis_cv_rules(self):
         subs = {s["id"]: s for s in fj.get_subscribers(CFG)}
         self.assertIn("luis", subs)
@@ -387,6 +418,30 @@ class EndToEnd(unittest.TestCase):
             att_html = attachments[0].get_content()
             self.assertIn("Lucas Scholl Matter", att_html)
             self.assertIn("Director of Engineering | Cloud &amp; AI Platform Leadership", att_html)
+            saved_docs_cvs = list((self.root / "docs" / "cvs" / "lucas").glob("*.html"))
+            self.assertEqual(len(saved_docs_cvs), 3)
+
+    @patch("fetch_jobs.call_gemini_json", side_effect=RuntimeError("gemini 429 quota"))
+    @patch("smtplib.SMTP_SSL")
+    def test_llm_fallback_still_sends_tailored_cvs(self, mock_smtp_ssl, _mock_gemini):
+        """Even if Gemini throws (429/503/JSON error), deterministic fallback still builds & attaches 3 CVs."""
+        mock_server = MagicMock()
+        mock_smtp_ssl.return_value.__enter__.return_value = mock_server
+        fj.http_json = fake_http()
+        with patch.dict(os.environ, {
+            "GMAIL_USER": "sender@gmail.com",
+            "GMAIL_APP_PASSWORD": "app-secret-password",
+            "GEMINI_API_KEY": "fake-gemini-key",
+        }):
+            code = fj.refresh(CFG, COMPANIES, root=self.root, today=date(2026, 11, 5), send_email=True, subscriber_id="lucas")
+            self.assertEqual(code, 0)
+            sent_msg = mock_server.send_message.call_args_list[0][0][0]
+            attachments = list(sent_msg.iter_attachments())
+            self.assertEqual(len(attachments), 3)
+            att_html = attachments[0].get_content()
+            self.assertIn("Lucas Scholl Matter", att_html)
+            self.assertIn("Google", att_html)
+            self.assertIn("AstraZeneca", att_html)
 
     def test_workday_dates(self):
         t = date(2026, 11, 5)
