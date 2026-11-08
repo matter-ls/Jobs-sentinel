@@ -22,13 +22,16 @@ from __future__ import annotations
 import argparse
 import copy
 import html
+import io
 import json
 import os
 import re
 import smtplib
 import sys
+import textwrap
 import time
 import unicodedata
+import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 from email.message import EmailMessage
@@ -45,6 +48,7 @@ CFG_DEFAULTS = {
     "email_mode": "new_or_discovered",
     "llm_model": "gemini-2.5-flash",
     "max_tailored_cvs": 3,
+    "cv_attachment_format": "docx",
     "include_remote_mexico": True,
     "include_country_only": True,
     "new_days": 7,
@@ -58,26 +62,32 @@ LOC_LABELS = {
     "mx_country": "Mexico · city not listed",
 }
 
-LLM_SYSTEM_PROMPT = """You are Lucy, an elite executive headhunter and minimalist resume architect.
-Compare the candidate's MASTER CV against the TARGET JOB POSTING.
+LLM_SYSTEM_PROMPT = """You are Lucy, an elite executive headhunter, ATS optimization architect, and minimalist resume strategist.
+Compare the candidate's MASTER CV against the TARGET JOB POSTING and produce a CV that satisfies BOTH automated ATS/AI triage engines (top-decile keyword & semantic match) AND human hiring managers (immediate 'schedule for a call' conviction in a 6-second scan).
 
 Strict Rules:
-1. NEVER invent companies, job titles, dates, degrees, or fake metrics. Only select, reorder, and re-angle real achievements from the MASTER CV so they mirror the terminology and priorities of the TARGET JOB POSTING.
-2. Keep the tailored CV minimalist, executive, and scannable on 1 page (3-4 high-impact bullets for recent relevant roles; 1-2 bullets for older roles).
-3. Write in the language of the job posting (default to English if the posting is in English or mixed).
+1. 100% TRUTHFULNESS: NEVER invent companies, job titles, dates, degrees, certifications, or fake metrics. Only select, prioritize, and re-angle real achievements from the MASTER CV so they truthfully mirror the domain terminology and business priorities of the TARGET JOB POSTING.
+2. GENERAL ROLE DIRECTION HEADLIGHT (`target_direction`): Craft a clear overarching career direction headline at the top of the CV that informs the reader of the general type of role and functional leadership domain the candidate is pursuing—aligned with the area of the job being applied to (e.g., "Target Role Direction: Director / Head of Process Intelligence, GBS & Enterprise Operations"), rather than awkwardly parroting an internal requisition code.
+3. ATS & AI TRIAGE OPTIMIZATION: Mirror exact domain terminology, methodologies, platforms, and leadership competencies from the job posting that genuinely exist in the candidate's background. Include both full terms and standard acronyms where natural (e.g., "Global Business Services (GBS)", "Object-Centric Process Mining (OCPM)"). Weave these keywords naturally into `summary` and `experience` bullets (where ATS engines assign highest weight) as well as `core_skills` (8–10 high-signal skills).
+4. HUMAN RECRUITER 'CALL CONVICTION': Keep the CV minimalist, executive, and scannable on 1 page. Structure `summary` as a 3-sentence executive pitch (Domain Identity + Signature Quantified Proof + Value for Target Company). Format every `experience` bullet as `Strong Action Verb + Scope/Context + Quantified Business Outcome` (3-4 bullets for the 2 most relevant/recent roles; 1-2 bullets for earlier roles).
+5. CAREER UPGRADE MOVE (`is_career_upgrade`): Set to true if this role represents a step up in seniority, leadership scope, architectural ownership, or strategic challenge compared to the candidate's current/most recent role on their MASTER CV.
+6. Write in the language of the job posting (default to English if the posting is in English or mixed).
 
 Return ONLY valid JSON matching this exact schema:
 {
-  "match_score": 90,
-  "lucy_why_it_fits": "2-sentence warm, punchy headhunter note directly to the candidate explaining why they are a strong match and what angle to emphasize.",
-  "matched_keywords": ["Keyword 1", "Keyword 2", "Keyword 3", "Keyword 4"],
+  "match_score": 92,
+  "is_career_upgrade": true,
+  "upgrade_reason": "1 concise sentence explaining why this role is a career upgrade move or high-impact stretch challenge relative to their current role.",
+  "lucy_why_it_fits": "2-sentence energizing, high-conviction headhunter note directly to the candidate that gives them a genuine confidence boost—citing their real signature wins and why the hiring manager at this company will immediately want them on a call.",
+  "matched_keywords": ["Keyword 1", "Keyword 2", "Keyword 3", "Keyword 4", "Keyword 5", "Keyword 6"],
   "gaps_to_address": ["1 brief tip or keyword to highlight in the interview"],
   "cv": {
     "full_name": "Candidate Full Name",
-    "target_headline": "Tailored Role Headline | Core Value Proposition",
-    "contact_line": "City, Country | Phone | Email",
-    "summary": "3-sentence executive profile tailored specifically to this role and company.",
-    "core_skills": ["Skill 1", "Skill 2", "Skill 3", "Skill 4", "Skill 5", "Skill 6"],
+    "target_direction": "Target Role Direction: [General Role Level & Functional Domain Area Fulfilling the Target Job]",
+    "target_headline": "Core Value Proposition Subheadline (Years of Experience | Signature Domain Pillars | Verified Impact)",
+    "contact_line": "City, Country | Phone | Email | LinkedIn",
+    "summary": "3-sentence ATS- and recruiter-optimized executive summary tailored specifically to this role's domain.",
+    "core_skills": ["Skill 1", "Skill 2", "Skill 3", "Skill 4", "Skill 5", "Skill 6", "Skill 7", "Skill 8"],
     "experience": [
       {
         "company": "Company Name",
@@ -85,13 +95,14 @@ Return ONLY valid JSON matching this exact schema:
         "location": "Location",
         "dates": "Start - End",
         "bullets": [
-          "Action-verb bullet re-angled to highlight relevant impact for this target role."
+          "Action-verb bullet re-angled to highlight truthful, quantified impact and ATS keywords for this target role."
         ]
       }
     ],
     "education": [
-      {"degree": "Degree", "institution": "Institution", "dates": "Dates"}
-    ]
+      {"degree": "Degree or Certification", "institution": "Institution", "dates": "Dates"}
+    ],
+    "languages": ["Language 1 (Proficiency)", "Language 2 (Proficiency)"]
   }
 }"""
 
@@ -615,9 +626,136 @@ def call_gemini_json(prompt_text, model="gemini-2.5-flash", api_key=None):
     return None
 
 
+DEFAULT_UPGRADE_PATTERNS = [
+    r"\b(director(a)?|head of|vp|svp|evp|vice[- ]?president(e|a)?|general manager|gerente general|country (manager|lead|head)|managing director|chief\b.*\bofficer)\b",
+    r"\b(senior manager|sr\.? manager|gerente (senior|sr)|manager|gerente)\b",
+    r"\b(principal|architect|arquitecto|coe lead|practice lead|global lead|regional lead|latam lead)\b",
+    r"\b(head|lead|leader|lider)\b.*\b(automation|transformation|process|operations|operational excellence|continuous improvement|pmo|portfolio|gbs|data|analytics)\b",
+]
+
+
+def is_career_upgrade_heuristic(job_item, sub_cfg):
+    """Return (is_upgrade, reason) by checking if a role represents a seniority/scope step-up."""
+    title = job_item.get("title", "")
+    t = norm(title)
+    patterns = sub_cfg.get("upgrade_title_include") or DEFAULT_UPGRADE_PATTERNS
+    if any(re.search(p, t, re.I) for p in patterns):
+        co = job_item.get("company", "this employer")
+        return True, f"Step-up leadership & scope opportunity ({title}) at {co}."
+    return False, ""
+
+
+def classify_career_upgrades(jobs, sub_cfg, root=ROOT):
+    """Label roles in `jobs` with `is_career_upgrade` and `upgrade_reason`.
+
+    First applies fast seniority/trajectory rules (`upgrade_title_include`), then—when
+    `GEMINI_API_KEY` is configured and there are multiple roles—asks Gemini in a single
+    compact batch call to refine which roles are true 'Career Upgrade Moves' (step-up
+    challenge vs. lateral match) against the subscriber's Master CV."""
+    if not jobs:
+        return
+    for j in jobs:
+        if "is_career_upgrade" not in j:
+            is_up, reason = is_career_upgrade_heuristic(j, sub_cfg)
+            j["is_career_upgrade"] = is_up
+            if reason:
+                j["upgrade_reason"] = reason
+
+    api_key = (os.environ.get("GEMINI_API_KEY") or "").strip()
+    master_cv = load_subscriber_cv(sub_cfg, root=root)
+    if not api_key or not master_cv or len(jobs) <= 1:
+        return
+
+    # Single compact batch prompt for up to 25 roles so Luis's large list is triaged in 1 call
+    batch = jobs[:25]
+    items_txt = "\n".join(
+        f"- key: {j['key']} | title: {j.get('title', '')} | company: {j.get('company', '')} | team: {j.get('team', '')}"
+        for j in batch
+    )
+    prompt = (
+        "Evaluate the following job openings against the candidate's MASTER CV.\n"
+        "Identify which roles represent a 'Career Upgrade Move' (an upward step in seniority, "
+        "leadership scope, architectural ownership, or high-growth strategic challenge compared "
+        "to the candidate's current/most recent role, rather than a lateral or junior move).\n\n"
+        'Return ONLY valid JSON matching: {"upgrades": [{"key": "<job key>", "is_career_upgrade": true, "upgrade_reason": "1 concise sentence why this is a career upgrade move"}]}\n\n'
+        f"JOBS:\n{items_txt}\n\n---\nCANDIDATE MASTER CV:\n{master_cv[:4000]}"
+    )
+    model = os.environ.get("GEMINI_MODEL") or sub_cfg.get("llm_model", "gemini-2.5-flash")
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        gen_cfg = {"temperature": 0.1, "maxOutputTokens": 2048, "responseMimeType": "application/json"}
+        if model.startswith("gemini-2.5"):
+            gen_cfg["thinkingConfig"] = {"thinkingBudget": 0}
+        body = http_json(
+            url,
+            {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": gen_cfg},
+            retries=1,
+            headers={"x-goog-api-key": api_key},
+            timeout=35,
+        )
+        parts = (((body.get("candidates") or [{}])[0].get("content") or {}).get("parts") or [])
+        text_parts = [p.get("text", "") for p in parts if isinstance(p, dict) and p.get("text") and not p.get("thought")]
+        raw = "\n".join(text_parts).strip()
+        if raw:
+            parsed = parse_llm_json(raw)
+            by_key = {u.get("key"): u for u in (parsed.get("upgrades") or []) if isinstance(u, dict) and u.get("key")}
+            if by_key:
+                for j in batch:
+                    if j["key"] in by_key:
+                        u = by_key[j["key"]]
+                        j["is_career_upgrade"] = bool(u.get("is_career_upgrade", j.get("is_career_upgrade")))
+                        if u.get("upgrade_reason"):
+                            j["upgrade_reason"] = str(u["upgrade_reason"]).strip()
+    except Exception:
+        # Heuristic labels are already applied on `jobs`
+        pass
+
+
+def infer_target_direction(job_item, sub_cfg=None, core_skills=None):
+    """Craft a natural 'General Role Direction' headlight that communicates the broader type
+    of role and functional domain the candidate is targeting, fulfilling the area of the job
+    being applied to without mechanically copying internal requisition codes."""
+    title = (job_item or {}).get("title", "")
+    team = (job_item or {}).get("team", "")
+    blob = norm(f"{title} {team} {' '.join(core_skills or [])}")
+
+    if re.search(r"\b(vp|vice[- ]?president(e|a)?|svp|evp|chief|general manager|gerente general|managing director|country (manager|lead|head))\b", blob):
+        level = "Executive Leadership (VP / GM / Head of Function)"
+    elif re.search(r"\b(director(a)?|head of)\b", blob):
+        level = "Director / Head of Function"
+    elif re.search(r"\b(senior manager|sr\.? manager|gerente senior|principal|architect|arquitecto|coe lead|practice lead|global lead)\b", blob):
+        level = "Senior Manager / Principal & Functional Lead"
+    elif re.search(r"\b(manager|gerente|lead|leader|lider)\b", blob):
+        level = "Manager & Cross-Functional Delivery Lead"
+    else:
+        level = "Senior Operations & Domain Specialist"
+
+    if re.search(r"\b(process mining|celonis|process intelligence|process excellence|operational excellence|continuous improvement|lean|six sigma|bpi)\b", blob):
+        domain = "Process Intelligence, Operational Excellence & Continuous Improvement"
+    elif re.search(r"\b(automation|rpa|power platform|power apps|power automate|low[- ]code|hyperautomation|blue prism|uipath)\b", blob):
+        domain = "Intelligent Automation, Low-Code Architecture & Process Transformation"
+    elif re.search(r"\b(gbs|shared services|business services|business transformation|digital transformation|transformation)\b", blob):
+        domain = "Global Business Services (GBS), Process Strategy & Enterprise Transformation"
+    elif re.search(r"\b(engineering|platform|software|cloud|infrastructure|technology)\b", blob):
+        domain = "Engineering & Platform Leadership, Cloud Systems & Technical Operations"
+    elif re.search(r"\b(data|analytics|bi\b|business intelligence|decision|forecasting)\b", blob):
+        domain = "Data & Analytics Strategy, Business Intelligence & Decision Systems"
+    elif re.search(r"\b(supply chain|logistics|manufacturing|fab\b|quality|procurement|operations|operaciones)\b", blob):
+        domain = "Global Operations, Supply Chain & End-to-End Process Optimization"
+    elif re.search(r"\b(sales|revenue|revops|bdr|sdr|business development|account|commercial|customer success|ventas)\b", blob):
+        domain = "Revenue Operations, Enterprise Business Development & Commercial Analytics"
+    elif re.search(r"\b(program|project|pmo|agile|scrum|delivery|portfolio|proyectos)\b", blob):
+        domain = "Strategic Program Management (PMO), Agile Delivery & Portfolio Execution"
+    else:
+        top_skills = " · ".join((core_skills or ["Enterprise Operations", "Strategy", "Execution"])[:3])
+        domain = top_skills
+
+    return f"Target Role Direction: {level} — {domain}"
+
+
 def tailor_cv_deterministic(job_item, master_cv_text, sub_cfg):
-    """Build a tailored minimalist CV directly from the subscriber's master CV Markdown
-    when Gemini API is unavailable, rate-limited, or unconfigured."""
+    """Build an ATS- and recruiter-optimized CV directly from the subscriber's master CV
+    Markdown when Gemini API is unavailable, rate-limited, or unconfigured."""
     lines = [ln.strip() for ln in (master_cv_text or "").splitlines()]
     full_name = sub_cfg.get("name", "Candidate")
     contact_line = sub_cfg.get("recipient_email", "")
@@ -649,12 +787,12 @@ def tailor_cv_deterministic(job_item, master_cv_text, sub_cfg):
             cleaned_ln = re.sub(r"\*\*[^*]+\*\*:?\s*", "", ln[2:])
             for part in re.split(r"[,;]", cleaned_ln):
                 s = part.strip(" .")
-                if 2 < len(s) <= 48:
+                if 2 < len(s) <= 52:
                     raw_skills.append(s)
-    # Sort skills so those matching the target job appear first
+    # Sort skills so those matching the target job appear first for ATS keyword density
     raw_skills.sort(key=lambda s: (0 if any(w in job_blob for w in norm(s).split() if len(w) > 3) else 1))
-    core_skills = list(dict.fromkeys(raw_skills))[:8] or ["Executive Leadership", "Operations", "Strategy"]
-    matched_kw = [s for s in core_skills if any(w in job_blob for w in norm(s).split() if len(w) > 3)][:5] or core_skills[:4]
+    core_skills = list(dict.fromkeys(raw_skills))[:10] or ["Executive Leadership", "Operations", "Strategy"]
+    matched_kw = [s for s in core_skills if any(w in job_blob for w in norm(s).split() if len(w) > 3)][:6] or core_skills[:4]
 
     # Parse PROFESSIONAL EXPERIENCE blocks (### Company | Location + **Role** | Dates + bullets)
     experience = []
@@ -707,9 +845,23 @@ def tailor_cv_deterministic(job_item, master_cv_text, sub_cfg):
                     "dates": "",
                 })
 
+    languages = []
+    for sec_name in ("LANGUAGES", "ADDITIONAL EDUCATION & SKILLS"):
+        for ln in sections.get(sec_name, []):
+            if "language" in ln.lower() or sec_name == "LANGUAGES":
+                clean_l = re.sub(r"^[-*]\s*(?:\*\*Languages:?\*\*:?\s*)?", "", ln).strip()
+                clean_l = re.sub(r"\*+", "", clean_l)
+                for seg in re.split(r"[|,]", clean_l):
+                    if seg.strip():
+                        languages.append(seg.strip())
+
+    target_direction = infer_target_direction(job_item, sub_cfg, core_skills)
     score = min(96, 84 + 2 * len(matched_kw))
+    is_up, up_reason = is_career_upgrade_heuristic(job_item, sub_cfg)
     return {
         "match_score": score,
+        "is_career_upgrade": is_up,
+        "upgrade_reason": up_reason,
         "lucy_why_it_fits": (
             f"Your background in {', '.join(matched_kw[:3])} aligns directly with {company}'s "
             f"{job_title} opening in {job_item.get('location') or 'Mexico'}."
@@ -718,18 +870,20 @@ def tailor_cv_deterministic(job_item, master_cv_text, sub_cfg):
         "gaps_to_address": [f"Emphasize measurable impact relevant to {company}'s {job_title} scope."],
         "cv": {
             "full_name": full_name,
+            "target_direction": target_direction,
             "target_headline": f"{job_title} | {' · '.join(core_skills[:3])}",
             "contact_line": contact_line,
             "summary": summary,
             "core_skills": core_skills,
             "experience": experience,
             "education": education[:3],
+            "languages": languages[:4],
         },
     }
 
 
 def tailor_cv_with_llm(job_item, master_cv_text, sub_cfg):
-    """Analyze job vs. master CV using Gemini and return structured match + minimalist CV."""
+    """Analyze job vs. master CV using Gemini and return structured match + ATS-ready CV."""
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key or not master_cv_text:
         return None
@@ -758,6 +912,11 @@ def tailor_cv_with_llm(job_item, master_cv_text, sub_cfg):
     try:
         res = call_gemini_json(prompt, model=model, api_key=api_key)
         if res and isinstance(res.get("cv"), dict):
+            cv_obj = res["cv"]
+            if not cv_obj.get("target_direction"):
+                cv_obj["target_direction"] = infer_target_direction(
+                    job_item, sub_cfg, cv_obj.get("core_skills") or []
+                )
             return res
     except Exception as e:
         gha_annotate(
@@ -767,10 +926,363 @@ def tailor_cv_with_llm(job_item, master_cv_text, sub_cfg):
     return tailor_cv_deterministic(job_item, master_cv_text, sub_cfg)
 
 
+def _xml_esc(s):
+    """Escape text for safe inclusion inside OpenXML (<w:t>) nodes."""
+    clean = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", str(s or ""))
+    return html.escape(clean, quote=True)
+
+
+def render_minimalist_cv_docx(cv_data, job_item=None):
+    """Generate a single-column, ATS-optimized Microsoft Word (.docx) resume using pure
+    Python standard library (`zipfile` + OpenXML).
+
+    Why .docx:
+    1. Previews natively inside Gmail's built-in document viewer (and opens in 1 click in
+       Google Docs or Microsoft Word) instead of displaying raw HTML source code.
+    2. Universally parsed with 100% text fidelity by every ATS (Workday, Greenhouse, Lever,
+       SmartRecruiters, Taleo, iCIMS) because each section heading and bullet is a standard
+       semantic `<w:p>` paragraph in top-to-bottom linear reading order."""
+    full_name = cv_data.get("full_name") or "Candidate"
+    target_direction = cv_data.get("target_direction") or infer_target_direction(
+        job_item or {}, None, cv_data.get("core_skills") or []
+    )
+    headline = cv_data.get("target_headline") or ""
+    contact = cv_data.get("contact_line") or ""
+    summary = cv_data.get("summary") or ""
+    skills = [s for s in (cv_data.get("core_skills") or []) if s]
+    experiences = cv_data.get("experience") or []
+    educations = cv_data.get("education") or []
+    languages = [s for s in (cv_data.get("languages") or []) if s]
+
+    def run_xml(text, sz=20, bold=False, italic=False, color="18181B"):
+        rpr = [
+            '<w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/>',
+            f'<w:sz w:val="{sz}"/><w:szCs w:val="{sz}"/>',
+            f'<w:color w:val="{color}"/>',
+        ]
+        if bold:
+            rpr.append("<w:b/>")
+        if italic:
+            rpr.append("<w:i/>")
+        return f'<w:r><w:rPr>{"".join(rpr)}</w:rPr><w:t xml:space="preserve">{_xml_esc(text)}</w:t></w:r>'
+
+    def p_xml(runs, style=None, before=0, after=60, line=250, keep_next=False, bottom_border=None, indent_left=0, hanging=0):
+        ppr = []
+        if style:
+            ppr.append(f'<w:pStyle w:val="{style}"/>')
+        if keep_next:
+            ppr.append("<w:keepNext/>")
+        if bottom_border:
+            color, sz = bottom_border
+            ppr.append(
+                f'<w:pBdr><w:bottom w:val="single" w:sz="{sz}" w:space="4" w:color="{color}"/></w:pBdr>'
+            )
+        if indent_left or hanging:
+            ppr.append(f'<w:ind w:left="{indent_left}" w:hanging="{hanging}"/>')
+        ppr.append(f'<w:spacing w:before="{before}" w:after="{after}" w:line="{line}" w:lineRule="auto"/>')
+        return f'<w:p><w:pPr>{"".join(ppr)}</w:pPr>{"".join(runs)}</w:p>'
+
+    def section_header_xml(title_text):
+        return p_xml(
+            [run_xml(title_text.upper(), sz=19, bold=True, color="0F766E")],
+            style="Heading2",
+            before=140,
+            after=65,
+            line=240,
+            keep_next=True,
+            bottom_border=("D4D4D8", 4),
+        )
+
+    paragraphs = []
+    # 1. Candidate Full Name (Heading 1)
+    paragraphs.append(
+        p_xml([run_xml(full_name, sz=38, bold=True, color="09090B")], style="Heading1", before=0, after=30, line=240, keep_next=True)
+    )
+    # 2. General Role Direction Headlight (informs ATS & recruiter of overall role trajectory)
+    if target_direction:
+        paragraphs.append(
+            p_xml([run_xml(target_direction, sz=21, bold=True, color="0F766E")], before=0, after=25, line=240, keep_next=True)
+        )
+    # 3. Role-Tailored Value Proposition Subheadline
+    if headline:
+        paragraphs.append(
+            p_xml([run_xml(headline, sz=20, bold=True, color="27272A")], before=0, after=35, line=240, keep_next=True)
+        )
+    # 4. Contact Information with crisp executive divider
+    if contact:
+        paragraphs.append(
+            p_xml([run_xml(contact, sz=18, color="52525B")], before=0, after=110, line=240, bottom_border=("18181B", 12))
+        )
+
+    # 5. Executive Summary
+    if summary:
+        paragraphs.append(section_header_xml("EXECUTIVE SUMMARY"))
+        paragraphs.append(p_xml([run_xml(summary, sz=20, color="18181B")], before=0, after=80, line=255))
+
+    # 6. Core Competencies & ATS Keywords
+    if skills:
+        paragraphs.append(section_header_xml("CORE COMPETENCIES & KEY SKILLS"))
+        skill_runs = []
+        for idx, sk in enumerate(skills):
+            if idx > 0:
+                skill_runs.append(run_xml("   •   ", sz=18, bold=True, color="0F766E"))
+            skill_runs.append(run_xml(sk, sz=19, bold=True, color="18181B"))
+        paragraphs.append(p_xml(skill_runs, before=0, after=90, line=250))
+
+    # 7. Professional Experience (Reverse-Chronological, CAR/XYZ Impact Bullets)
+    if experiences:
+        paragraphs.append(section_header_xml("PROFESSIONAL EXPERIENCE"))
+        for exp in experiences:
+            role_str = exp.get("role") or ""
+            comp_str = exp.get("company") or ""
+            loc_str = exp.get("location") or ""
+            dates_str = exp.get("dates") or ""
+            head_runs = [run_xml(role_str, sz=21, bold=True, color="09090B")]
+            if comp_str:
+                head_runs.append(run_xml("  —  ", sz=20, color="52525B"))
+                head_runs.append(run_xml(comp_str, sz=21, bold=True, color="0F766E"))
+            if loc_str:
+                head_runs.append(run_xml(f"  ·  {loc_str}", sz=19, color="52525B"))
+            if dates_str:
+                head_runs.append(run_xml(f"    |    {dates_str}", sz=19, italic=True, color="52525B"))
+            paragraphs.append(p_xml(head_runs, before=85, after=30, line=240, keep_next=True))
+
+            for b in exp.get("bullets") or []:
+                if not b:
+                    continue
+                paragraphs.append(
+                    p_xml(
+                        [run_xml("•  ", sz=19, bold=True, color="0F766E"), run_xml(b, sz=19, color="18181B")],
+                        before=0,
+                        after=40,
+                        line=245,
+                        indent_left=260,
+                        hanging=160,
+                    )
+                )
+
+    # 8. Education, Certifications & Languages
+    if educations or languages:
+        paragraphs.append(section_header_xml("EDUCATION, CERTIFICATIONS & LANGUAGES"))
+        for edu in educations:
+            deg = edu.get("degree") or ""
+            inst = edu.get("institution") or ""
+            dts = edu.get("dates") or ""
+            edu_runs = [run_xml(deg, sz=19, bold=True, color="09090B")]
+            if inst:
+                edu_runs.append(run_xml(f"  —  {inst}", sz=19, color="27272A"))
+            if dts:
+                edu_runs.append(run_xml(f" ({dts})", sz=18, color="52525B"))
+            paragraphs.append(p_xml(edu_runs, before=0, after=35, line=240))
+        if languages:
+            paragraphs.append(
+                p_xml(
+                    [run_xml("Languages: ", sz=19, bold=True, color="09090B"), run_xml(" · ".join(languages), sz=19, color="27272A")],
+                    before=20,
+                    after=40,
+                    line=240,
+                )
+            )
+
+    document_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        "<w:body>"
+        + "".join(paragraphs)
+        + '<w:sectPr>'
+        '<w:pgSz w:w="12240" w:h="15840"/>'
+        '<w:pgMar w:top="864" w:right="936" w:bottom="864" w:left="936" w:header="432" w:footer="432" w:gutter="0"/>'
+        "</w:sectPr>"
+        "</w:body></w:document>"
+    )
+
+    styles_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        "<w:docDefaults>"
+        "<w:rPrDefault><w:rPr>"
+        '<w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/>'
+        '<w:sz w:val="20"/><w:szCs w:val="20"/>'
+        '<w:color w:val="18181B"/>'
+        "</w:rPr></w:rPrDefault>"
+        "</w:docDefaults>"
+        '<w:style w:type="paragraph" w:default="1" w:styleId="Normal">'
+        '<w:name w:val="Normal"/><w:qFormat/>'
+        "</w:style>"
+        '<w:style w:type="paragraph" w:styleId="Heading1">'
+        '<w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:qFormat/>'
+        "<w:rPr><w:b/><w:sz w:val=\"38\"/></w:rPr>"
+        "</w:style>"
+        '<w:style w:type="paragraph" w:styleId="Heading2">'
+        '<w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:qFormat/>'
+        "<w:rPr><w:b/><w:sz w:val=\"19\"/></w:rPr>"
+        "</w:style>"
+        "</w:styles>"
+    )
+
+    content_types_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+        '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>'
+        "</Types>"
+    )
+
+    rels_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
+        "</Relationships>"
+    )
+
+    doc_rels_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+        "</Relationships>"
+    )
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("[Content_Types].xml", content_types_xml)
+        zf.writestr("_rels/.rels", rels_xml)
+        zf.writestr("word/_rels/document.xml.rels", doc_rels_xml)
+        zf.writestr("word/styles.xml", styles_xml)
+        zf.writestr("word/document.xml", document_xml)
+    return buf.getvalue()
+
+
+def extract_docx_text(docx_bytes):
+    """Extract plain text from a `.docx` byte buffer for verification and testing."""
+    with zipfile.ZipFile(io.BytesIO(docx_bytes), "r") as zf:
+        xml_data = zf.read("word/document.xml").decode("utf-8", errors="replace")
+    paragraphs = re.findall(r"<w:p\b[^>]*>(.*?)</w:p>", xml_data, re.S)
+    out = []
+    for p in paragraphs:
+        texts = [html.unescape(t) for t in re.findall(r"<w:t\b[^>]*>(.*?)</w:t>", p, re.S)]
+        if texts:
+            out.append("".join(texts))
+    return "\n".join(out)
+
+
+def render_minimalist_cv_pdf(cv_data, job_item=None):
+    """Generate a clean, single-column ATS-readable PDF 1.4 document in pure stdlib."""
+    def pdf_str(s):
+        # Map common typography punctuation to Latin-1 equivalents for Type1 Helvetica
+        s = (
+            str(s or "")
+            .replace("—", " - ")
+            .replace("–", "-")
+            .replace("•", "*")
+            .replace("·", "|")
+            .replace("→", "->")
+            .replace("“", '"')
+            .replace("”", '"')
+            .replace("’", "'")
+        )
+        encoded = s.encode("latin-1", errors="replace").decode("latin-1")
+        return encoded.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+    full_name = cv_data.get("full_name") or "Candidate"
+    target_direction = cv_data.get("target_direction") or infer_target_direction(
+        job_item or {}, None, cv_data.get("core_skills") or []
+    )
+    headline = cv_data.get("target_headline") or ""
+    contact = cv_data.get("contact_line") or ""
+    summary = cv_data.get("summary") or ""
+    skills = [s for s in (cv_data.get("core_skills") or []) if s]
+
+    ops = []
+    y = 750
+
+    def add_line(txt, font="F1", size=9.5, leading=13, x=48):
+        nonlocal y
+        if y < 52:
+            return
+        ops.append(f"BT /{font} {size} Tf 1 0 0 1 {x} {y:.1f} Tm ({pdf_str(txt)}) Tj ET")
+        y -= leading
+
+    def add_wrapped(txt, width=95, font="F1", size=9.5, leading=13, x=48, prefix=""):
+        for idx, ln in enumerate(textwrap.wrap(str(txt or ""), width=width) or [""]):
+            line_txt = f"{prefix}{ln}" if idx == 0 else ("   " + ln if prefix else ln)
+            add_line(line_txt, font=font, size=size, leading=leading, x=x)
+
+    add_line(full_name, font="F2", size=17, leading=19)
+    if target_direction:
+        add_wrapped(target_direction, width=90, font="F2", size=10, leading=13.5)
+    if headline:
+        add_wrapped(headline, width=92, font="F2", size=9.5, leading=13)
+    if contact:
+        add_line(contact, font="F1", size=8.5, leading=14)
+    ops.append(f"0.7 w 48 {y + 6:.1f} m 564 {y + 6:.1f} l S")
+    y -= 6
+
+    if summary:
+        add_line("EXECUTIVE SUMMARY", font="F2", size=9.5, leading=13)
+        add_wrapped(summary, width=96, font="F1", size=9.2, leading=12.5)
+        y -= 4
+
+    if skills:
+        add_line("CORE COMPETENCIES & KEY SKILLS", font="F2", size=9.5, leading=13)
+        add_wrapped(" | ".join(skills), width=96, font="F1", size=9.0, leading=12.5)
+        y -= 4
+
+    if cv_data.get("experience"):
+        add_line("PROFESSIONAL EXPERIENCE", font="F2", size=9.5, leading=13)
+        for exp in cv_data.get("experience") or []:
+            hdr = f"{exp.get('role', '')} - {exp.get('company', '')}"
+            if exp.get("location"):
+                hdr += f" ({exp.get('location')})"
+            if exp.get("dates"):
+                hdr += f" | {exp.get('dates')}"
+            add_wrapped(hdr, width=92, font="F2", size=9.5, leading=13)
+            for b in exp.get("bullets") or []:
+                if b:
+                    add_wrapped(b, width=92, font="F1", size=9.0, leading=12, x=56, prefix="- ")
+            y -= 3
+
+    if cv_data.get("education"):
+        add_line("EDUCATION & CERTIFICATIONS", font="F2", size=9.5, leading=13)
+        for edu in cv_data.get("education") or []:
+            line_edu = f"{edu.get('degree', '')} - {edu.get('institution', '')}"
+            if edu.get("dates"):
+                line_edu += f" ({edu.get('dates')})"
+            add_wrapped(line_edu, width=95, font="F1", size=9.0, leading=12.5)
+
+    stream_bytes = "\n".join(ops).encode("latin-1", errors="replace")
+    objs = [
+        b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
+        b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
+        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>\nendobj\n",
+        b"4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n",
+        b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>\nendobj\n",
+        f"6 0 obj\n<< /Length {len(stream_bytes)} >>\nstream\n".encode("ascii") + stream_bytes + b"\nendstream\nendobj\n",
+    ]
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for o in objs:
+        offsets.append(len(out))
+        out.extend(o)
+    xref_pos = len(out)
+    out.extend(f"xref\n0 {len(objs) + 1}\n0000000000 65535 f \n".encode("ascii"))
+    for off in offsets:
+        out.extend(f"{off:010d} 00000 n \n".encode("ascii"))
+    out.extend(
+        f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF\n".encode("ascii")
+    )
+    return bytes(out)
+
+
 def render_minimalist_cv_html(cv_data, job_item=None):
-    """Render a sleek, single-page print-ready minimalist CV in HTML."""
+    """Render a sleek, single-page print-ready & ATS-structured minimalist CV in HTML."""
     esc = html.escape
     full_name = esc(cv_data.get("full_name", "Candidate"))
+    raw_dir = cv_data.get("target_direction") or infer_target_direction(
+        job_item or {}, None, cv_data.get("core_skills") or []
+    )
+    direction = esc(raw_dir)
     headline = esc(cv_data.get("target_headline", ""))
     contact = esc(cv_data.get("contact_line", ""))
     summary = esc(cv_data.get("summary", ""))
@@ -797,6 +1309,9 @@ def render_minimalist_cv_html(cv_data, job_item=None):
             f"<div class='edu'><strong>{esc(edu.get('degree', ''))}</strong> &mdash; "
             f"{esc(edu.get('institution', ''))}{dates_part}</div>"
         )
+    languages = [esc(s) for s in (cv_data.get("languages") or []) if s]
+    if languages:
+        edu_blocks.append(f"<div class='edu'><strong>Languages:</strong> {' &middot; '.join(languages)}</div>")
 
     target_note = ""
     if job_item:
@@ -846,14 +1361,15 @@ def render_minimalist_cv_html(cv_data, job_item=None):
     font-size: 9pt;
   }}
   h1 {{ font-size: 21pt; font-weight: 800; margin: 0; letter-spacing: -0.4px; color: #09090b; }}
-  .headline {{ font-size: 11pt; font-weight: 600; color: #0f766e; margin: 3px 0 5px; }}
+  .direction {{ font-size: 10.5pt; font-weight: 700; color: #0f766e; margin: 4px 0 2px; }}
+  .headline {{ font-size: 10pt; font-weight: 600; color: #27272a; margin: 0 0 5px; }}
   .contact {{ font-size: 9pt; color: #52525b; padding-bottom: 10px; border-bottom: 1.5px solid #18181b; margin-bottom: 12px; }}
   h2 {{
     font-size: 8.5pt;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 1.2px;
-    color: #71717a;
+    color: #0f766e;
     margin: 14px 0 6px;
     padding-bottom: 3px;
     border-bottom: 1px solid #e4e4e7;
@@ -891,30 +1407,32 @@ def render_minimalist_cv_html(cv_data, job_item=None):
   </div>
   <div class="sheet">
     <h1>{full_name}</h1>
+    <div class="direction">{direction}</div>
     <div class="headline">{headline}</div>
     <div class="contact">{contact}</div>
 
-    <h2>Executive Profile</h2>
+    <h2>Executive Summary</h2>
     <p class="summary">{summary}</p>
 
-    <h2>Core Competencies</h2>
+    <h2>Core Competencies &amp; Key Skills</h2>
     <div class="skills">{skills_html}</div>
 
-    <h2>Relevant Experience</h2>
+    <h2>Professional Experience</h2>
     {''.join(exp_blocks)}
 
-    <h2>Education</h2>
+    <h2>Education &amp; Certifications</h2>
     {''.join(edu_blocks)}
   </div>
 </body>
 </html>"""
 
 
-def cv_attachment_filename(sub_name, job_item):
+def cv_attachment_filename(sub_name, job_item, ext="docx"):
     """Build a clean, filesystem-safe filename for a tailored CV attachment."""
     raw = f"CV_{sub_name}_{job_item.get('company', '')}_{job_item.get('title', '')}"
     clean = re.sub(r"[^a-zA-Z0-9]+", "_", norm(raw)).strip("_")
-    return f"{clean[:60]}.html"
+    ext_clean = str(ext or "docx").lstrip(".")
+    return f"{clean[:60]}.{ext_clean}"
 
 
 # --------------------------------------------------------------------------
@@ -1079,8 +1597,26 @@ def job_age_info(j, today):
     return days, is_hot, label
 
 
+DAILY_DOPAMINE_HOOKS = [
+    "Good morning, {first_name} — your track record puts you in the top 1% of candidates on the market today. Here is your highest-leverage play:",
+    "{first_name}, momentum compounds: 1 high-conviction application today puts you ahead of 95% of passive candidates.",
+    "I scanned the market while you slept, {first_name}, and unlocked {highlight_count} high-impact move(s) built for your background.",
+    "Your unfair advantage is proven execution at scale, {first_name}. Today's #1 opening at {top_company} has your name written all over it.",
+    "New day, new ceiling, {first_name}. Your ATS-ready CV is already tailored — all it takes is 60 seconds to take your shot.",
+]
+
+
+def _daily_dopamine_boost(sub_name, top_job, upgrade_count, today):
+    """Return a motivating, personalized morning headhunter boost that rotates daily."""
+    first_name = (sub_name or "there").split()[0]
+    top_co = (top_job or {}).get("company") or "a top employer"
+    hi_cnt = upgrade_count if upgrade_count > 0 else 1
+    template = DAILY_DOPAMINE_HOOKS[today.toordinal() % len(DAILY_DOPAMINE_HOOKS)]
+    return template.format(first_name=first_name, top_company=top_co, highlight_count=hi_cnt)
+
+
 def _render_job_card_html(j, today):
-    """Render a single job card with 🔥 HOT styling + Lucy's LLM CV analysis box."""
+    """Render a minimalist executive job card with Career Upgrade emphasis and visual reward cues."""
     days, is_hot, age_label = job_age_info(j, today)
     loc_tag = html.escape(LOC_LABELS.get(j.get("loc_class"), j.get("loc_class", "")))
     title_esc = html.escape(j.get("title", "Untitled Role"))
@@ -1090,247 +1626,290 @@ def _render_job_card_html(j, today):
     url_esc = html.escape(j.get("url", "#"))
     age_esc = html.escape(age_label)
 
-    meta_parts = [f"<strong>{company_esc}</strong>", loc_esc]
+    analysis = j.get("llm_analysis") or {}
+    is_upgrade = bool(j.get("is_career_upgrade") or analysis.get("is_career_upgrade"))
+    upgrade_reason = (j.get("upgrade_reason") or analysis.get("upgrade_reason") or "").strip()
+
+    meta_parts = [f"<strong style='color:#18181b;'>{company_esc}</strong>", loc_esc]
     if team_esc:
         meta_parts.append(team_esc)
+    meta_parts.append(age_esc)
     meta_html = " &middot; ".join(meta_parts)
 
-    analysis = j.get("llm_analysis") or {}
-    score = analysis.get("match_score")
-    score_pill = (
-        f"<span style='display:inline-block;background:#dcfce7;color:#15803d;"
-        f"font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;"
-        f"margin-right:6px;'>&#127919; {int(score)}% CV Match</span>"
-        if isinstance(score, (int, float))
-        else ""
-    )
-
+    badges = []
+    if is_upgrade:
+        badges.append(
+            "<span style='display:inline-block;background:#18181b;color:#ffffff;"
+            "font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;"
+            "letter-spacing:0.5px;margin-right:6px;text-transform:uppercase;'>"
+            "&uarr; Career Upgrade Move</span>"
+        )
     if is_hot:
-        card_bg = "#fffaf5"
-        card_border = "#fed7aa"
-        left_border = "#f97316"
-        badge_html = (
-            f"<span style='display:inline-block;background:#ffedd5;color:#c2410c;"
-            f"font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;"
-            f"letter-spacing:0.3px;margin-right:6px;'>&#128293; HOT &middot; {age_esc.upper()}</span>"
-            f"{score_pill}"
+        badges.append(
             f"<span style='display:inline-block;background:#fef3c7;color:#92400e;"
-            f"font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;"
-            f"margin-right:6px;'>&#128142; Lucy&rsquo;s Top Pick</span>"
+            f"font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;"
+            f"letter-spacing:0.3px;margin-right:6px;'>🔥 HOT &middot; {age_esc.upper()}</span>"
         )
-        btn_bg = "#ea580c"
-        btn_text = "Claim This Role &amp; Apply &#128640;"
-    else:
-        card_bg = "#ffffff"
-        card_border = "#e7e5e4"
-        left_border = "#0f766e"
-        status_pill = (
-            "<span style='display:inline-block;background:#ccfbf1;color:#0f766e;"
-            "font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;"
-            "margin-right:6px;'>&#10024; HANDPICKED</span>"
-            if j.get("is_new")
-            else ""
+    elif j.get("is_new"):
+        badges.append(
+            "<span style='display:inline-block;background:#f4f4f5;color:#27272a;"
+            "font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;"
+            "margin-right:6px;'>NEW</span>"
         )
-        badge_html = (
-            f"{status_pill}{score_pill}"
-            f"<span style='display:inline-block;background:#f5f5f4;color:#57534e;"
-            f"font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;"
-            f"margin-right:6px;'>&#128197; {age_esc}</span>"
-        )
-        btn_bg = "#0f766e"
-        btn_text = "View Role &amp; Apply &rarr;"
 
-    loc_pill = (
-        f"<span style='display:inline-block;background:#f5f5f4;color:#78716c;"
-        f"font-size:11px;padding:3px 8px;border-radius:999px;'>&#128205; {loc_tag}</span>"
+    score = analysis.get("match_score")
+    score_int = int(score) if isinstance(score, (int, float)) else None
+    if score_int is not None:
+        badges.append(
+            f"<span style='display:inline-block;background:#ecfdf5;color:#065f46;"
+            f"border:1px solid #a7f3d0;font-size:10px;font-weight:700;padding:1px 7px;"
+            f"border-radius:4px;margin-right:6px;'>&#9733; {score_int}% CV Match</span>"
+        )
+
+    upgrade_html = (
+        f"<div style='font-size:12.5px;color:#0f766e;font-weight:600;margin:4px 0 6px;'>"
+        f"&uarr; {html.escape(upgrade_reason)}</div>"
+        if is_upgrade and upgrade_reason
+        else ""
     )
 
     llm_box_html = ""
     if analysis:
         why_esc = html.escape(analysis.get("lucy_why_it_fits", ""))
+        cv_obj = analysis.get("cv") or {}
+        dir_txt = cv_obj.get("target_direction") or infer_target_direction(
+            j, None, cv_obj.get("core_skills") or []
+        )
+        dir_esc = html.escape(dir_txt)
         kws = ", ".join(html.escape(k) for k in (analysis.get("matched_keywords") or [])[:6])
-        att_name = html.escape(j.get("cv_filename", "Tailored_CV.html"))
+        att_name = html.escape(j.get("cv_filename", "Tailored_CV.docx"))
+        bar_pct = max(50, min(100, score_int or 90))
+        meter_html = (
+            f"<div style='background:#e4e4e7;height:4px;border-radius:999px;overflow:hidden;margin:4px 0 7px;'>"
+            f"<div style='background:#10b981;width:{bar_pct}%;height:4px;border-radius:999px;'></div>"
+            f"</div>"
+        )
+        dir_line = (
+            f"<div style='font-size:11.5px;color:#0f766e;font-weight:700;margin-bottom:3px;'>"
+            f"{dir_esc}</div>"
+            if dir_esc else ""
+        )
         kw_line = (
-            f"<div style='margin-top:6px;font-size:12px;color:#44403c;'>"
-            f"<strong>Matched Keywords:</strong> {kws}</div>"
+            f"<div style='margin-top:4px;font-size:11.5px;color:#52525b;'>"
+            f"<strong>ATS Keywords:</strong> {kws}</div>"
             if kws else ""
         )
         llm_box_html = f"""
-      <div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;line-height:1.45;color:#134e4a;">
-        <div style="font-weight:800;margin-bottom:4px;">&#128373;&#65039;&zwj;&#9792;&#65039; Lucy&rsquo;s Headhunter Take &amp; Tailored CV:</div>
+      <div style="background:#fafafa;border-left:3px solid #10b981;border-radius:0 6px 6px 0;padding:9px 12px;margin:8px 0 6px;font-size:12.5px;line-height:1.45;color:#27272a;">
+        <div style="font-weight:700;color:#18181b;margin-bottom:2px;">&#10024; Lucy&rsquo;s Headhunter Take &amp; Tailored CV</div>
+        {meter_html}
+        {dir_line}
         <div>{why_esc}</div>
         {kw_line}
-        <div style="margin-top:8px;font-size:12px;font-weight:700;color:#0f766e;">
-          &#128206; Attached tailored minimalist CV: <code style="background:#ccfbf1;padding:2px 6px;border-radius:4px;">{att_name}</code> (open &amp; click &ldquo;Save as PDF&rdquo;)
+        <div style="margin-top:6px;font-size:11.5px;color:#0f766e;font-weight:600;">
+          &#9889; Ready to Send (ATS .docx): <code style="background:#f4f4f5;color:#18181b;padding:1px 5px;border-radius:3px;">{att_name}</code>
         </div>
       </div>"""
 
+    border_style = (
+        "border:1px solid #18181b;border-left:4px solid #18181b;background:#ffffff;"
+        if is_upgrade
+        else "border:1px solid #e4e4e7;background:#ffffff;"
+    )
+    btn_style = (
+        "background:#09090b;color:#ffffff;padding:5px 11px;border-radius:6px;font-size:11.5px;font-weight:700;text-decoration:none;white-space:nowrap;"
+        if is_upgrade
+        else "background:#f0fdf4;color:#0f766e;border:1px solid #99f6e4;padding:4px 10px;border-radius:6px;font-size:11.5px;font-weight:700;text-decoration:none;white-space:nowrap;"
+    )
+    badge_row = f"<div style='margin-bottom:6px;'>{''.join(badges)}</div>" if badges else ""
+
     return f"""
-    <div style="background:{card_bg};border:1px solid {card_border};border-left:5px solid {left_border};border-radius:12px;padding:16px 18px;margin-bottom:12px;">
-      <div style="margin-bottom:8px;">
-        {badge_html}{loc_pill}
-      </div>
-      <div style="font-size:17px;font-weight:700;color:#1c1917;line-height:1.35;margin-bottom:4px;">
-        <a href="{url_esc}" style="color:#1c1917;text-decoration:none;">{title_esc}</a>
-      </div>
-      <div style="font-size:14px;color:#57534e;margin-bottom:14px;">
-        {meta_html}
-      </div>
-      {llm_box_html}
-      <div>
-        <a href="{url_esc}" style="display:inline-block;background:{btn_bg};color:#ffffff;font-size:13px;font-weight:700;padding:9px 16px;border-radius:8px;text-decoration:none;">
-          {btn_text}
+    <div style="{border_style}border-radius:8px;padding:14px 16px;margin-bottom:10px;">
+      {badge_row}
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;">
+        <div style="font-size:15px;font-weight:700;color:#09090b;line-height:1.35;">
+          <a href="{url_esc}" style="color:#09090b;text-decoration:none;">{title_esc}</a>
+        </div>
+        <a href="{url_esc}" style="{btn_style}">
+          Apply &rarr;
         </a>
       </div>
+      <div style="font-size:12.5px;color:#71717a;margin-top:2px;">
+        {meta_html}
+      </div>
+      {upgrade_html}
+      {llm_box_html}
     </div>"""
 
 
 def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_email, attachments=None):
-    """Construct a fun, VIP 'Lucy — Your Personal Headhunter' multipart email with optional CV attachments."""
+    """Construct a minimalist, dopamine-boosting executive daily digest email."""
     recipient = sub_cfg.get("recipient_email", "lucasschollmatter@gmail.com")
     sub_name = sub_cfg.get("name") or recipient
     date_str = today.isoformat()
     attachments = attachments or []
 
-    # Enrich and sort so 🔥 HOT roles (0-2 days old) appear first
+    # Ensure every job has career-upgrade classification
+    classify_career_upgrades(jobs_to_send, sub_cfg)
+
+    # Sort: Career Upgrade Moves first, then HOT (0-2d), then newest, then company
     enriched = []
     for j in jobs_to_send:
         days, is_hot, age_label = job_age_info(j, today)
-        enriched.append((not is_hot, days, j, is_hot, age_label))
-    enriched.sort(key=lambda item: (item[0], item[1], item[2].get("company", "").lower()))
+        is_up = bool(j.get("is_career_upgrade") or (j.get("llm_analysis") or {}).get("is_career_upgrade"))
+        j["is_career_upgrade"] = is_up
+        enriched.append((not is_up, not is_hot, days, j, is_hot, age_label, is_up))
+    enriched.sort(key=lambda item: (item[0], item[1], item[2], item[3].get("company", "").lower()))
 
-    hot_jobs = [item[2] for item in enriched if item[3]]
-    other_jobs = [item[2] for item in enriched if not item[3]]
+    upgrade_jobs = [item[3] for item in enriched if item[6]]
+    hot_jobs = [item[3] for item in enriched if item[4]]
+    standard_jobs = [item[3] for item in enriched if not item[6]]
+    top_job = enriched[0][3] if enriched else None
+    morning_boost = _daily_dopamine_boost(sub_name, top_job, len(upgrade_jobs), today)
 
     msg = EmailMessage()
-    hot_prefix = f"🔥 {len(hot_jobs)} HOT! " if hot_jobs else "🕵️‍♀️✨ "
+    hot_prefix = f"🔥 {len(hot_jobs)} HOT · " if hot_jobs else "⚡ "
+    up_part = f"{len(upgrade_jobs)} Career Upgrade Move(s) · " if upgrade_jobs else ""
     cv_suffix = f" + {len(attachments)} Tailored CV(s)" if attachments else ""
     msg["Subject"] = (
-        f"{hot_prefix}Lucy (Your Personal Headhunter): {len(jobs_to_send)} Relevant Opening(s){cv_suffix} for {sub_name} ({date_str})"
+        f"{hot_prefix}Lucy: {up_part}{len(jobs_to_send)} Relevant Opening(s){cv_suffix} for {sub_name} ({date_str})"
     )
-    msg["From"] = f"Lucy · Your Personal Headhunter <{sender_email}>"
+    msg["From"] = f"Lucy · Personal Headhunter <{sender_email}>"
     msg["To"] = recipient
 
-    # Plain-text version (keeps '- {title} at {company}' format for compatibility)
+    # Minimalist plain-text version (preserves '- {title} at {company}' format)
     txt_lines = [
-        f"Hey {sub_name}! 👋✨",
-        "",
-        "It's Lucy — your personal headhunter who ACTUALLY works for you (no commission, no ghosting, just pure hustle!).",
-        "While you were doing your thing, I put on my detective hat, dug through a mountain of noisy career boards, and handpicked the coolest opportunities that match YOUR exact profile.",
-        "I'm your daily reminder to check where to apply today — and honestly, you're a total catch, so these companies are lucky to have you!",
-        "",
-        f"Lucy's VIP Shortlist — {date_str}",
-        f"🔥 {len(hot_jobs)} HOT role(s) posted in the last 1-2 days | 💎 {len(jobs_to_send)} role(s) handpicked today ({all_jobs_count} total active matches on your radar):",
+        f"{sub_name} — Daily Curated Job Digest ({date_str})",
+        morning_boost,
+        "Lucy, your personal headhunter — your daily reminder to check where to apply today.",
+        f"{len(upgrade_jobs)} Career Upgrade Move(s) · {len(hot_jobs)} Hot (0-2d) · {len(jobs_to_send)} shown ({all_jobs_count} active matches)",
         "",
     ]
-    for _, _, j, is_hot, age_label in enriched:
+    for _, _, _, j, is_hot, age_label, is_up in enriched:
         loc_tag = LOC_LABELS.get(j.get("loc_class"), j.get("loc_class", ""))
-        hot_tag = "[🔥 HOT] " if is_hot else "[NEW] " if j.get("is_new") else ""
-        txt_lines.append(f"- {hot_tag}{j['title']} at {j['company']}")
-        txt_lines.append(f"  Location: {j.get('location') or loc_tag} ({loc_tag}) | {age_label} ({j.get('posted_at') or j.get('first_seen', date_str)})")
+        tags = []
+        if is_up:
+            tags.append("[CAREER UPGRADE MOVE]")
+        if is_hot:
+            tags.append("[HOT]")
+        elif j.get("is_new"):
+            tags.append("[NEW]")
+        prefix = (" ".join(tags) + " ") if tags else ""
+        txt_lines.append(f"- {prefix}{j['title']} at {j['company']}")
+        txt_lines.append(f"  {j.get('location') or loc_tag} · {age_label} · {j.get('url')}")
+        if is_up and j.get("upgrade_reason"):
+            txt_lines.append(f"  Upgrade: {j['upgrade_reason']}")
         if j.get("llm_analysis"):
             an = j["llm_analysis"]
-            txt_lines.append(f"  🎯 Lucy's Fit Analysis ({an.get('match_score', '?')}% Match): {an.get('lucy_why_it_fits', '')}")
+            cv_obj = an.get("cv") or {}
+            if cv_obj.get("target_direction"):
+                txt_lines.append(f"  {cv_obj['target_direction']}")
+            txt_lines.append(f"  Fit ({an.get('match_score', '?')}% Match): {an.get('lucy_why_it_fits', '')}")
             if j.get("cv_filename"):
-                txt_lines.append(f"  📎 Attached Tailored CV: {j['cv_filename']}")
-        txt_lines.append(f"  Apply: {j.get('url')}")
+                txt_lines.append(f"  Attached CV: {j['cv_filename']}")
         txt_lines.append("")
-    txt_lines.extend([
-        f"Headhunter's orders, {sub_name}: I already did the heavy lifting and filtered out all the junk. Now pour yourself a coffee, pick 1 or 2 roles above, and hit apply!",
-        "",
-        "Cheering for you always,",
-        "Lucy 🕵️‍♀️💼",
-        "Your Personal Headhunter (who works exclusively for you!)",
-    ])
+    txt_lines.append("🎯 Today's 60-Second Win: Pick 1 role above, attach your tailored .docx CV, and hit submit.")
     msg.set_content("\n".join(txt_lines))
 
-    # HTML sections
+    # Minimalist HTML sections
     sections_html = []
-    if hot_jobs:
-        hot_cards = "".join(_render_job_card_html(j, today) for j in hot_jobs)
+    if upgrade_jobs:
+        up_cards = "".join(_render_job_card_html(j, today) for j in upgrade_jobs)
         sections_html.append(f"""
-        <div style="margin-bottom:24px;">
-          <div style="font-size:16px;font-weight:800;color:#c2410c;margin-bottom:4px;">
-            &#128293; Hot Off the Press (Posted in the Last 1&ndash;2 Days)
+        <div style="margin-bottom:22px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#18181b;border-bottom:1.5px solid #18181b;padding-bottom:4px;margin-bottom:10px;">
+            &#9889; Career Upgrade Moves ({len(upgrade_jobs)}) &middot; High-Reward Targets
           </div>
-          <div style="font-size:13px;color:#78716c;margin-bottom:12px;">
-            I spotted these right as they went live &mdash; apply now so your CV lands right at the top of the stack!
-          </div>
-          {hot_cards}
+          {up_cards}
         </div>""")
 
-    if other_jobs:
-        other_heading = (
-            "&#128142; More Handpicked Gems from My Search"
+    if standard_jobs:
+        std_heading = (
+            "Hot Off the Press &amp; Additional Matches"
             if hot_jobs
-            else "&#128142; Today&rsquo;s Handpicked Shortlist Just for You"
+            else "Matching Roles"
         )
-        other_cards = "".join(_render_job_card_html(j, today) for j in other_jobs)
+        std_cards = "".join(_render_job_card_html(j, today) for j in standard_jobs)
         sections_html.append(f"""
-        <div style="margin-bottom:16px;">
-          <div style="font-size:16px;font-weight:800;color:#0f766e;margin-bottom:10px;">
-            {other_heading}
+        <div style="margin-bottom:14px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#71717a;border-bottom:1px solid #e4e4e7;padding-bottom:4px;margin-bottom:10px;">
+            {std_heading} ({len(standard_jobs)})
           </div>
-          {other_cards}
+          {std_cards}
         </div>""")
+    elif hot_jobs:
+        # Ensure "Hot Off the Press" marker is present when all roles are upgrades and hot
+        sections_html.append(
+            "<div style='font-size:11px;color:#71717a;margin-top:4px;'>Hot Off the Press: includes roles posted in the last 1&ndash;2 days.</div>"
+        )
 
     sub_name_esc = html.escape(sub_name)
-    cv_pill_html = (
-        f"<span style='display:inline-block;background:#10b981;color:#ffffff;font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;margin-right:6px;margin-bottom:4px;'>"
-        f"&#128206; {len(attachments)} Tailored CV(s) Attached</span>"
-        if attachments else ""
+    boost_esc = html.escape(morning_boost)
+    preheader_txt = (
+        f"⚡ #1 Play Today: {top_job.get('title', '')} at {top_job.get('company', '')} — {morning_boost}"
+        if top_job else morning_boost
     )
+    preheader_esc = html.escape(preheader_txt)
+
+    stats_parts = [
+        f"<strong>{len(upgrade_jobs)}</strong> Career Upgrade Move(s)",
+        f"<strong>{len(hot_jobs)}</strong> Hot (0&ndash;2d)",
+        f"<strong>{len(jobs_to_send)}</strong> Today",
+    ]
+    if attachments:
+        stats_parts.append(f"<strong>{len(attachments)}</strong> Tailored CV(s) Attached")
+    stats_parts.append(f"{all_jobs_count} Active")
+    stats_line = " &nbsp;&middot;&nbsp; ".join(stats_parts)
 
     html_body = f"""<!doctype html>
 <html>
-<body style="margin:0;padding:20px 12px;font-family:system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1c1917;background:#f5f5f4;">
-  <div style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #e7e5e4;border-radius:16px;overflow:hidden;">
-    <div style="background:#0f172a;background:linear-gradient(135deg,#0f172a 0%,#134e4a 55%,#0f766e 100%);color:#ffffff;padding:28px 24px;">
-      <div style="display:inline-block;background:rgba(255,255,255,0.16);color:#5eead4;font-size:11px;font-weight:800;padding:4px 11px;border-radius:999px;letter-spacing:0.6px;margin-bottom:12px;">
-        &#128373;&#65039;&zwj;&#9792;&#65039; LUCY &middot; YOUR PERSONAL HEADHUNTER &middot; VIP CLIENT DOSSIER
+<body style="margin:0;padding:24px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#18181b;background:#f4f4f5;">
+  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">{preheader_esc}</div>
+  <div style="max-width:660px;margin:0 auto;background:#ffffff;border:1px solid #e4e4e7;border-radius:10px;padding:28px 28px 22px;">
+    <div style="border-bottom:1.5px solid #18181b;padding-bottom:14px;margin-bottom:18px;">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#0f766e;margin-bottom:4px;">
+        &#10024; Lucy &middot; Personal Headhunter &amp; Daily Radar
       </div>
-      <h1 style="margin:0 0 10px;font-size:22px;line-height:1.3;color:#ffffff;">
-        Hey {sub_name_esc}! &#128075;&#10024; I worked hard digging through the boards today &mdash; and I found some seriously cool opportunities for you.
+      <h1 style="margin:0 0 6px;font-size:20px;font-weight:800;letter-spacing:-0.3px;color:#09090b;">
+        {sub_name_esc} &mdash; {date_str}
       </h1>
-      <p style="margin:0 0 12px;font-size:14px;line-height:1.55;color:#e2e8f0;">
-        It&rsquo;s <strong>Lucy</strong>, the personal headhunter that <em>actually works for you</em> (zero commission, zero fluff, 100% on your team). I&rsquo;m your daily reminder to check where to apply today!
-      </p>
-      <p style="margin:0 0 18px;font-size:14px;line-height:1.55;color:#cbd5e1;">
-        I just combed through dozens of career pages, tossed out all the irrelevant noise, and curated this VIP shortlist tailored to your exact background. Anything posted in the last 1&ndash;2 days is badged <strong>&#128293; HOT</strong> so you can beat the crowd!
-      </p>
-      <div>
-        <span style="display:inline-block;background:#ea580c;color:#ffffff;font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;margin-right:6px;margin-bottom:4px;">
-          &#128293; {len(hot_jobs)} Hot (1&ndash;2d)
-        </span>
-        <span style="display:inline-block;background:rgba(255,255,255,0.18);color:#ffffff;font-size:12px;font-weight:600;padding:5px 12px;border-radius:999px;margin-right:6px;margin-bottom:4px;">
-          &#128142; {len(jobs_to_send)} Handpicked Today
-        </span>
-        {cv_pill_html}
-        <span style="display:inline-block;background:rgba(255,255,255,0.12);color:#cbd5e1;font-size:12px;padding:5px 12px;border-radius:999px;margin-bottom:4px;">
-          &#128225; {all_jobs_count} Total Active Matches
-        </span>
+      <div style="font-size:13px;font-weight:600;color:#0f766e;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px 11px;margin-bottom:8px;line-height:1.4;">
+        &#9889; {boost_esc}
+      </div>
+      <div style="font-size:12px;color:#52525b;margin-bottom:10px;">
+        Your daily reminder to check where to apply today &middot; Career Upgrade Moves highlighted first.
+      </div>
+      <div style="font-size:12px;color:#27272a;background:#fafafa;border:1px solid #e4e4e7;border-radius:6px;padding:7px 10px;">
+        {stats_line}
       </div>
     </div>
 
-    <div style="padding:24px;">
-      {''.join(sections_html)}
-      <div style="margin-top:22px;padding:18px;background:#fafaf9;border:1px dashed #d6d3d1;border-radius:12px;font-size:13px;line-height:1.5;color:#44403c;">
-        <div style="font-weight:800;font-size:14px;color:#0f766e;margin-bottom:4px;">
-          &#128140; A quick note from Lucy, your personal headhunter:
-        </div>
-        I already did the heavy lifting, filtered out all the junk, and even tailored your minimalist CV for your top matches. Pour yourself a coffee &#9749;, pick 1 or 2 roles above, and send that application today, <strong>{sub_name_esc}</strong> &mdash; these companies would be lucky to have you! &#128170;&#128640;
-      </div>
+    {''.join(sections_html)}
+
+    <div style="margin-top:16px;padding-top:12px;border-top:1px solid #e4e4e7;font-size:12px;color:#27272a;background:#fafafa;border-radius:6px;padding:10px 12px;">
+      <strong>&#127919; Today&rsquo;s 60-Second Win:</strong> Pick just <strong>1 role</strong> above, download your pre-tailored <code style="background:#f4f4f5;padding:1px 4px;border-radius:3px;">CV_*.docx</code> (previews directly in Gmail &amp; passes ATS triage), and hit submit. One high-leverage shot a day compounds fast.
+      <div style="font-size:11px;color:#71717a;margin-top:4px;">Curated by Lucy, your personal headhunter.</div>
     </div>
   </div>
 </body>
 </html>"""
     msg.add_alternative(html_body, subtype="html")
 
-    for filename, html_bytes in attachments:
+    for filename, file_bytes in attachments:
+        lower_fn = filename.lower()
+        if lower_fn.endswith(".docx"):
+            maintype = "application"
+            subtype = "vnd.openxmlformats-officedocument.wordprocessingml.document"
+        elif lower_fn.endswith(".pdf"):
+            maintype = "application"
+            subtype = "pdf"
+        else:
+            maintype = "text"
+            subtype = "html"
         msg.add_attachment(
-            html_bytes,
-            maintype="text",
-            subtype="html",
+            file_bytes,
+            maintype=maintype,
+            subtype=subtype,
             filename=filename,
         )
     return msg
@@ -1338,14 +1917,16 @@ def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_ema
 
 def _format_cv_markdown_preview(cv_data):
     """Render a clean Markdown preview of a tailored CV for the GitHub Actions Step Summary."""
-    lines = [
-        f"#### {cv_data.get('full_name', 'Candidate')}",
+    lines = [f"#### {cv_data.get('full_name', 'Candidate')}"]
+    if cv_data.get("target_direction"):
+        lines.append(f"**{cv_data.get('target_direction')}**  ")
+    lines.extend([
         f"**{cv_data.get('target_headline', '')}**  ",
         f"*{cv_data.get('contact_line', '')}*",
         "",
-        f"**Executive Profile:** {cv_data.get('summary', '')}",
+        f"**Executive Summary:** {cv_data.get('summary', '')}",
         "",
-    ]
+    ])
     skills = [s for s in (cv_data.get("core_skills") or []) if s]
     if skills:
         lines.append("**Core Competencies:** " + " · ".join(f"`{s}`" for s in skills))
@@ -1360,15 +1941,17 @@ def _format_cv_markdown_preview(cv_data):
 
 
 def prepare_tailored_cvs(jobs_to_send, sub_cfg, today, root=ROOT):
-    """Run LLM analysis + minimalist CV generation for up to `max_tailored_cvs` top jobs.
+    """Run LLM analysis + ATS-ready CV generation for up to `max_tailored_cvs` top jobs.
 
-    Saves each generated CV to both `out/cvs/<filename>` (workflow artifact) and
-    `docs/cvs/<sub_id>/<filename>` (committed to the repository), and appends a
-    preview to the GitHub Actions job summary when running in CI."""
+    Saves each generated CV in `.docx` (Microsoft Word OpenXML), `.pdf`, and `.html` formats
+    under both `out/cvs/` (workflow artifact) and `docs/cvs/<sub_id>/` (committed to the
+    repository), attaches the ATS-ready `.docx` (or configured `cv_attachment_format`) to the
+    email so it previews natively in Gmail, and appends a preview to the GitHub Actions summary."""
     sub_name = sub_cfg.get("name") or sub_cfg.get("id", "Candidate")
     sub_id = sub_cfg.get("id", "default")
     api_key = (os.environ.get("GEMINI_API_KEY") or "").strip()
     max_cvs = int(sub_cfg.get("max_tailored_cvs", 3))
+    att_fmt = str(sub_cfg.get("cv_attachment_format") or "docx").lower().lstrip(".")
     if max_cvs <= 0 or not jobs_to_send:
         return []
     if not api_key:
@@ -1380,10 +1963,17 @@ def prepare_tailored_cvs(jobs_to_send, sub_cfg, today, root=ROOT):
         print(f"  [{sub_name}] Tailored CV skipped: no master CV found (check cv_file in config.json).")
         return []
 
-    # Prioritize HOT (0-2d) roles first
+    classify_career_upgrades(jobs_to_send, sub_cfg, root=root)
+
+    # Prioritize Career Upgrade Moves first, then HOT (0-2d) roles
     ranked = sorted(
         jobs_to_send,
-        key=lambda j: (not job_age_info(j, today)[1], job_age_info(j, today)[0], j.get("company", "").lower()),
+        key=lambda j: (
+            not bool(j.get("is_career_upgrade")),
+            not job_age_info(j, today)[1],
+            job_age_info(j, today)[0],
+            j.get("company", "").lower(),
+        ),
     )
 
     attachments = []
@@ -1398,24 +1988,51 @@ def prepare_tailored_cvs(jobs_to_send, sub_cfg, today, root=ROOT):
             analysis = tailor_cv_with_llm(j, master_cv, sub_cfg)
             if not analysis or not isinstance(analysis.get("cv"), dict):
                 continue
-            filename = cv_attachment_filename(sub_name, j)
-            cv_html = render_minimalist_cv_html(analysis["cv"], job_item=j)
-            cv_bytes = cv_html.encode("utf-8")
-            (cv_out_dir / filename).write_bytes(cv_bytes)
-            (cv_docs_dir / filename).write_bytes(cv_bytes)
+            cv_obj = analysis["cv"]
+            if not cv_obj.get("target_direction"):
+                cv_obj["target_direction"] = infer_target_direction(
+                    j, sub_cfg, cv_obj.get("core_skills") or []
+                )
+            if "is_career_upgrade" in analysis:
+                j["is_career_upgrade"] = bool(analysis["is_career_upgrade"])
+            if analysis.get("upgrade_reason"):
+                j["upgrade_reason"] = str(analysis["upgrade_reason"]).strip()
+
+            docx_name = cv_attachment_filename(sub_name, j, ext="docx")
+            pdf_name = cv_attachment_filename(sub_name, j, ext="pdf")
+            html_name = cv_attachment_filename(sub_name, j, ext="html")
+
+            docx_bytes = render_minimalist_cv_docx(cv_obj, job_item=j)
+            pdf_bytes = render_minimalist_cv_pdf(cv_obj, job_item=j)
+            html_bytes = render_minimalist_cv_html(cv_obj, job_item=j).encode("utf-8")
+
+            for fname, fbytes in ((docx_name, docx_bytes), (pdf_name, pdf_bytes), (html_name, html_bytes)):
+                (cv_out_dir / fname).write_bytes(fbytes)
+                (cv_docs_dir / fname).write_bytes(fbytes)
+
+            if att_fmt == "pdf":
+                att_filename, att_bytes = pdf_name, pdf_bytes
+            elif att_fmt == "html":
+                att_filename, att_bytes = html_name, html_bytes
+            else:
+                att_filename, att_bytes = docx_name, docx_bytes
+
             j["llm_analysis"] = analysis
-            j["cv_filename"] = filename
-            attachments.append((filename, cv_bytes))
+            j["cv_filename"] = att_filename
+            attachments.append((att_filename, att_bytes))
             score = analysis.get("match_score", "?")
-            print(f"  [{sub_name}] Tailored CV generated for {j['title']} at {j['company']} ({score}% match) -> docs/cvs/{sub_id}/{filename}")
+            up_badge = " [CAREER UPGRADE MOVE]" if j.get("is_career_upgrade") else ""
+            print(f"  [{sub_name}] Tailored CV generated for {j['title']} at {j['company']}{up_badge} ({score}% match) -> docs/cvs/{sub_id}/{att_filename}")
             kws = ", ".join(analysis.get("matched_keywords") or [])
             summary_blocks.append(
-                f"- **{j.get('title')}** at **{j.get('company')}** ({j.get('location', '')}) — "
-                f"**{score}% CV Match** · saved to `docs/cvs/{sub_id}/{filename}`\n"
+                f"- **{j.get('title')}** at **{j.get('company')}** ({j.get('location', '')}){up_badge} — "
+                f"**{score}% CV Match** · saved to `docs/cvs/{sub_id}/{att_filename}`\n"
+                f"  - *Target Role Direction:* {cv_obj.get('target_direction', '')}\n"
                 f"  - *Lucy's take:* {analysis.get('lucy_why_it_fits', '')}\n"
+                + (f"  - *Career upgrade rationale:* {j.get('upgrade_reason')}\n" if j.get("upgrade_reason") else "")
                 + (f"  - *Matched keywords:* {kws}\n" if kws else "")
                 + f"  <details><summary>Preview tailored CV for {j.get('company')}</summary>\n\n"
-                + _format_cv_markdown_preview(analysis["cv"])
+                + _format_cv_markdown_preview(cv_obj)
                 + "\n\n  </details>"
             )
         except Exception as e:
@@ -1512,7 +2129,7 @@ def strip_transient_fields(jobs):
     """Remove heavy job description / detail_api fields before writing static JSON files."""
     clean = []
     for j in jobs:
-         item = {k: v for k, v in j.items() if k not in ("description", "detail_api", "llm_analysis", "cv_filename")}
+         item = {k: v for k, v in j.items() if k not in ("description", "detail_api", "llm_analysis", "cv_filename", "is_career_upgrade", "upgrade_reason")}
          clean.append(item)
     return clean
 

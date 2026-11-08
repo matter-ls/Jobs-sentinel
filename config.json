@@ -69,6 +69,12 @@
         "\\b(senior manager|sr\\.? manager|gerente sr|gerente senior|principal|coe lead|practice lead|global lead)\\b.*\\b(process|operational excellence|continuous improvement|transformation|gbs|data|analytics|ai|automation|program|operations|strategy|corporate development)\\b",
         "\\b(process|operational excellence|continuous improvement|business transformation|gbs|data analytics|technical program)\\b.*\\b(senior manager|sr\\.? manager|practice lead|coe lead|global lead)\\b",
         "\\b(staff|principal|senior|sr\\.?)\\b.*\\btechnical program manager\\b"
+      ],
+      "upgrade_title_include": [
+        "\\b(senior director|sr\\.? director|executive director|vp|svp|evp|vice[- ]?president(e|a)?)\\b",
+        "\\b(head of|general manager|gerente general|country (manager|lead|head)|managing director)\\b",
+        "\\bchief\\b.*\\bofficer\\b",
+        "\\bdirector(a)?\\b"
       ]
     },
     {
@@ -80,6 +86,13 @@
       "email_mode": "new_or_discovered",
       "cv_file": "cvs/luis.md",
       "max_tailored_cvs": 3,
+      "upgrade_title_include": [
+        "\\b(director(a)?|head of|vp|vice[- ]?president(e|a)?)\\b",
+        "\\b(senior manager|sr\\.? manager|gerente (senior|sr)|manager|gerente)\\b",
+        "\\b(principal|architect|arquitecto|coe lead|practice lead|global lead|regional lead|latam lead)\\b",
+        "\\b(head|lead|leader|lider)\\b.*\\b(automation|transformation|process excellence|operational excellence|continuous improvement|pmo|portfolio|gbs)\\b",
+        "\\b(automation|digital transformation|process excellence|operational excellence|continuous improvement|pmo|portfolio)\\b.*\\b(lead|leader|lider|manager|gerente|head|director)\\b"
+      ],
       "title_include": [
         "\\b(rpa|robotic process automation|intelligent automation|hyperautomation|process automation|business automation)\\b",
         "\\bautomation\\b.*\\b(consultant|analyst|lead|leader|manager|architect|specialist|engineer|developer|coe|program|project|delivery|strategist|advisor)\\b",
@@ -136,6 +149,11 @@
       "email_mode": "new_or_discovered",
       "cv_file": "cvs/ewerson.md",
       "max_tailored_cvs": 3,
+      "upgrade_title_include": [
+        "\\b(manager|gerente|senior manager|sr\\.? manager|lead|leader|lider|head of|principal)\\b",
+        "\\b(account executive|ae|enterprise|strategic|regional|latam)\\b.*\\b(sales|account|business development|operations|manager|lead)\\b",
+        "\\b(senior|sr\\.?)\\b.*\\b(analyst|analista|specialist|especialista|business development|sales operations|revenue operations|data|bi)\\b"
+      ],
       "title_include": [
         "\\b(business development|bdr|sdr|sales development|inside sales|digital sales|demand generation)\\b",
         "\\b(sales|revenue|commercial|deal|bid|order|go[- ]to[- ]market|gtm)\\b.*\\b(operations|ops|analyst|specialist|coordinator|manager|lead|enablement|support|strategy|planning)\\b",
