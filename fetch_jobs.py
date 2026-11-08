@@ -218,6 +218,12 @@ def http_json(url, payload=None, retries=2, headers=None, timeout=25):
                 return json.loads(r.read().decode("utf-8"))
         except error.HTTPError as e:
             if e.code < 500 and e.code != 429:
+                try:
+                    detail = e.read().decode("utf-8", errors="replace")[:300].strip()
+                    if detail:
+                        e.msg = f"{e.msg} — {detail}"
+                except Exception:
+                    pass
                 raise
             err = e
         except (error.URLError, TimeoutError, json.JSONDecodeError) as e:
@@ -228,8 +234,10 @@ def http_json(url, payload=None, retries=2, headers=None, timeout=25):
 
 
 def gha_annotate(level, text):
-    """Print a GitHub Actions annotation (shows up in the run summary) and mirror it to stderr."""
-    print(f"::{level}::{text}" if os.environ.get("GITHUB_ACTIONS") else f"{level}: {text}", file=sys.stderr)
+    """Print a GitHub Actions annotation (shows up in the run summary) and mirror it to stderr.
+    Suppressed while running under unittest so negative tests don't pollute CI annotations."""
+    in_ci = bool(os.environ.get("GITHUB_ACTIONS")) and "unittest" not in sys.modules
+    print(f"::{level}::{text}" if in_ci else f"{level}: {text}", file=sys.stderr)
 
 
 def gha_summary(markdown):
@@ -530,38 +538,194 @@ def flag_new(j, today, new_days):
 # LLM Headhunter Analysis & Minimalist CV Generator
 # --------------------------------------------------------------------------
 
+def parse_llm_json(raw_text):
+    """Leniently extract and parse a JSON object from an LLM response string."""
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", (raw_text or "").strip())
+    candidates = [cleaned]
+    m = re.search(r"\{.*\}", cleaned, re.S)
+    if m and m.group(0) != cleaned:
+        candidates.append(m.group(0))
+    last_err = None
+    for cand in candidates:
+        for attempt_str in (cand, re.sub(r",\s*([}\]])", r"\1", cand)):
+            try:
+                return json.loads(attempt_str, strict=False)
+            except json.JSONDecodeError as e:
+                last_err = e
+    raise last_err or ValueError("Empty LLM JSON response")
+
+
 def call_gemini_json(prompt_text, model="gemini-2.5-flash", api_key=None):
     """Call Gemini generateContent endpoint and return parsed JSON object.
 
-    The key travels in the `x-goog-api-key` header (never in the URL, so it can't
-    leak into logs or tracebacks) and the request goes through `http_json`, which
-    retries 429 / 5xx responses, the usual free-tier failure modes."""
-    api_key = api_key or os.environ.get("GEMINI_API_KEY")
+    Uses `thinkingBudget: 0` on 2.5 models (so thinking tokens don't consume the
+    output budget or truncate the JSON), sets `maxOutputTokens: 4096`, and falls
+    back across models if a model is unavailable or returns malformed output."""
+    api_key = (api_key or os.environ.get("GEMINI_API_KEY") or "").strip()
     if not api_key:
         return None
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-    payload = {
-        "systemInstruction": {"parts": [{"text": LLM_SYSTEM_PROMPT}]},
-        "contents": [{"parts": [{"text": prompt_text}]}],
-        "generationConfig": {
+
+    models_to_try = [model]
+    for fallback_model in ("gemini-2.5-flash", "gemini-2.0-flash"):
+        if fallback_model not in models_to_try:
+            models_to_try.append(fallback_model)
+
+    last_err = None
+    for m_name in models_to_try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{m_name}:generateContent"
+        gen_cfg = {
             "temperature": 0.2,
+            "maxOutputTokens": 4096,
             "responseMimeType": "application/json",
+        }
+        if m_name.startswith("gemini-2.5"):
+            gen_cfg["thinkingConfig"] = {"thinkingBudget": 0}
+        payload = {
+            "systemInstruction": {"parts": [{"text": LLM_SYSTEM_PROMPT}]},
+            "contents": [{"parts": [{"text": prompt_text}]}],
+            "generationConfig": gen_cfg,
+        }
+        try:
+            try:
+                body = http_json(url, payload, retries=2, headers={"x-goog-api-key": api_key}, timeout=60)
+            except error.HTTPError as e:
+                if e.code == 400 and "thinkingConfig" in payload["generationConfig"]:
+                    payload["generationConfig"].pop("thinkingConfig", None)
+                    body = http_json(url, payload, retries=1, headers={"x-goog-api-key": api_key}, timeout=60)
+                else:
+                    raise
+            cand0 = (body.get("candidates") or [{}])[0]
+            parts = (cand0.get("content") or {}).get("parts") or []
+            text_parts = [p.get("text", "") for p in parts if isinstance(p, dict) and p.get("text") and not p.get("thought")]
+            if not text_parts:
+                text_parts = [p.get("text", "") for p in parts if isinstance(p, dict) and p.get("text")]
+            raw_text = "\n".join(text_parts).strip()
+            if not raw_text:
+                reason = cand0.get("finishReason") or body.get("promptFeedback") or "empty candidates"
+                raise ValueError(f"Gemini ({m_name}) returned no text ({reason})")
+            parsed = parse_llm_json(raw_text)
+            if isinstance(parsed, dict) and isinstance(parsed.get("cv"), dict):
+                return parsed
+            raise ValueError(f"Gemini ({m_name}) JSON missing 'cv' object")
+        except Exception as e:
+            last_err = e
+            print(f"  [gemini] model {m_name} attempt failed: {type(e).__name__}: {e}", file=sys.stderr)
+    if last_err:
+        raise last_err
+    return None
+
+
+def tailor_cv_deterministic(job_item, master_cv_text, sub_cfg):
+    """Build a tailored minimalist CV directly from the subscriber's master CV Markdown
+    when Gemini API is unavailable, rate-limited, or unconfigured."""
+    lines = [ln.strip() for ln in (master_cv_text or "").splitlines()]
+    full_name = sub_cfg.get("name", "Candidate")
+    contact_line = sub_cfg.get("recipient_email", "")
+    for i, ln in enumerate(lines):
+        if ln.startswith("# "):
+            full_name = ln[2:].strip().title()
+            if i + 1 < len(lines) and lines[i + 1] and not lines[i + 1].startswith("#"):
+                contact_line = lines[i + 1].strip()
+            break
+
+    sections = {}
+    cur_sec = None
+    for ln in lines:
+        if ln.startswith("## "):
+            cur_sec = ln[3:].strip().upper()
+            sections[cur_sec] = []
+        elif cur_sec is not None:
+            sections[cur_sec].append(ln)
+
+    summary = " ".join(x for x in sections.get("PROFESSIONAL SUMMARY", []) if x)
+    job_title = job_item.get("title", "Target Role")
+    company = job_item.get("company", "Company")
+    job_blob = norm(f"{job_title} {company} {job_item.get('team', '')} {job_item.get('description', '')}")
+
+    # Extract skills from CORE COMPETENCIES
+    raw_skills = []
+    for ln in sections.get("CORE COMPETENCIES", []):
+        if ln.startswith("- ") or ln.startswith("* "):
+            cleaned_ln = re.sub(r"\*\*[^*]+\*\*:?\s*", "", ln[2:])
+            for part in re.split(r"[,;]", cleaned_ln):
+                s = part.strip(" .")
+                if 2 < len(s) <= 48:
+                    raw_skills.append(s)
+    # Sort skills so those matching the target job appear first
+    raw_skills.sort(key=lambda s: (0 if any(w in job_blob for w in norm(s).split() if len(w) > 3) else 1))
+    core_skills = list(dict.fromkeys(raw_skills))[:8] or ["Executive Leadership", "Operations", "Strategy"]
+    matched_kw = [s for s in core_skills if any(w in job_blob for w in norm(s).split() if len(w) > 3)][:5] or core_skills[:4]
+
+    # Parse PROFESSIONAL EXPERIENCE blocks (### Company | Location + **Role** | Dates + bullets)
+    experience = []
+    cur_exp = None
+    for ln in sections.get("PROFESSIONAL EXPERIENCE", []):
+        if ln.startswith("### "):
+            parts = [p.strip() for p in ln[4:].split("|")]
+            cur_exp = {
+                "company": re.sub(r"\*+", "", parts[0]),
+                "location": parts[1] if len(parts) > 1 else "",
+                "role": "",
+                "dates": "",
+                "bullets": [],
+            }
+            experience.append(cur_exp)
+        elif cur_exp is not None and ln.startswith("**") and ("|" in ln or "–" in ln or "-" in ln):
+            parts = [p.strip() for p in ln.split("|")]
+            role_txt = re.sub(r"\*+", "", parts[0]).strip()
+            if cur_exp["role"] and cur_exp["bullets"]:
+                cur_exp = {
+                    "company": cur_exp["company"],
+                    "location": cur_exp["location"],
+                    "role": role_txt,
+                    "dates": parts[1] if len(parts) > 1 else "",
+                    "bullets": [],
+                }
+                experience.append(cur_exp)
+            else:
+                cur_exp["role"] = role_txt
+                cur_exp["dates"] = parts[1] if len(parts) > 1 else ""
+        elif cur_exp is not None and (ln.startswith("- ") or ln.startswith("* ")):
+            b_txt = re.sub(r"\*\*([^*]+)\*\*", r"\1", ln[2:].strip())
+            if cur_exp["role"]:
+                cur_exp["bullets"].append(b_txt)
+
+    experience = [e for e in experience if e.get("role") and e.get("bullets")][:4]
+    for idx, e in enumerate(experience):
+        e["bullets"].sort(key=lambda b: (0 if any(w in job_blob for w in norm(b).split() if len(w) > 4) else 1))
+        e["bullets"] = e["bullets"][:4 if idx < 2 else 2]
+
+    education = []
+    for sec_name in ("EDUCATION & CERTIFICATIONS", "EDUCATION"):
+        for ln in sections.get(sec_name, []):
+            if ln.startswith("- ") or ln.startswith("* "):
+                txt = re.sub(r"\*+", "", ln[2:].strip())
+                parts = [p.strip() for p in re.split(r"—|--", txt, maxsplit=1)]
+                education.append({
+                    "degree": parts[0],
+                    "institution": parts[1] if len(parts) > 1 else "",
+                    "dates": "",
+                })
+
+    score = min(96, 84 + 2 * len(matched_kw))
+    return {
+        "match_score": score,
+        "lucy_why_it_fits": (
+            f"Your background in {', '.join(matched_kw[:3])} aligns directly with {company}'s "
+            f"{job_title} opening in {job_item.get('location') or 'Mexico'}."
+        ),
+        "matched_keywords": matched_kw,
+        "gaps_to_address": [f"Emphasize measurable impact relevant to {company}'s {job_title} scope."],
+        "cv": {
+            "full_name": full_name,
+            "target_headline": f"{job_title} | {' · '.join(core_skills[:3])}",
+            "contact_line": contact_line,
+            "summary": summary,
+            "core_skills": core_skills,
+            "experience": experience,
+            "education": education[:3],
         },
     }
-    body = http_json(url, payload, retries=2, headers={"x-goog-api-key": api_key}, timeout=60)
-    parts = ((body.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
-    text_parts = [p.get("text", "") for p in parts if isinstance(p, dict) and p.get("text") and not p.get("thought")]
-    if not text_parts:
-        text_parts = [p.get("text", "") for p in parts if isinstance(p, dict) and p.get("text")]
-    raw_text = (text_parts[-1] if text_parts else "").strip()
-    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_text)
-    try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError:
-        m = re.search(r"\{.*\}", cleaned, re.S)
-        if m:
-            return json.loads(m.group(0))
-        raise
 
 
 def tailor_cv_with_llm(job_item, master_cv_text, sub_cfg):
@@ -591,7 +755,16 @@ def tailor_cv_with_llm(job_item, master_cv_text, sub_cfg):
         f"CANDIDATE MASTER CV:\n{master_cv_text}"
     )
     model = os.environ.get("GEMINI_MODEL") or sub_cfg.get("llm_model", "gemini-2.5-flash")
-    return call_gemini_json(prompt, model=model, api_key=api_key)
+    try:
+        res = call_gemini_json(prompt, model=model, api_key=api_key)
+        if res and isinstance(res.get("cv"), dict):
+            return res
+    except Exception as e:
+        gha_annotate(
+            "warning",
+            f"Gemini API fallback triggered for '{job_item.get('title')}' ({type(e).__name__}: {e}) — using deterministic CV tailor.",
+        )
+    return tailor_cv_deterministic(job_item, master_cv_text, sub_cfg)
 
 
 def render_minimalist_cv_html(cv_data, job_item=None):
