@@ -52,7 +52,24 @@
       "email_on_baseline": true,
       "email_mode": "new_or_discovered",
       "cv_file": "cvs/lucas.md",
-      "max_tailored_cvs": 3
+      "max_tailored_cvs": 3,
+      "title_include": [
+        "\\bdirector(a)?\\b",
+        "\\bhead of\\b",
+        "\\bvp\\b",
+        "\\bsvp\\b",
+        "\\bevp\\b",
+        "\\bvice[- ]?president(e|a)?\\b",
+        "\\bgeneral manager\\b",
+        "\\bgerente general\\b",
+        "\\bcountry (manager|lead|head)\\b",
+        "\\bmanaging director\\b",
+        "\\bchief\\b.*\\bofficer\\b",
+        "\\b(process mining|celonis|signavio|process intelligence)\\b.*\\b(manager|lead|leader|principal|architect|head|director)\\b",
+        "\\b(senior manager|sr\\.? manager|gerente sr|gerente senior|principal|coe lead|practice lead|global lead)\\b.*\\b(process|operational excellence|continuous improvement|transformation|gbs|data|analytics|ai|automation|program|operations|strategy|corporate development)\\b",
+        "\\b(process|operational excellence|continuous improvement|business transformation|gbs|data analytics|technical program)\\b.*\\b(senior manager|sr\\.? manager|practice lead|coe lead|global lead)\\b",
+        "\\b(staff|principal|senior|sr\\.?)\\b.*\\btechnical program manager\\b"
+      ]
     },
     {
       "id": "luis",
