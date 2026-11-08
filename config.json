@@ -1,6 +1,9 @@
 {
   "_note": "title_include / title_exclude are regexes written WITHOUT accents. To widen the net add patterns such as \"\\\\bsenior manager\\\\b\" or \"\\\\bsubdirector(a)?\\\\b\".",
   "page_title": "Openings",
+  "recipient_email": "lucasschollmatter@gmail.com",
+  "email_on_baseline": true,
+  "email_mode": "new_or_discovered",
   "title_include": [
     "\\bdirector(a)?\\b",
     "\\bhead of\\b",

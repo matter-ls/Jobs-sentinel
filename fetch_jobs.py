@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
 job-radar: pulls public job feeds (Greenhouse, Lever, Ashby, Workable,
-SmartRecruiters, Workday), keeps director-level roles in Jalisco, and builds a
-static page at docs/index.html.
+SmartRecruiters, Workday), keeps director-level roles in Jalisco (plus
+remote-Mexico roles), builds a static page at docs/index.html, and emails
+daily relevant openings to the configured recipient.
 
-  python3 fetch_jobs.py            normal run (fetch, filter, write page + state)
+  python3 fetch_jobs.py            normal run (fetch, filter, write page + state, send email if configured)
   python3 fetch_jobs.py --check    test every company board and report problems
   python3 fetch_jobs.py --demo     build out/demo.html from fake data (no network)
 
@@ -15,12 +16,15 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import os
 import re
+import smtplib
 import sys
 import time
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
+from email.message import EmailMessage
 from pathlib import Path
 from urllib import error, request
 
@@ -29,11 +33,20 @@ UA = "job-radar/1.0 (personal job board)"
 
 CFG_DEFAULTS = {
     "page_title": "Openings",
+    "recipient_email": "lucasschollmatter@gmail.com",
+    "email_on_baseline": True,
+    "email_mode": "new_or_discovered",
     "include_remote_mexico": True,
     "include_country_only": True,
     "new_days": 7,
     "max_workers": 8,
     "state_retention_days": 120,
+}
+
+LOC_LABELS = {
+    "jalisco": "Jalisco",
+    "remote_mx": "Remote · Mexico",
+    "mx_country": "Mexico · city not listed",
 }
 
 
@@ -214,10 +227,10 @@ def workday_posted(text, today):
     return None
 
 
-def fetch_workday(c):
+def fetch_workday(c, today=None):
     host = f"{c['tenant']}.{c['wd']}.myworkdayjobs.com"
     api = f"https://{host}/wday/cxs/{c['tenant']}/{c['site']}/jobs"
-    today, found = today_utc(), {}
+    today, found = today or today_utc(), {}
     for term in c.get("search_terms", ["Guadalajara", "Zapopan", "Jalisco", "El Salto", "Tonala"]):
         offset, total = 0, None
         while offset < 600:
@@ -251,12 +264,12 @@ FETCHERS = {
 }
 
 
-def fetch_one(c):
+def fetch_one(c, today=None):
     try:
         fn = FETCHERS.get(c.get("ats"))
         if fn is None:
             return c, None, f"unknown ats '{c.get('ats')}'"
-        return c, fn(c), None
+        return c, (fn(c, today=today) if fn is fetch_workday else fn(c)), None
     except KeyError as e:
         return c, None, f"missing field {e} in companies.json"
     except error.HTTPError as e:
@@ -266,9 +279,9 @@ def fetch_one(c):
         return c, None, f"{type(e).__name__}: {e}"
 
 
-def fetch_all(companies, cfg):
+def fetch_all(companies, cfg, today=None):
     with ThreadPoolExecutor(max_workers=int(cfg["max_workers"])) as ex:
-        return list(ex.map(fetch_one, companies))
+        return list(ex.map(lambda c: fetch_one(c, today=today), companies))
 
 
 # --------------------------------------------------------------------------
@@ -336,6 +349,7 @@ def update_state(jobs, state, today, retention_days):
         if (today - last).days > retention_days:
             del seen[k]
     state["initialized"] = True
+    return baseline
 
 
 def flag_new(j, today, new_days):
@@ -346,7 +360,7 @@ def flag_new(j, today, new_days):
 
 
 # --------------------------------------------------------------------------
-# output
+# output & daily email notifications
 # --------------------------------------------------------------------------
 
 PAGE = """<!doctype html>
@@ -398,7 +412,7 @@ input[type=search],select{width:100%;padding:10px 12px;border:1px solid var(--li
 <script>
 const DATA = __DATA__;
 const $ = id => document.getElementById(id);
-const LOC = {jalisco: "Jalisco", remote_mx: "Remote \\u00b7 Mexico", mx_country: "Mexico \\u00b7 city not listed"};
+const LOC = {jalisco: "Jalisco", remote_mx: "Remote \u00b7 Mexico", mx_country: "Mexico \u00b7 city not listed"};
 const DAY = 86400000;
 function daysAgo(s) {
   const d = new Date(s + "T00:00:00"), t = new Date();
@@ -406,7 +420,7 @@ function daysAgo(s) {
   return Math.max(0, Math.round((t - d) / DAY));
 }
 function when(n) { return n === 0 ? "today" : n === 1 ? "yesterday" : n + " days ago"; }
-function safeUrl(u) { return /^https?:\\/\\//i.test(u) ? u : "#"; }
+function safeUrl(u) { return /^https?:\/\//i.test(u) ? u : "#"; }
 const co = $("co");
 [...new Set(DATA.map(j => j.company))].sort((a, b) => a.localeCompare(b)).forEach(name => {
   const o = document.createElement("option");
@@ -432,7 +446,7 @@ function render() {
     a.className = "job"; a.href = safeUrl(j.url); a.target = "_blank"; a.rel = "noopener noreferrer";
     const t = document.createElement("div"); t.className = "t"; t.textContent = j.title;
     const m = document.createElement("div"); m.className = "m";
-    m.textContent = [j.company, j.location, j.team].filter(Boolean).join(" \\u00b7 ");
+    m.textContent = [j.company, j.location, j.team].filter(Boolean).join(" \u00b7 ");
     const b = document.createElement("div"); b.className = "badges";
     const add = (txt, cls) => {
       const s = document.createElement("span");
@@ -470,6 +484,121 @@ def alert_markdown(new_jobs, today):
     return "\n".join(lines) + "\n"
 
 
+def select_jobs_for_email(jobs, baseline, cfg):
+    """Choose which jobs to include in the daily email digest."""
+    mode = cfg.get("email_mode", "new_or_discovered")
+    if mode == "all":
+        return [j for j in jobs if not j.get("stale")]
+    if baseline:
+        if cfg.get("email_on_baseline", True):
+            # On the very first run, send roles flagged is_new (or all non-stale if none have dates)
+            new_roles = [j for j in jobs if j.get("is_new") and not j.get("stale")]
+            return new_roles or [j for j in jobs if not j.get("stale")]
+        return []
+    if mode == "discovered_only":
+        return [j for j in jobs if j.get("discovered_now")]
+    # Default 'new_or_discovered': newly discovered roles on this run
+    return [j for j in jobs if j.get("discovered_now")]
+
+
+def build_email_message(jobs_to_send, all_jobs_count, cfg, today, sender_email):
+    """Construct a multipart plain-text + HTML EmailMessage."""
+    recipient = cfg.get("recipient_email", "lucasschollmatter@gmail.com")
+    date_str = today.isoformat()
+    msg = EmailMessage()
+    msg["Subject"] = f"Jobs Sentinel: {len(jobs_to_send)} Relevant Director Opening(s) ({date_str})"
+    msg["From"] = sender_email
+    msg["To"] = recipient
+
+    # Plain-text version
+    txt_lines = [
+        f"Jobs Sentinel Daily Digest — {date_str}",
+        f"{len(jobs_to_send)} new/relevant role(s) ({all_jobs_count} total active roles tracked):",
+        "",
+    ]
+    for j in jobs_to_send:
+        loc_tag = LOC_LABELS.get(j.get("loc_class"), j.get("loc_class", ""))
+        posted = j.get("posted_at") or f"First seen {j.get('first_seen', date_str)}"
+        txt_lines.append(f"- {j['title']} at {j['company']}")
+        txt_lines.append(f"  Location: {j.get('location') or loc_tag} ({loc_tag}) | Date: {posted}")
+        txt_lines.append(f"  Apply: {j.get('url')}")
+        txt_lines.append("")
+    msg.set_content("\n".join(txt_lines))
+
+    # HTML version
+    rows_html = []
+    for j in jobs_to_send:
+        loc_tag = html.escape(LOC_LABELS.get(j.get("loc_class"), j.get("loc_class", "")))
+        title_esc = html.escape(j.get("title", ""))
+        company_esc = html.escape(j.get("company", ""))
+        loc_esc = html.escape(j.get("location", ""))
+        url_esc = html.escape(j.get("url", "#"))
+        posted_esc = html.escape(j.get("posted_at") or f"Seen {j.get('first_seen', date_str)}")
+        rows_html.append(
+            f"<tr>"
+            f"<td style='padding:10px 8px;border-bottom:1px solid #e7e5e4;'><strong>{company_esc}</strong></td>"
+            f"<td style='padding:10px 8px;border-bottom:1px solid #e7e5e4;'>{title_esc}</td>"
+            f"<td style='padding:10px 8px;border-bottom:1px solid #e7e5e4;'>{loc_esc}<br>"
+            f"<span style='font-size:12px;color:#78716c;'>{loc_tag}</span></td>"
+            f"<td style='padding:10px 8px;border-bottom:1px solid #e7e5e4;font-size:13px;color:#78716c;'>{posted_esc}</td>"
+            f"<td style='padding:10px 8px;border-bottom:1px solid #e7e5e4;'>"
+            f"<a href='{url_esc}' style='color:#0f766e;font-weight:600;text-decoration:none;'>Open &rarr;</a></td>"
+            f"</tr>"
+        )
+
+    html_body = f"""<!doctype html>
+<html>
+<body style="font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#1c1917;background:#fafaf9;padding:20px;">
+  <div style="max-width:760px;margin:0 auto;background:#ffffff;border:1px solid #e7e5e4;border-radius:12px;padding:24px;">
+    <h2 style="margin:0 0 4px;font-size:20px;">Jobs Sentinel Daily Digest</h2>
+    <p style="margin:0 0 18px;color:#78716c;font-size:14px;">
+      {date_str} &middot; <strong>{len(jobs_to_send)}</strong> highlighted opening(s) ({all_jobs_count} total matching roles tracked)
+    </p>
+    <table style="width:100%;border-collapse:collapse;font-size:14px;text-align:left;">
+      <thead>
+        <tr style="border-bottom:2px solid #e7e5e4;color:#78716c;font-size:12px;text-transform:uppercase;">
+          <th style="padding:8px;">Company</th>
+          <th style="padding:8px;">Role</th>
+          <th style="padding:8px;">Location</th>
+          <th style="padding:8px;">Date</th>
+          <th style="padding:8px;">Link</th>
+        </tr>
+      </thead>
+      <tbody>
+        {''.join(rows_html)}
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>"""
+    msg.add_alternative(html_body, subtype="html")
+    return msg
+
+
+def send_email_digest(jobs_to_send, all_jobs_count, cfg, today):
+    """Send the daily digest via Gmail/SMTP if credentials are configured."""
+    if not jobs_to_send:
+        print("No new roles to email today.")
+        return False
+
+    smtp_user = os.environ.get("GMAIL_USER") or os.environ.get("SMTP_USER")
+    smtp_password = os.environ.get("GMAIL_APP_PASSWORD") or os.environ.get("SMTP_PASSWORD")
+    smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(os.environ.get("SMTP_PORT", "465"))
+
+    if not smtp_user or not smtp_password:
+        print("Email skipped: GMAIL_USER / GMAIL_APP_PASSWORD environment variables not set.")
+        return False
+
+    msg = build_email_message(jobs_to_send, all_jobs_count, cfg, today, smtp_user)
+    with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=25) as server:
+        server.login(smtp_user, smtp_password)
+        server.send_message(msg)
+
+    print(f"Sent email digest ({len(jobs_to_send)} roles) to {msg['To']}.")
+    return True
+
+
 def write_outputs(root, cfg, jobs, state, today, stamp):
     root = Path(root)
     write_json(root / "state" / "seen.json", state)
@@ -493,10 +622,10 @@ def write_outputs(root, cfg, jobs, state, today, stamp):
 # commands
 # --------------------------------------------------------------------------
 
-def refresh(cfg, companies, root=ROOT, today=None):
+def refresh(cfg, companies, root=ROOT, today=None, send_email=True):
     today = today or today_utc()
     rules = build_rules(cfg)
-    results = fetch_all(companies, cfg)
+    results = fetch_all(companies, cfg, today=today)
     failed = [(c, err) for c, jobs, err in results if jobs is None]
     for c, err in failed:
         print(f"  skipped {c['name']}: {err}")
@@ -510,13 +639,15 @@ def refresh(cfg, companies, root=ROOT, today=None):
 
     root = Path(root)
     state = load_json(root / "state" / "seen.json", {})
-    update_state(jobs, state, today, int(cfg["state_retention_days"]))
+    baseline = update_state(jobs, state, today, int(cfg["state_retention_days"]))
 
     # A board that failed this time keeps its last known roles, marked stale.
     failed_names = {c["name"] for c, _ in failed}
+    existing_keys = {j["key"] for j in jobs}
     for p in load_json(root / "state" / "jobs.json", []):
-        if p.get("company") in failed_names:
+        if p.get("company") in failed_names and p.get("key") not in existing_keys:
             jobs.append({**p, "stale": True, "discovered_now": False})
+            existing_keys.add(p.get("key"))
 
     for j in jobs:
         j["is_new"] = flag_new(j, today, int(cfg["new_days"]))
@@ -530,6 +661,14 @@ def refresh(cfg, companies, root=ROOT, today=None):
     print(f"Fetched {ok}/{len(results)} boards. {len(jobs)} matching roles, "
           f"{sum(1 for j in jobs if j['is_new'])} marked NEW, {len(fresh)} first seen this run.")
     print(f"Page: {root / 'docs' / 'index.html'}")
+
+    if send_email:
+        to_email = select_jobs_for_email(jobs, baseline, cfg)
+        try:
+            send_email_digest(to_email, len(jobs), cfg, today)
+        except Exception as e:
+            print(f"  warning: email delivery failed: {type(e).__name__}: {e}", file=sys.stderr)
+
     return 0
 
 
@@ -575,12 +714,16 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--check", action="store_true", help="test every company board")
     ap.add_argument("--demo", action="store_true", help="build out/demo.html from fake data")
+    ap.add_argument("--no-email", action="store_true", help="skip sending email digest")
+    ap.add_argument("--email-all", action="store_true", help="email all current matching roles")
     args = ap.parse_args(argv)
     cfg = load_config()
+    if args.email_all:
+        cfg["email_mode"] = "all"
     if args.demo:
         return demo(cfg)
     companies = load_companies()
-    return check(cfg, companies) if args.check else refresh(cfg, companies)
+    return check(cfg, companies) if args.check else refresh(cfg, companies, send_email=not args.no_email)
 
 
 if __name__ == "__main__":
