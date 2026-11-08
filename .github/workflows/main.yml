@@ -9,7 +9,7 @@ on:
       email_all:
         description: "Send all matching roles in email (not just newly discovered)"
         required: false
-        default: true
+        default: false
         type: boolean
       subscriber:
         description: "Target subscriber (select 'all' to run for everyone)"
@@ -54,12 +54,10 @@ jobs:
       - name: Run offline unit tests
         run: python3 -m unittest discover -s tests -v
 
-      # Safe fallback check: explicitly check if it's true (will skip on schedule where inputs is null)
       - name: Check every company board (check_only mode)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.check_only == true }}
         run: python3 fetch_jobs.py --check
 
-      # Safe fallback check: will run on schedule (since event is not check_only) or if manual check_only is false
       - name: Fetch jobs, tailor CVs with Gemini, and send emails
         id: refresh
         if: ${{ github.event_name == 'schedule' || inputs.check_only != true }}
@@ -69,8 +67,8 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
-          # Fallback values for when 'inputs' is null (on schedule event)
-          INPUT_EMAIL_ALL: ${{ inputs.email_all || 'true' }}
+          # IMPORTANT: On schedule, inputs.email_all is null -> must default to 'false' so only NEW jobs are emailed!
+          INPUT_EMAIL_ALL: ${{ github.event_name == 'workflow_dispatch' && inputs.email_all == true && 'true' || 'false' }}
           INPUT_SUBSCRIBER: ${{ inputs.subscriber || 'all' }}
         run: |
           args=()
@@ -80,6 +78,7 @@ jobs:
           if [ -n "$INPUT_SUBSCRIBER" ] && [ "$INPUT_SUBSCRIBER" != "all" ]; then
             args+=(--subscriber "$INPUT_SUBSCRIBER")
           fi
+          echo "Running: python3 fetch_jobs.py ${args[*]}"
           set +e
           python3 fetch_jobs.py "${args[@]}"
           rc=$?
