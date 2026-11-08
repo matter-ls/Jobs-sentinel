@@ -4,6 +4,8 @@
   "recipient_email": "lucasschollmatter@gmail.com",
   "email_on_baseline": true,
   "email_mode": "new_or_discovered",
+  "llm_model": "gemini-2.5-flash",
+  "max_tailored_cvs": 3,
   "title_include": [
     "\\bdirector(a)?\\b",
     "\\bhead of\\b",
@@ -48,7 +50,9 @@
       "recipient_email": "lucasschollmatter@gmail.com",
       "enabled": true,
       "email_on_baseline": true,
-      "email_mode": "new_or_discovered"
+      "email_mode": "new_or_discovered",
+      "cv_file": "cvs/lucas.md",
+      "max_tailored_cvs": 3
     },
     {
       "id": "luis",
@@ -57,6 +61,8 @@
       "enabled": true,
       "email_on_baseline": true,
       "email_mode": "new_or_discovered",
+      "cv_file": "cvs/luis.md",
+      "max_tailored_cvs": 3,
       "title_include": [
         "\\b(rpa|robotic process automation|intelligent automation|hyperautomation|process automation|business automation)\\b",
         "\\bautomation\\b.*\\b(consultant|analyst|lead|leader|manager|architect|specialist|engineer|developer|coe|program|project|delivery|strategist|advisor)\\b",
@@ -88,6 +94,59 @@
         "\\bautomation\\b.*\\b(qa|quality assurance|test|testing|sdet)\\b",
         "\\bmarketing automation\\b",
         "\\b(industrial|plc|scada|controls|building|packaging|warehouse) automation\\b"
+      ],
+      "locations": [
+        "guadalajara",
+        "zapopan",
+        "tlaquepaque",
+        "tonala",
+        "tlajomulco",
+        "el salto",
+        "puerto vallarta",
+        "jalisco",
+        "gdl",
+        "jal"
+      ],
+      "include_remote_mexico": true,
+      "include_country_only": true
+    },
+    {
+      "id": "ewerson",
+      "name": "Ewerson Lira",
+      "recipient_email": "ewerson.lira@live.com",
+      "enabled": true,
+      "email_on_baseline": true,
+      "email_mode": "new_or_discovered",
+      "cv_file": "cvs/ewerson.md",
+      "max_tailored_cvs": 3,
+      "title_include": [
+        "\\b(business development|bdr|sdr|sales development|inside sales|digital sales|demand generation)\\b",
+        "\\b(sales|revenue|commercial|deal|bid|order|go[- ]to[- ]market|gtm)\\b.*\\b(operations|ops|analyst|specialist|coordinator|manager|lead|enablement|support|strategy|planning)\\b",
+        "\\b(business|sales|commercial) (operations|analyst|analytics|intelligence|insights|planning|support)\\b",
+        "\\b(data|bi|business intelligence|reporting|analytics|insights)\\b.*\\b(analyst|specialist|visualization|coordinator|lead|manager)\\b",
+        "\\b(power bi|tableau|looker|watson analytics)\\b",
+        "\\b(forecast|forecasting|pipeline|crm|salesforce|quota|territory)\\b.*\\b(analyst|specialist|manager|administrator|admin|coordinator)\\b",
+        "\\b(account|territory|channel|partner|alliances?|customer success|client success|renewals?)\\b.*\\b(manager|executive|representative|specialist|lead|coordinator)\\b",
+        "\\b(software asset|asset|license|licensing)\\b.*\\b(management|analyst|specialist|coordinator)\\b",
+        "\\b(customer|technical|client) (support|service|care|experience)\\b.*\\b(lead|leader|manager|supervisor|team lead|coordinator)\\b",
+        "\\b(project|program) (coordinator|analyst|manager|specialist)\\b",
+        "\\banalista\\b.*\\b(datos|ventas|negocio|negocios|operaciones|comercial|inteligencia de negocios)\\b",
+        "\\b(ejecutivo|representante|gerente|coordinador|lider|especialista)\\b.*\\b(ventas|comercial|cuentas|desarrollo de negocios|operaciones)\\b",
+        "\\b(international business|comercio (internacional|exterior)|export|import|trade compliance)\\b"
+      ],
+      "title_exclude": [
+        "\\bassistant to\\b",
+        "\\bexecutive assistant\\b",
+        "\\bintern(ship)?\\b",
+        "\\bpracticante\\b",
+        "\\bbecari[oa]\\b",
+        "\\b(vp|svp|evp|vice[- ]?president(e|a)?)\\b",
+        "\\bchief\\b.*\\bofficer\\b",
+        "\\b(software|backend|frontend|front-end|back-end|full[- ]stack|devops|cloud|platform|machine learning|ml|ai)\\b.*\\b(engineer|developer|architect)\\b",
+        "\\b(data|analytics) (engineer|scientist|architect)\\b",
+        "\\b(qa|quality assurance|test|testing|sdet)\\b",
+        "\\b(field|retail|store|door[- ]to[- ]door|telemarketing|call center agent)\\b",
+        "\\b(accountant|accounting|payroll|tax|legal|nurse|physician)\\b"
       ],
       "locations": [
         "guadalajara",

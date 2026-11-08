@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
-# Jobs Sentinel - Multi-Subscriber Daily Digest
+# Jobs Sentinel - Multi-Subscriber Daily Digest + LLM CV Headhunter
 """
 job-radar: pulls public job feeds (Greenhouse, Lever, Ashby, Workable,
 SmartRecruiters, Workday), keeps matching roles per subscriber profile,
-builds a static page at docs/index.html, and emails personalized daily
-digests to one or multiple subscribers based on their individual preferences.
+builds a static page at docs/index.html, optionally calls Gemini LLM to
+compare top job postings against each subscriber's master CV to generate a
+tailored minimalist CV, and emails personalized daily digests.
 
   python3 fetch_jobs.py                     normal run (fetch, filter, write page + state, email all active subscribers)
   python3 fetch_jobs.py --subscriber lucas  only process email for subscriber 'lucas'
   python3 fetch_jobs.py --check             test every company board and report problems
   python3 fetch_jobs.py --demo              build out/demo.html from fake data (no network)
+
+Exit codes: 0 ok · 1 nothing written (every board failed / all boards FAIL in --check)
+            2 outputs written but at least one email digest failed to send
 
 Standard library only. Python 3.9+.
 """
@@ -39,6 +43,8 @@ CFG_DEFAULTS = {
     "recipient_email": "lucasschollmatter@gmail.com",
     "email_on_baseline": True,
     "email_mode": "new_or_discovered",
+    "llm_model": "gemini-2.5-flash",
+    "max_tailored_cvs": 3,
     "include_remote_mexico": True,
     "include_country_only": True,
     "new_days": 7,
@@ -52,6 +58,43 @@ LOC_LABELS = {
     "mx_country": "Mexico · city not listed",
 }
 
+LLM_SYSTEM_PROMPT = """You are Lucy, an elite executive headhunter and minimalist resume architect.
+Compare the candidate's MASTER CV against the TARGET JOB POSTING.
+
+Strict Rules:
+1. NEVER invent companies, job titles, dates, degrees, or fake metrics. Only select, reorder, and re-angle real achievements from the MASTER CV so they mirror the terminology and priorities of the TARGET JOB POSTING.
+2. Keep the tailored CV minimalist, executive, and scannable on 1 page (3-4 high-impact bullets for recent relevant roles; 1-2 bullets for older roles).
+3. Write in the language of the job posting (default to English if the posting is in English or mixed).
+
+Return ONLY valid JSON matching this exact schema:
+{
+  "match_score": 90,
+  "lucy_why_it_fits": "2-sentence warm, punchy headhunter note directly to the candidate explaining why they are a strong match and what angle to emphasize.",
+  "matched_keywords": ["Keyword 1", "Keyword 2", "Keyword 3", "Keyword 4"],
+  "gaps_to_address": ["1 brief tip or keyword to highlight in the interview"],
+  "cv": {
+    "full_name": "Candidate Full Name",
+    "target_headline": "Tailored Role Headline | Core Value Proposition",
+    "contact_line": "City, Country | Phone | Email",
+    "summary": "3-sentence executive profile tailored specifically to this role and company.",
+    "core_skills": ["Skill 1", "Skill 2", "Skill 3", "Skill 4", "Skill 5", "Skill 6"],
+    "experience": [
+      {
+        "company": "Company Name",
+        "role": "Job Title",
+        "location": "Location",
+        "dates": "Start - End",
+        "bullets": [
+          "Action-verb bullet re-angled to highlight relevant impact for this target role."
+        ]
+      }
+    ],
+    "education": [
+      {"degree": "Degree", "institution": "Institution", "dates": "Dates"}
+    ]
+  }
+}"""
+
 
 # --------------------------------------------------------------------------
 # small helpers
@@ -61,6 +104,14 @@ def norm(s):
     """Lower-case and strip accents so 'Tonalá' == 'tonala'."""
     s = unicodedata.normalize("NFKD", s or "")
     return "".join(ch for ch in s if not unicodedata.combining(ch)).lower()
+
+
+def strip_html(raw):
+    """Convert HTML or rich text job descriptions into clean plain text."""
+    if not raw:
+        return ""
+    txt = re.sub(r"<[^>]+>", " ", html.unescape(str(raw)))
+    return re.sub(r"\s+", " ", txt).strip()
 
 
 def today_utc():
@@ -101,11 +152,24 @@ def load_companies(root=ROOT):
     return json.loads((Path(root) / "companies.json").read_text(encoding="utf-8"))["companies"]
 
 
+def load_subscriber_cv(sub_cfg, root=ROOT):
+    """Load a subscriber's master CV text from `cv_text` or `cv_file`."""
+    if sub_cfg.get("cv_text"):
+        return str(sub_cfg["cv_text"]).strip()
+    cv_rel = sub_cfg.get("cv_file")
+    if not cv_rel:
+        return ""
+    for base in (Path(root), ROOT):
+        cand = base / cv_rel
+        if cand.exists():
+            return cand.read_text(encoding="utf-8").strip()
+    return ""
+
+
 def get_subscribers(cfg, only_id=None):
     """Return list of enabled subscriber configs, merging each with global defaults."""
     raw_subs = cfg.get("subscribers")
     if not raw_subs:
-        # Backward-compatible single-subscriber fallback from top-level config
         raw_subs = [{
             "id": "default",
             "name": "Default",
@@ -122,7 +186,6 @@ def get_subscribers(cfg, only_id=None):
         merged = {**cfg, **sub}
         merged["id"] = sub_id
         merged["name"] = sub.get("name") or sub_id
-        # Allow 'locations' as a friendly alias for 'jalisco_locations' per subscriber
         if "locations" in sub and "jalisco_locations" not in sub:
             merged["jalisco_locations"] = sub["locations"]
         resolved.append(merged)
@@ -140,17 +203,18 @@ def collect_workday_search_terms(cfg):
     return list(seen.values())
 
 
-def http_json(url, payload=None, retries=2):
+def http_json(url, payload=None, retries=2, headers=None, timeout=25):
     """GET (or POST when payload is given) and parse JSON. Retries 429/5xx/timeouts."""
     data = json.dumps(payload).encode() if payload is not None else None
-    headers = {"User-Agent": UA, "Accept": "application/json"}
+    hdrs = {"User-Agent": UA, "Accept": "application/json"}
     if data is not None:
-        headers["Content-Type"] = "application/json"
+        hdrs["Content-Type"] = "application/json"
+    hdrs.update(headers or {})
     err = None
     for attempt in range(retries + 1):
         try:
-            req = request.Request(url, data=data, headers=headers)
-            with request.urlopen(req, timeout=25) as r:
+            req = request.Request(url, data=data, headers=hdrs)
+            with request.urlopen(req, timeout=timeout) as r:
                 return json.loads(r.read().decode("utf-8"))
         except error.HTTPError as e:
             if e.code < 500 and e.code != 429:
@@ -158,12 +222,26 @@ def http_json(url, payload=None, retries=2):
             err = e
         except (error.URLError, TimeoutError, json.JSONDecodeError) as e:
             err = e
-        time.sleep(2 * (attempt + 1))
+        if attempt < retries:
+            time.sleep(2 * (attempt + 1))
     raise err
 
 
-def job(c, jid, title, location, url, posted=None, team=""):
-    return {
+def gha_annotate(level, text):
+    """Print a GitHub Actions annotation (shows up in the run summary) and mirror it to stderr."""
+    print(f"::{level}::{text}" if os.environ.get("GITHUB_ACTIONS") else f"{level}: {text}", file=sys.stderr)
+
+
+def gha_summary(markdown):
+    """Append Markdown to the GitHub Actions step summary when running in CI (no-op locally)."""
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if path:
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(markdown + "\n")
+
+
+def job(c, jid, title, location, url, posted=None, team="", description="", detail_api=""):
+    out = {
         "key": f"{c['ats']}:{c['name']}:{jid}",
         "company": c["name"],
         "ats": c["ats"],
@@ -173,6 +251,11 @@ def job(c, jid, title, location, url, posted=None, team=""):
         "url": url or "",
         "posted_at": to_date(posted),
     }
+    if description:
+        out["description"] = strip_html(description)[:12000]
+    if detail_api:
+        out["detail_api"] = detail_api
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -180,11 +263,11 @@ def job(c, jid, title, location, url, posted=None, team=""):
 # --------------------------------------------------------------------------
 
 def fetch_greenhouse(c):
-    d = http_json(f"https://boards-api.greenhouse.io/v1/boards/{c['board']}/jobs")
-    # Only first_published is trusted as a "posted" date: updated_at changes on every edit.
+    d = http_json(f"https://boards-api.greenhouse.io/v1/boards/{c['board']}/jobs?content=true")
     return [
         job(c, j["id"], j.get("title"), (j.get("location") or {}).get("name"),
-            j.get("absolute_url"), j.get("first_published"))
+            j.get("absolute_url"), j.get("first_published"),
+            description=j.get("content") or "")
         for j in d.get("jobs") or []
     ]
 
@@ -198,8 +281,14 @@ def fetch_lever(c):
         loc = "; ".join(x for x in (cat.get("allLocations") or [cat.get("location")]) if x)
         if j.get("workplaceType") == "remote" and "remote" not in loc.lower():
             loc += " (Remote)"
+        lists_txt = " ".join(
+            f"{lst.get('text', '')}: {strip_html(lst.get('content', ''))}"
+            for lst in (j.get("lists") or []) if isinstance(lst, dict)
+        )
+        desc = f"{j.get('descriptionPlain') or j.get('description') or ''} {lists_txt}".strip()
         out.append(job(c, j.get("id"), j.get("text"), loc, j.get("hostedUrl"),
-                       j.get("createdAt"), cat.get("team") or cat.get("department")))
+                       j.get("createdAt"), cat.get("team") or cat.get("department"),
+                       description=desc))
     return out
 
 
@@ -216,8 +305,10 @@ def fetch_ashby(c):
         loc = "; ".join(dict.fromkeys(x for x in locs if x))
         if j.get("isRemote") and "remote" not in loc.lower():
             loc += " (Remote)"
+        desc = j.get("descriptionPlain") or j.get("descriptionHtml") or ""
         out.append(job(c, j.get("id"), j.get("title"), loc, j.get("jobUrl") or j.get("applyUrl"),
-                       j.get("publishedAt"), j.get("department") or j.get("team")))
+                       j.get("publishedAt"), j.get("department") or j.get("team"),
+                       description=desc))
     return out
 
 
@@ -228,9 +319,11 @@ def fetch_workable(c):
         loc = ", ".join(x for x in [j.get("city"), j.get("state"), j.get("country")] if x)
         if j.get("telecommuting"):
             loc += " (Remote)"
+        desc = f"{j.get('description') or ''} {j.get('requirements') or ''} {j.get('benefits') or ''}".strip()
         out.append(job(c, j.get("shortcode") or j.get("code"), j.get("title"), loc,
                        j.get("url") or j.get("shortlink"),
-                       j.get("published_on") or j.get("created_at"), j.get("department")))
+                       j.get("published_on") or j.get("created_at"), j.get("department"),
+                       description=desc))
     return out
 
 
@@ -247,9 +340,11 @@ def fetch_smartrecruiters(c):
                                         "Mexico" if country == "mx" else country.upper()] if x)
             if l.get("remote"):
                 loc += " (Remote)"
+            detail_api = f"https://api.smartrecruiters.com/v1/companies/{c['board']}/postings/{j['id']}"
             out.append(job(c, j["id"], j.get("name"), loc,
                            f"https://jobs.smartrecruiters.com/{c['board']}/{j['id']}",
-                           j.get("releasedDate"), (j.get("department") or {}).get("label")))
+                           j.get("releasedDate"), (j.get("department") or {}).get("label"),
+                           detail_api=detail_api))
         offset += 100
         if not items or offset >= (d.get("totalFound") or 0):
             break
@@ -288,13 +383,39 @@ def fetch_workday(c, today=None, extra_terms=None):
                     loc = f"{loc} (matched '{term}')"
                 path = p.get("externalPath", "")
                 ref = (p.get("bulletFields") or [""])[0] or path
+                detail_api = f"https://{host}/wday/cxs/{c['tenant']}/{c['site']}{path}" if path else ""
                 found.setdefault(ref, job(
                     c, ref, p.get("title"), loc, f"https://{host}/en-US/{c['site']}{path}",
-                    workday_posted(p.get("postedOn") or "", today)))
+                    workday_posted(p.get("postedOn") or "", today),
+                    detail_api=detail_api))
             offset += 20
             if not posts or offset >= total:
                 break
     return list(found.values())
+
+
+def enrich_job_description(j):
+    """Fetch full job description on-demand for Workday / SmartRecruiters when needed."""
+    if j.get("description"):
+        return j["description"]
+    detail_api = j.get("detail_api")
+    if not detail_api:
+        return ""
+    try:
+        d = http_json(detail_api, retries=1)
+        if not isinstance(d, dict):
+            return ""
+        if "jobPostingInfo" in d:
+            desc = (d.get("jobPostingInfo") or {}).get("jobDescription") or ""
+        elif "jobAd" in d:
+            sections = ((d.get("jobAd") or {}).get("sections") or {}).values()
+            desc = " ".join(s.get("text", "") for s in sections if isinstance(s, dict))
+        else:
+            desc = d.get("description") or d.get("content") or ""
+        j["description"] = strip_html(desc)[:12000]
+        return j["description"]
+    except Exception:
+        return ""
 
 
 FETCHERS = {
@@ -320,7 +441,7 @@ def fetch_one(c, today=None, extra_terms=None):
     except error.HTTPError as e:
         hint = " (board not found: check the token)" if e.code == 404 else ""
         return c, None, f"HTTP {e.code}{hint}"
-    except Exception as e:  # network down, bad JSON, anything else: report, don't crash
+    except Exception as e:
         return c, None, f"{type(e).__name__}: {e}"
 
 
@@ -380,8 +501,7 @@ def select(jobs, rules, cfg):
 # --------------------------------------------------------------------------
 
 def update_state(jobs, state, today, retention_days):
-    """Stamp first_seen on each job in the given state dict. The very first run
-    for a state dict is a 'baseline': nothing found then counts as newly discovered."""
+    """Stamp first_seen on each job in the given state dict."""
     seen = state.setdefault("jobs", {})
     baseline = not state.get("initialized")
     for j in jobs:
@@ -407,10 +527,218 @@ def flag_new(j, today, new_days):
 
 
 # --------------------------------------------------------------------------
+# LLM Headhunter Analysis & Minimalist CV Generator
+# --------------------------------------------------------------------------
+
+def call_gemini_json(prompt_text, model="gemini-2.5-flash", api_key=None):
+    """Call Gemini generateContent endpoint and return parsed JSON object.
+
+    The key travels in the `x-goog-api-key` header (never in the URL, so it can't
+    leak into logs or tracebacks) and the request goes through `http_json`, which
+    retries 429 / 5xx responses, the usual free-tier failure modes."""
+    api_key = api_key or os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        return None
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    payload = {
+        "systemInstruction": {"parts": [{"text": LLM_SYSTEM_PROMPT}]},
+        "contents": [{"parts": [{"text": prompt_text}]}],
+        "generationConfig": {
+            "temperature": 0.2,
+            "responseMimeType": "application/json",
+        },
+    }
+    body = http_json(url, payload, retries=2, headers={"x-goog-api-key": api_key}, timeout=60)
+    raw_text = body["candidates"][0]["content"]["parts"][0]["text"]
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_text.strip())
+    return json.loads(cleaned)
+
+
+def tailor_cv_with_llm(job_item, master_cv_text, sub_cfg):
+    """Analyze job vs. master CV using Gemini and return structured match + minimalist CV."""
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key or not master_cv_text:
+        return None
+
+    jd_text = enrich_job_description(job_item)
+    if not jd_text:
+        jd_text = (
+            f"Role Title: {job_item.get('title', '')}\n"
+            f"Company: {job_item.get('company', '')}\n"
+            f"Department/Team: {job_item.get('team', 'General')}\n"
+            f"Location: {job_item.get('location', '')}\n"
+            "(Full description text not exposed in feed; tailor CV to role title, company industry, and level.)"
+        )
+
+    prompt = (
+        f"TARGET JOB POSTING:\n"
+        f"Title: {job_item.get('title', '')}\n"
+        f"Company: {job_item.get('company', '')}\n"
+        f"Location: {job_item.get('location', '')}\n"
+        f"Team: {job_item.get('team', '')}\n"
+        f"Job Description:\n{jd_text}\n\n"
+        f"---\n"
+        f"CANDIDATE MASTER CV:\n{master_cv_text}"
+    )
+    model = os.environ.get("GEMINI_MODEL") or sub_cfg.get("llm_model", "gemini-2.5-flash")
+    return call_gemini_json(prompt, model=model, api_key=api_key)
+
+
+def render_minimalist_cv_html(cv_data, job_item=None):
+    """Render a sleek, single-page print-ready minimalist CV in HTML."""
+    esc = html.escape
+    full_name = esc(cv_data.get("full_name", "Candidate"))
+    headline = esc(cv_data.get("target_headline", ""))
+    contact = esc(cv_data.get("contact_line", ""))
+    summary = esc(cv_data.get("summary", ""))
+    skills = [esc(s) for s in (cv_data.get("core_skills") or []) if s]
+    skills_html = "".join(f"<span class='skill-pill'>{s}</span>" for s in skills)
+
+    exp_blocks = []
+    for exp in cv_data.get("experience") or []:
+        bullets = "".join(f"<li>{esc(b)}</li>" for b in (exp.get("bullets") or []) if b)
+        loc_part = f" &middot; {esc(exp.get('location', ''))}" if exp.get("location") else ""
+        exp_blocks.append(f"""
+        <div class="job">
+          <div class="job-head">
+            <div><span class="role">{esc(exp.get('role', ''))}</span> &mdash; <span class="company">{esc(exp.get('company', ''))}</span>{loc_part}</div>
+            <div class="dates">{esc(exp.get('dates', ''))}</div>
+          </div>
+          <ul>{bullets}</ul>
+        </div>""")
+
+    edu_blocks = []
+    for edu in cv_data.get("education") or []:
+        dates_part = f" <span class='dates'>({esc(edu.get('dates', ''))})</span>" if edu.get("dates") else ""
+        edu_blocks.append(
+            f"<div class='edu'><strong>{esc(edu.get('degree', ''))}</strong> &mdash; "
+            f"{esc(edu.get('institution', ''))}{dates_part}</div>"
+        )
+
+    target_note = ""
+    if job_item:
+        target_note = f"Tailored by Lucy for: {esc(job_item.get('title', ''))} at {esc(job_item.get('company', ''))}"
+
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{full_name} — Minimalist CV</title>
+<style>
+  @page {{ size: A4; margin: 14mm 16mm; }}
+  * {{ box-sizing: border-box; }}
+  body {{
+    font: 10pt/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #18181b;
+    background: #f4f4f5;
+    margin: 0;
+    padding: 24px 12px;
+  }}
+  .sheet {{
+    max-width: 780px;
+    margin: 0 auto;
+    background: #ffffff;
+    padding: 36px 42px;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+  }}
+  .toolbar {{
+    max-width: 780px;
+    margin: 0 auto 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 9pt;
+    color: #52525b;
+  }}
+  .print-btn {{
+    background: #0f766e;
+    color: #ffffff;
+    border: none;
+    padding: 7px 14px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 9pt;
+  }}
+  h1 {{ font-size: 21pt; font-weight: 800; margin: 0; letter-spacing: -0.4px; color: #09090b; }}
+  .headline {{ font-size: 11pt; font-weight: 600; color: #0f766e; margin: 3px 0 5px; }}
+  .contact {{ font-size: 9pt; color: #52525b; padding-bottom: 10px; border-bottom: 1.5px solid #18181b; margin-bottom: 12px; }}
+  h2 {{
+    font-size: 8.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: #71717a;
+    margin: 14px 0 6px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid #e4e4e7;
+  }}
+  .summary {{ font-size: 9.8pt; color: #27272a; margin: 0 0 8px; }}
+  .skills {{ display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }}
+  .skill-pill {{
+    font-size: 8.8pt;
+    background: #f4f4f5;
+    color: #27272a;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid #e4e4e7;
+    font-weight: 500;
+  }}
+  .job {{ margin-bottom: 10px; page-break-inside: avoid; }}
+  .job-head {{ display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 2px; }}
+  .role {{ font-weight: 700; font-size: 10pt; color: #09090b; }}
+  .company {{ font-weight: 600; color: #0f766e; }}
+  .dates {{ font-size: 8.8pt; color: #71717a; white-space: nowrap; }}
+  ul {{ margin: 3px 0 0 16px; padding: 0; }}
+  li {{ margin-bottom: 3px; font-size: 9.5pt; color: #27272a; }}
+  .edu {{ font-size: 9.5pt; margin-bottom: 4px; }}
+  @media print {{
+    body {{ background: #ffffff; padding: 0; }}
+    .sheet {{ box-shadow: none; padding: 0; max-width: 100%; border-radius: 0; }}
+    .toolbar {{ display: none; }}
+  }}
+</style>
+</head>
+<body>
+  <div class="toolbar">
+    <span>{target_note}</span>
+    <button class="print-btn" onclick="window.print()">Save as PDF / Print</button>
+  </div>
+  <div class="sheet">
+    <h1>{full_name}</h1>
+    <div class="headline">{headline}</div>
+    <div class="contact">{contact}</div>
+
+    <h2>Executive Profile</h2>
+    <p class="summary">{summary}</p>
+
+    <h2>Core Competencies</h2>
+    <div class="skills">{skills_html}</div>
+
+    <h2>Relevant Experience</h2>
+    {''.join(exp_blocks)}
+
+    <h2>Education</h2>
+    {''.join(edu_blocks)}
+  </div>
+</body>
+</html>"""
+
+
+def cv_attachment_filename(sub_name, job_item):
+    """Build a clean, filesystem-safe filename for a tailored CV attachment."""
+    raw = f"CV_{sub_name}_{job_item.get('company', '')}_{job_item.get('title', '')}"
+    clean = re.sub(r"[^a-zA-Z0-9]+", "_", norm(raw)).strip("_")
+    return f"{clean[:60]}.html"
+
+
+# --------------------------------------------------------------------------
 # output & daily email notifications
 # --------------------------------------------------------------------------
 
-PAGE = """<!doctype html>
+PAGE = r"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -459,7 +787,7 @@ input[type=search],select{width:100%;padding:10px 12px;border:1px solid var(--li
 <script>
 const DATA = __DATA__;
 const $ = id => document.getElementById(id);
-const LOC = {jalisco: "Jalisco", remote_mx: "Remote \u00b7 Mexico", mx_country: "Mexico \u00b7 city not listed"};
+const LOC = {jalisco: "Jalisco", remote_mx: "Remote · Mexico", mx_country: "Mexico · city not listed"};
 const DAY = 86400000;
 function daysAgo(s) {
   const d = new Date(s + "T00:00:00"), t = new Date();
@@ -493,7 +821,7 @@ function render() {
     a.className = "job"; a.href = safeUrl(j.url); a.target = "_blank"; a.rel = "noopener noreferrer";
     const t = document.createElement("div"); t.className = "t"; t.textContent = j.title;
     const m = document.createElement("div"); m.className = "m";
-    m.textContent = [j.company, j.location, j.team].filter(Boolean).join(" \u00b7 ");
+    m.textContent = [j.company, j.location, j.team].filter(Boolean).join(" · ");
     const b = document.createElement("div"); b.className = "badges";
     const add = (txt, cls) => {
       const s = document.createElement("span");
@@ -569,7 +897,7 @@ def job_age_info(j, today):
 
 
 def _render_job_card_html(j, today):
-    """Render a single job card with 🔥 HOT styling for 0-2 day old roles."""
+    """Render a single job card with 🔥 HOT styling + Lucy's LLM CV analysis box."""
     days, is_hot, age_label = job_age_info(j, today)
     loc_tag = html.escape(LOC_LABELS.get(j.get("loc_class"), j.get("loc_class", "")))
     title_esc = html.escape(j.get("title", "Untitled Role"))
@@ -584,6 +912,16 @@ def _render_job_card_html(j, today):
         meta_parts.append(team_esc)
     meta_html = " &middot; ".join(meta_parts)
 
+    analysis = j.get("llm_analysis") or {}
+    score = analysis.get("match_score")
+    score_pill = (
+        f"<span style='display:inline-block;background:#dcfce7;color:#15803d;"
+        f"font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;"
+        f"margin-right:6px;'>&#127919; {int(score)}% CV Match</span>"
+        if isinstance(score, (int, float))
+        else ""
+    )
+
     if is_hot:
         card_bg = "#fffaf5"
         card_border = "#fed7aa"
@@ -592,6 +930,7 @@ def _render_job_card_html(j, today):
             f"<span style='display:inline-block;background:#ffedd5;color:#c2410c;"
             f"font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;"
             f"letter-spacing:0.3px;margin-right:6px;'>&#128293; HOT &middot; {age_esc.upper()}</span>"
+            f"{score_pill}"
             f"<span style='display:inline-block;background:#fef3c7;color:#92400e;"
             f"font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;"
             f"margin-right:6px;'>&#128142; Lucy&rsquo;s Top Pick</span>"
@@ -610,7 +949,7 @@ def _render_job_card_html(j, today):
             else ""
         )
         badge_html = (
-            f"{status_pill}"
+            f"{status_pill}{score_pill}"
             f"<span style='display:inline-block;background:#f5f5f4;color:#57534e;"
             f"font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;"
             f"margin-right:6px;'>&#128197; {age_esc}</span>"
@@ -623,6 +962,26 @@ def _render_job_card_html(j, today):
         f"font-size:11px;padding:3px 8px;border-radius:999px;'>&#128205; {loc_tag}</span>"
     )
 
+    llm_box_html = ""
+    if analysis:
+        why_esc = html.escape(analysis.get("lucy_why_it_fits", ""))
+        kws = ", ".join(html.escape(k) for k in (analysis.get("matched_keywords") or [])[:6])
+        att_name = html.escape(j.get("cv_filename", "Tailored_CV.html"))
+        kw_line = (
+            f"<div style='margin-top:6px;font-size:12px;color:#44403c;'>"
+            f"<strong>Matched Keywords:</strong> {kws}</div>"
+            if kws else ""
+        )
+        llm_box_html = f"""
+      <div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;line-height:1.45;color:#134e4a;">
+        <div style="font-weight:800;margin-bottom:4px;">&#128373;&#65039;&zwj;&#9792;&#65039; Lucy&rsquo;s Headhunter Take &amp; Tailored CV:</div>
+        <div>{why_esc}</div>
+        {kw_line}
+        <div style="margin-top:8px;font-size:12px;font-weight:700;color:#0f766e;">
+          &#128206; Attached tailored minimalist CV: <code style="background:#ccfbf1;padding:2px 6px;border-radius:4px;">{att_name}</code> (open &amp; click &ldquo;Save as PDF&rdquo;)
+        </div>
+      </div>"""
+
     return f"""
     <div style="background:{card_bg};border:1px solid {card_border};border-left:5px solid {left_border};border-radius:12px;padding:16px 18px;margin-bottom:12px;">
       <div style="margin-bottom:8px;">
@@ -634,6 +993,7 @@ def _render_job_card_html(j, today):
       <div style="font-size:14px;color:#57534e;margin-bottom:14px;">
         {meta_html}
       </div>
+      {llm_box_html}
       <div>
         <a href="{url_esc}" style="display:inline-block;background:{btn_bg};color:#ffffff;font-size:13px;font-weight:700;padding:9px 16px;border-radius:8px;text-decoration:none;">
           {btn_text}
@@ -642,11 +1002,12 @@ def _render_job_card_html(j, today):
     </div>"""
 
 
-def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_email):
-    """Construct a fun, VIP 'Lucy — Your Personal Headhunter' multipart email."""
+def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_email, attachments=None):
+    """Construct a fun, VIP 'Lucy — Your Personal Headhunter' multipart email with optional CV attachments."""
     recipient = sub_cfg.get("recipient_email", "lucasschollmatter@gmail.com")
     sub_name = sub_cfg.get("name") or recipient
     date_str = today.isoformat()
+    attachments = attachments or []
 
     # Enrich and sort so 🔥 HOT roles (0-2 days old) appear first
     enriched = []
@@ -660,8 +1021,9 @@ def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_ema
 
     msg = EmailMessage()
     hot_prefix = f"🔥 {len(hot_jobs)} HOT! " if hot_jobs else "🕵️‍♀️✨ "
+    cv_suffix = f" + {len(attachments)} Tailored CV(s)" if attachments else ""
     msg["Subject"] = (
-        f"{hot_prefix}Lucy (Your Personal Headhunter): {len(jobs_to_send)} Relevant Opening(s) handpicked for {sub_name} ({date_str})"
+        f"{hot_prefix}Lucy (Your Personal Headhunter): {len(jobs_to_send)} Relevant Opening(s){cv_suffix} for {sub_name} ({date_str})"
     )
     msg["From"] = f"Lucy · Your Personal Headhunter <{sender_email}>"
     msg["To"] = recipient
@@ -683,6 +1045,11 @@ def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_ema
         hot_tag = "[🔥 HOT] " if is_hot else "[NEW] " if j.get("is_new") else ""
         txt_lines.append(f"- {hot_tag}{j['title']} at {j['company']}")
         txt_lines.append(f"  Location: {j.get('location') or loc_tag} ({loc_tag}) | {age_label} ({j.get('posted_at') or j.get('first_seen', date_str)})")
+        if j.get("llm_analysis"):
+            an = j["llm_analysis"]
+            txt_lines.append(f"  🎯 Lucy's Fit Analysis ({an.get('match_score', '?')}% Match): {an.get('lucy_why_it_fits', '')}")
+            if j.get("cv_filename"):
+                txt_lines.append(f"  📎 Attached Tailored CV: {j['cv_filename']}")
         txt_lines.append(f"  Apply: {j.get('url')}")
         txt_lines.append("")
     txt_lines.extend([
@@ -725,6 +1092,12 @@ def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_ema
         </div>""")
 
     sub_name_esc = html.escape(sub_name)
+    cv_pill_html = (
+        f"<span style='display:inline-block;background:#10b981;color:#ffffff;font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;margin-right:6px;margin-bottom:4px;'>"
+        f"&#128206; {len(attachments)} Tailored CV(s) Attached</span>"
+        if attachments else ""
+    )
+
     html_body = f"""<!doctype html>
 <html>
 <body style="margin:0;padding:20px 12px;font-family:system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1c1917;background:#f5f5f4;">
@@ -749,6 +1122,7 @@ def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_ema
         <span style="display:inline-block;background:rgba(255,255,255,0.18);color:#ffffff;font-size:12px;font-weight:600;padding:5px 12px;border-radius:999px;margin-right:6px;margin-bottom:4px;">
           &#128142; {len(jobs_to_send)} Handpicked Today
         </span>
+        {cv_pill_html}
         <span style="display:inline-block;background:rgba(255,255,255,0.12);color:#cbd5e1;font-size:12px;padding:5px 12px;border-radius:999px;margin-bottom:4px;">
           &#128225; {all_jobs_count} Total Active Matches
         </span>
@@ -761,17 +1135,66 @@ def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_ema
         <div style="font-weight:800;font-size:14px;color:#0f766e;margin-bottom:4px;">
           &#128140; A quick note from Lucy, your personal headhunter:
         </div>
-        I already did the heavy lifting and filtered out all the junk so you don&rsquo;t have to scroll for hours. Pour yourself a coffee &#9749;, pick 1 or 2 roles above, and send that application today, <strong>{sub_name_esc}</strong> &mdash; these companies would be lucky to have you! &#128170;&#128640;
+        I already did the heavy lifting, filtered out all the junk, and even tailored your minimalist CV for your top matches. Pour yourself a coffee &#9749;, pick 1 or 2 roles above, and send that application today, <strong>{sub_name_esc}</strong> &mdash; these companies would be lucky to have you! &#128170;&#128640;
       </div>
     </div>
   </div>
 </body>
 </html>"""
     msg.add_alternative(html_body, subtype="html")
+
+    for filename, html_bytes in attachments:
+        msg.add_attachment(
+            html_bytes,
+            maintype="text",
+            subtype="html",
+            filename=filename,
+        )
     return msg
 
 
-def send_email_digest(jobs_to_send, all_jobs_count, sub_cfg, today):
+def prepare_tailored_cvs(jobs_to_send, sub_cfg, today, root=ROOT):
+    """Run LLM analysis + minimalist CV generation for up to `max_tailored_cvs` top jobs."""
+    api_key = os.environ.get("GEMINI_API_KEY")
+    max_cvs = int(sub_cfg.get("max_tailored_cvs", 3))
+    if not api_key or max_cvs <= 0 or not jobs_to_send:
+        return []
+
+    master_cv = load_subscriber_cv(sub_cfg, root=root)
+    if not master_cv:
+        return []
+
+    # Prioritize HOT (0-2d) roles first
+    ranked = sorted(
+        jobs_to_send,
+        key=lambda j: (not job_age_info(j, today)[1], job_age_info(j, today)[0], j.get("company", "").lower()),
+    )
+
+    attachments = []
+    sub_name = sub_cfg.get("name") or sub_cfg.get("id", "Candidate")
+    cv_out_dir = Path(root) / "out" / "cvs"
+    cv_out_dir.mkdir(parents=True, exist_ok=True)
+
+    for j in ranked[:max_cvs]:
+        try:
+            analysis = tailor_cv_with_llm(j, master_cv, sub_cfg)
+            if not analysis or not isinstance(analysis.get("cv"), dict):
+                continue
+            filename = cv_attachment_filename(sub_name, j)
+            cv_html = render_minimalist_cv_html(analysis["cv"], job_item=j)
+            cv_bytes = cv_html.encode("utf-8")
+            (cv_out_dir / filename).write_bytes(cv_bytes)
+            j["llm_analysis"] = analysis
+            j["cv_filename"] = filename
+            attachments.append((filename, cv_bytes))
+            print(f"  [{sub_name}] Tailored CV generated for {j['title']} at {j['company']} ({analysis.get('match_score', '?')}% match)")
+        except Exception as e:
+            print(f"  warning: LLM CV tailoring skipped for {j.get('title')}: {type(e).__name__}: {e}", file=sys.stderr)
+
+    return attachments
+
+
+def send_email_digest(jobs_to_send, all_jobs_count, sub_cfg, today, root=ROOT):
     """Send a single subscriber's daily digest via Gmail/SMTP if credentials are configured."""
     sub_name = sub_cfg.get("name") or sub_cfg.get("recipient_email", "subscriber")
     if not jobs_to_send:
@@ -787,27 +1210,35 @@ def send_email_digest(jobs_to_send, all_jobs_count, sub_cfg, today):
         print(f"  [{sub_name}] Email skipped: GMAIL_USER / GMAIL_APP_PASSWORD environment variables not set.")
         return False
 
-    msg = build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, smtp_user)
+    attachments = prepare_tailored_cvs(jobs_to_send, sub_cfg, today, root=root)
+    msg = build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, smtp_user, attachments=attachments)
     with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=25) as server:
         server.login(smtp_user, smtp_password)
         server.send_message(msg)
 
-    print(f"  [{sub_name}] Sent email digest ({len(jobs_to_send)} roles) to {msg['To']}.")
+    print(f"  [{sub_name}] Sent email digest ({len(jobs_to_send)} roles, {len(attachments)} tailored CVs) to {msg['To']}.")
     return True
 
 
-def process_subscribers(fetched, state, cfg, today, send_email=True, only_id=None):
+def process_subscribers(fetched, state, cfg, today, send_email=True, only_id=None, root=ROOT):
     """Filter fetched jobs for each active subscriber, update their personal seen
-    state in state['subscribers'][sub_id], and send each subscriber's email."""
+    state in state['subscribers'][sub_id], and send each subscriber's email.
+
+    Returns the list of subscriber ids whose email delivery raised. For those
+    subscribers the per-subscriber state is rolled back to what it was before
+    this run, so the same roles are re-discovered (and re-emailed) next run
+    instead of being silently lost."""
     subscribers = get_subscribers(cfg, only_id=only_id)
     sub_states = state.setdefault("subscribers", {})
     retention = int(cfg["state_retention_days"])
+    failed_ids = []
 
     for sub_cfg in subscribers:
         sub_id = sub_cfg["id"]
         sub_rules = build_rules(sub_cfg)
         sub_matched = list({j["key"]: copy.deepcopy(j) for j in select(fetched, sub_rules, sub_cfg)}.values())
 
+        previous_state = copy.deepcopy(sub_states.get(sub_id))
         sub_state = sub_states.setdefault(sub_id, {})
         sub_baseline = update_state(sub_matched, sub_state, today, retention)
         new_days = int(sub_cfg.get("new_days", cfg["new_days"]))
@@ -820,23 +1251,39 @@ def process_subscribers(fetched, state, cfg, today, send_email=True, only_id=Non
         if send_email:
             to_email = select_jobs_for_email(sub_matched, sub_baseline, sub_cfg)
             try:
-                send_email_digest(to_email, len(sub_matched), sub_cfg, today)
+                send_email_digest(to_email, len(sub_matched), sub_cfg, today, root=root)
             except Exception as e:
-                print(f"  warning: email delivery failed for {sub_id}: {type(e).__name__}: {e}", file=sys.stderr)
+                gha_annotate("error", f"email delivery failed for {sub_id}: {type(e).__name__}: {e}")
+                failed_ids.append(sub_id)
+                if previous_state is None:
+                    sub_states.pop(sub_id, None)
+                else:
+                    sub_states[sub_id] = previous_state
+    return failed_ids
+
+
+def strip_transient_fields(jobs):
+    """Remove heavy job description / detail_api fields before writing static JSON files."""
+    clean = []
+    for j in jobs:
+         item = {k: v for k, v in j.items() if k not in ("description", "detail_api", "llm_analysis", "cv_filename")}
+         clean.append(item)
+    return clean
 
 
 def write_outputs(root, cfg, jobs, state, today, stamp):
     root = Path(root)
+    clean_jobs = strip_transient_fields(jobs)
     write_json(root / "state" / "seen.json", state)
-    write_json(root / "state" / "jobs.json", jobs)
-    write_json(root / "docs" / "jobs.json", jobs)
+    write_json(root / "state" / "jobs.json", clean_jobs)
+    write_json(root / "docs" / "jobs.json", clean_jobs)
     docs = root / "docs"
     docs.mkdir(parents=True, exist_ok=True)
-    (docs / "index.html").write_text(render_page(jobs, cfg, stamp), encoding="utf-8")
+    (docs / "index.html").write_text(render_page(clean_jobs, cfg, stamp), encoding="utf-8")
     (docs / "robots.txt").write_text("User-agent: *\nDisallow: /\n", encoding="utf-8")
     alert = root / "out" / "new_jobs.md"
     alert.parent.mkdir(parents=True, exist_ok=True)
-    fresh = [j for j in jobs if j.get("discovered_now")]
+    fresh = [j for j in clean_jobs if j.get("discovered_now")]
     if fresh:
         alert.write_text(alert_markdown(fresh, today), encoding="utf-8")
     elif alert.exists():
@@ -881,16 +1328,31 @@ def refresh(cfg, companies, root=ROOT, today=None, send_email=True, subscriber_i
     jobs.sort(key=lambda j: (j["company"].lower(), j["title"].lower()))
     jobs.sort(key=lambda j: j["eff_date"], reverse=True)
 
-    # Process per-subscriber filtering, state updates, and email digests
-    process_subscribers(fetched, state, cfg, today, send_email=send_email, only_id=subscriber_id)
+    # Process per-subscriber filtering, LLM CV tailoring, state updates, and email digests
+    email_failures = process_subscribers(fetched, state, cfg, today, send_email=send_email,
+                                         only_id=subscriber_id, root=root)
 
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     fresh = write_outputs(root, cfg, jobs, state, today, stamp)
     ok = len(results) - len(failed)
+    n_new = sum(1 for j in jobs if j["is_new"])
     print(f"Fetched {ok}/{len(results)} boards. {len(jobs)} matching roles on main board, "
-          f"{sum(1 for j in jobs if j['is_new'])} marked NEW, {len(fresh)} first seen this run.")
+          f"{n_new} marked NEW, {len(fresh)} first seen this run.")
     print(f"Page: {root / 'docs' / 'index.html'}")
-    return 0
+
+    summary = [f"### Jobs Sentinel · {stamp}",
+               f"- Boards fetched: **{ok}/{len(results)}**"
+               + (f" (failed: {', '.join(c['name'] for c, _ in failed)})" if failed else ""),
+               f"- Matching roles: **{len(jobs)}** · NEW: **{n_new}** · first seen this run: **{len(fresh)}**"]
+    if email_failures:
+        summary.append(f"- :x: Email delivery failed for: **{', '.join(email_failures)}** "
+                       "(their state was rolled back; they will be retried next run)")
+    gha_summary("\n".join(summary))
+    if failed:
+        gha_annotate("warning", f"{len(failed)} board(s) failed: "
+                     + "; ".join(f"{c['name']}: {err}" for c, err in failed))
+    # Exit 2 = outputs were written, but at least one digest could not be delivered.
+    return 2 if email_failures else 0
 
 
 def check(cfg, companies):
@@ -932,6 +1394,8 @@ def demo(cfg, root=ROOT):
 
 
 def main(argv=None):
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(line_buffering=True)
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--check", action="store_true", help="test every company board")
     ap.add_argument("--demo", action="store_true", help="build out/demo.html from fake data")
