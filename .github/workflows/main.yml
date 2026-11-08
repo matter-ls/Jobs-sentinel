@@ -57,7 +57,7 @@ jobs:
           python-version: "3.12"
 
       - name: Run offline unit & syntax tests
-        run: python3 -W error::SyntaxWarning -m unittest discover -s tests -v
+        run: python3 -W error::SyntaxWarning -m unittest discover -s tests -b -v
 
       - name: Check every company board (check_only mode)
         if: ${{ inputs.check_only == true }}
