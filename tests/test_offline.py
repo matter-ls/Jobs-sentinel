@@ -91,6 +91,39 @@ class TitleAndLocation(unittest.TestCase):
         for t in no:
             self.assertFalse(fj.is_director(t, luis_rules), t)
 
+        # Career Upgrade Move classification for Luis (distinguishes step-up from lateral IC roles)
+        upgrades = [
+            "Digital Transformation Program Manager",
+            "Power Platform Solution Architect",
+            "Senior Manager, Process Automation",
+            "Director of Operational Excellence",
+            "Global CoE Lead - Hyperautomation",
+        ]
+        laterals = [
+            "RPA Developer",
+            "Business Process Optimization Analyst",
+            "Operational Excellence Specialist",
+        ]
+        for t in upgrades:
+            is_up, reason = fj.is_career_upgrade_heuristic({"title": t, "company": "Acme"}, luis_cfg)
+            self.assertTrue(is_up, t)
+            self.assertTrue(reason)
+        for t in laterals:
+            is_up, _ = fj.is_career_upgrade_heuristic({"title": t, "company": "Acme"}, luis_cfg)
+            self.assertFalse(is_up, t)
+
+        # Minimalist email prioritizes Career Upgrade Moves at the top
+        sample_jobs = [
+            {"key": "k1", "title": "RPA Developer", "company": "Beta", "location": "Guadalajara", "loc_class": "jalisco", "url": "https://example.com/1", "posted_at": "2026-11-05"},
+            {"key": "k2", "title": "Senior Manager, Process Automation", "company": "Acme", "location": "Zapopan", "loc_class": "jalisco", "url": "https://example.com/2", "posted_at": "2026-11-01"},
+        ]
+        msg = fj.build_email_message(sample_jobs, 2, luis_cfg, date(2026, 11, 5), "sender@gmail.com")
+        self.assertIn("1 Career Upgrade Move(s)", msg["Subject"])
+        html_body = msg.get_body(preferencelist=("html",)).get_content()
+        self.assertIn("Career Upgrade Move", html_body)
+        # Upgrade role (even though older) appears before the lateral role
+        self.assertLess(html_body.index("Senior Manager, Process Automation"), html_body.index("RPA Developer"))
+
     def test_ewerson_cv_rules(self):
         subs = {s["id"]: s for s in fj.get_subscribers(CFG)}
         self.assertIn("ewerson", subs)
@@ -415,11 +448,18 @@ class EndToEnd(unittest.TestCase):
 
             attachments = list(sent_msg.iter_attachments())
             self.assertEqual(len(attachments), 3)  # max_tailored_cvs = 3
-            att_html = attachments[0].get_content()
-            self.assertIn("Lucas Scholl Matter", att_html)
-            self.assertIn("Director of Engineering | Cloud &amp; AI Platform Leadership", att_html)
-            saved_docs_cvs = list((self.root / "docs" / "cvs" / "lucas").glob("*.html"))
-            self.assertEqual(len(saved_docs_cvs), 3)
+            self.assertTrue(attachments[0].get_filename().endswith(".docx"))
+            self.assertEqual(
+                attachments[0].get_content_type(),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+            att_text = fj.extract_docx_text(attachments[0].get_content())
+            self.assertIn("Lucas Scholl Matter", att_text)
+            self.assertIn("Target Role Direction:", att_text)
+            self.assertIn("Director of Engineering | Cloud & AI Platform Leadership", att_text)
+            self.assertEqual(len(list((self.root / "docs" / "cvs" / "lucas").glob("*.docx"))), 3)
+            self.assertEqual(len(list((self.root / "docs" / "cvs" / "lucas").glob("*.pdf"))), 3)
+            self.assertEqual(len(list((self.root / "docs" / "cvs" / "lucas").glob("*.html"))), 3)
 
     @patch("fetch_jobs.call_gemini_json", side_effect=RuntimeError("gemini 429 quota"))
     @patch("smtplib.SMTP_SSL")
@@ -438,10 +478,14 @@ class EndToEnd(unittest.TestCase):
             sent_msg = mock_server.send_message.call_args_list[0][0][0]
             attachments = list(sent_msg.iter_attachments())
             self.assertEqual(len(attachments), 3)
-            att_html = attachments[0].get_content()
-            self.assertIn("Lucas Scholl Matter", att_html)
-            self.assertIn("Google", att_html)
-            self.assertIn("AstraZeneca", att_html)
+            self.assertTrue(attachments[0].get_filename().endswith(".docx"))
+            att_text = fj.extract_docx_text(attachments[0].get_content())
+            self.assertIn("Lucas Scholl Matter", att_text)
+            self.assertIn("Target Role Direction:", att_text)
+            self.assertIn("Google", att_text)
+            self.assertIn("AstraZeneca", att_text)
+            pdf_files = list((self.root / "docs" / "cvs" / "lucas").glob("*.pdf"))
+            self.assertTrue(pdf_files[0].read_bytes().startswith(b"%PDF-1.4"))
 
     def test_workday_dates(self):
         t = date(2026, 11, 5)
