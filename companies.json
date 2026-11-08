@@ -101,7 +101,7 @@
     {"name": "Diligent", "ats": "greenhouse", "board": "diligent", "confirmed": true},
     {"name": "ServiceNow", "ats": "smartrecruiters", "board": "ServiceNow", "confirmed": true},
     {"name": "Salesforce", "ats": "workday", "tenant": "salesforce", "wd": "wd12", "site": "External_Career_Site", "confirmed": true},
-    {"name": "Workday", "ats": "workday", "tenant": "workday", "wd": "wd5", "site": "Workday", "confirmed": true},
+    {"name": "Workday, Inc.", "ats": "workday", "tenant": "workday", "wd": "wd5", "site": "Workday", "confirmed": true},
     {"name": "Adobe", "ats": "workday", "tenant": "adobe", "wd": "wd5", "site": "external_experienced", "confirmed": true},
     {"name": "Autodesk", "ats": "workday", "tenant": "autodesk", "wd": "wd1", "site": "Ext", "confirmed": true},
     {"name": "Zendesk", "ats": "workday", "tenant": "zendesk", "wd": "wd1", "site": "zendesk", "confirmed": true},

@@ -24,7 +24,7 @@ Every daily run scans across:
 | **CPG, Spirits & Global Business Services (GBS)** | 5 | Brown-Forman (Casa Herradura), Diageo (Zapopan / Atotonilco), Mondelēz International, Kimberly-Clark, Procter & Gamble |
 | **Fintech, E-Commerce, Banking & Payments** | 15 | Kueski (GDL HQ), Clara, Paystand (GDL), Backbase (GDL), Bitso, Mercado Libre, Nubank, Stripe, Citi (GDL), JPMorgan Chase, American Express, Visa, Mastercard, PayPal, Coinbase |
 | **3PL, FreightTech & Supply Chain** | 3 | Rapido Solutions Group (Zapopan), Arrive Logistics (GDL), Flexport (GDL) |
-| **Global SaaS & Remote-Mexico Tech** | 21 | Diligent (GDL), ServiceNow, Salesforce, Workday, Adobe, Autodesk, Zendesk, CrowdStrike, Datadog, Okta, Zscaler, Cloudflare, Twilio, GitLab, Canonical, Pinterest, Lyft, HubSpot, Deel, Zapier, Notion |
+| **Global SaaS & Remote-Mexico Tech** | 21 | Diligent (GDL), ServiceNow, Salesforce, Workday, Inc., Adobe, Autodesk, Zendesk, CrowdStrike, Datadog, Okta, Zscaler, Cloudflare, Twilio, GitLab, Canonical, Pinterest, Lyft, HubSpot, Deel, Zapier, Notion |
 
 ---
 

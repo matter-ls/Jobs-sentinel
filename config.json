@@ -137,7 +137,9 @@
         "\\b(qa|quality assurance|test|testing|sdet|cypress|selenium|appium)\\b.*\\bautomation\\b",
         "\\bautomation\\b.*\\b(qa|quality assurance|test|testing|sdet)\\b",
         "\\bmarketing automation\\b",
-        "\\b(industrial|plc|scada|controls|building|packaging|warehouse) automation\\b"
+        "\\b(industrial|plc|scada|controls|building|packaging|warehouse) automation\\b",
+        "\\b(technician|tecnico|tecnica|operator|operador|operario|machinist|mechanic|solder|smt|surface mount|tooling|molding|welding)\\b",
+        "\\b(analyst|engineer|specialist)\\s+(i|1)\\b"
       ],
       "include_remote_mexico": true,
       "include_country_only": true
