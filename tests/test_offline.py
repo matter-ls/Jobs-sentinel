@@ -118,7 +118,8 @@ class TitleAndLocation(unittest.TestCase):
             {"key": "k2", "title": "Senior Manager, Process Automation", "company": "Acme", "location": "Zapopan", "loc_class": "jalisco", "url": "https://example.com/2", "posted_at": "2026-11-01"},
         ]
         msg = fj.build_email_message(sample_jobs, 2, luis_cfg, date(2026, 11, 5), "sender@gmail.com")
-        self.assertIn("1 Career Upgrade Move(s)", msg["Subject"])
+        self.assertIn("1 Career Upgrade Move", msg["Subject"])
+        self.assertIn("2 new roles for you", msg["Subject"])
         html_body = msg.get_body(preferencelist=("html",)).get_content()
         self.assertIn("Career Upgrade Move", html_body)
         # Upgrade role (even though older) appears before the lateral role
@@ -450,11 +451,13 @@ class EndToEnd(unittest.TestCase):
             self.assertTrue(mock_server.send_message.called)
             sent_msg = mock_server.send_message.call_args_list[0][0][0]
             self.assertEqual(sent_msg["To"], "lucasschollmatter@gmail.com")
-            self.assertIn("Relevant Opening(s)", sent_msg["Subject"])
+            self.assertIn("new roles for you", sent_msg["Subject"])
             self.assertIn("HOT", sent_msg["Subject"])
+            self.assertLess(len(sent_msg["Subject"]), 120)
             html_part = sent_msg.get_body(preferencelist=("html",)).get_content()
             self.assertIn("daily reminder to check where to apply today", html_part)
             self.assertIn("Hot Off the Press", html_part)
+            self.assertIn("only roles never sent to you before appear here", html_part)
             self.assertIn("Lucy", sent_msg["Subject"])
             self.assertIn("personal headhunter", html_part.lower())
 
@@ -560,7 +563,7 @@ class EndToEnd(unittest.TestCase):
             self.assertTrue(mock_server.send_message.called)
 
             sent_msg = mock_server.send_message.call_args_list[0][0][0]
-            self.assertIn("Tailored CV(s)", sent_msg["Subject"])
+            self.assertIn("3 Tailored CVs ready", sent_msg["Subject"])
             html_part = sent_msg.get_body(preferencelist=("html",)).get_content()
             self.assertIn("94% CV Match", html_part)
             self.assertIn("Lucy&rsquo;s Headhunter Take &amp; Tailored CV", html_part)
@@ -820,7 +823,8 @@ class EndToEnd(unittest.TestCase):
         self.assertIn("Flex Built A Gate. We Brought The Key.", html_part)
         self.assertIn("Us vs. Their Machine · Chapter 7", plain_part)
         self.assertIn("Their AI vs. Our AI:", plain_part)
-        self.assertIn("Flex Just Blinked", msg["Subject"])
+        self.assertIn("Flex Just Blinked", html_part)          # subject spark lives in the preheader
+        self.assertIn("1 new role for you · Flex", msg["Subject"])
 
         # 5. Continuity memory persists story beats, last micro-challenge and last spotlight employer
         fj.commit_relationship_state(sub_state, rel_ctx, pack, [top_job], date(2026, 11, 8))
@@ -880,48 +884,167 @@ class EndToEnd(unittest.TestCase):
         self.assertEqual(len(same_day_headlines), 3)
 
     @patch("smtplib.SMTP_SSL")
-    def test_relationship_streak_and_quiet_day_spotlight(self, mock_smtp_ssl):
-        """When zero brand-new postings arrive overnight, Lucy keeps daily connection alive by
-        spotlighting top unclaimed roles (rotating them each quiet day) and incrementing Edition & Streak."""
+    def test_relationship_streak_and_quiet_day_note(self, mock_smtp_ssl):
+        """When zero never-seen postings arrive overnight, Lucy sends a short role-free quiet-day
+        note (nothing is re-sent), still incrementing Edition & Streak; legacy spotlight and skip
+        modes remain available via `quiet_day_mode`."""
         mock_server = MagicMock()
         mock_smtp_ssl.return_value.__enter__.return_value = mock_server
         env = {"GMAIL_USER": "sender@gmail.com", "GMAIL_APP_PASSWORD": "app-secret-password"}
 
-        # Day 1 (Nov 5): Baseline -> Briefing #1 + Welcome milestone
+        def last_lucas_msg():
+            return [c[0][0] for c in mock_server.send_message.call_args_list if c[0][0]["To"] == "lucasschollmatter@gmail.com"][-1]
+
+        # Day 1 (Nov 5): Baseline -> Briefing #1 + Welcome milestone, roles listed once
         with patch.dict(os.environ, env):
             code, _ = self.run_refresh(date(2026, 11, 5), send_email=True)
         self.assertEqual(code, 0)
-        msg1 = mock_server.send_message.call_args_list[-1][0][0]
+        msg1 = last_lucas_msg()
         self.assertIn("Lucy #1:", msg1["Subject"])
         html1 = msg1.get_body(preferencelist=("html",)).get_content()
+        plain1 = msg1.get_body(preferencelist=("plain",)).get_content()
         self.assertIn("Briefing #1", html1)
         self.assertIn("Lucy&rsquo;s Corner:", html1)
         self.assertIn("Welcome to Your Unfair Advantage", html1)
+        self.assertIn("- [CAREER UPGRADE MOVE]", plain1)
 
-        # Day 2 (Nov 6): Zero new postings -> Quiet-Market Momentum Spotlight (#2, 2d Streak, 3 roles)
+        # Day 2 (Nov 6): Zero new postings -> Quiet-day note (#2, 2d Streak, NO roles re-sent)
         with patch.dict(os.environ, env):
             code, _ = self.run_refresh(date(2026, 11, 6), send_email=True)
         self.assertEqual(code, 0)
-        msg2 = mock_server.send_message.call_args_list[-1][0][0]
+        msg2 = last_lucas_msg()
         self.assertIn("Lucy #2:", msg2["Subject"])
-        self.assertNotEqual(msg1["Subject"], msg2["Subject"])
+        self.assertIn("Quiet day", msg2["Subject"])
+        self.assertIn("0 new roles", msg2["Subject"])
         html2 = msg2.get_body(preferencelist=("html",)).get_content()
-        self.assertIn("2d Streak", html2)
-        self.assertIn("Quiet-Market Momentum Spotlight", html2)
         plain2 = msg2.get_body(preferencelist=("plain",)).get_content()
+        self.assertIn("2d Streak", html2)
+        self.assertIn("Quiet day on the radar", html2)
+        self.assertNotIn("Director, Engineering at Acme", plain2)
+        self.assertNotIn("\n- ", plain2)                       # zero job bullet lines
+        self.assertNotIn("Quiet-Market Momentum Spotlight", html2)
 
-        # Day 3 (Nov 7): Another quiet day -> Briefing #3 (3d Streak + 3-Briefing Spark milestone + rotated spotlight roles)
+        # Day 3 (Nov 7): Another quiet day -> Briefing #3 (3d Streak + 3-Briefing Spark), still no roles
         with patch.dict(os.environ, env):
             code, _ = self.run_refresh(date(2026, 11, 7), send_email=True)
         self.assertEqual(code, 0)
-        msg3 = mock_server.send_message.call_args_list[-1][0][0]
+        msg3 = last_lucas_msg()
         self.assertIn("Lucy #3:", msg3["Subject"])
         html3 = msg3.get_body(preferencelist=("html",)).get_content()
+        plain3 = msg3.get_body(preferencelist=("plain",)).get_content()
         self.assertIn("3d Streak", html3)
         self.assertIn("3-Briefing Spark", html3)
+        self.assertNotIn("\n- ", plain3)
+        self.assertNotEqual(plain2, plain3)                   # Lucy's note still changes every day
+
+        # Legacy mode: quiet_day_mode=spotlight re-lists up to 3 unclaimed roles with the spotlight banner
+        spotlight_cfg = {**CFG, "quiet_day_mode": "spotlight",
+                         "subscribers": [{**s, "quiet_day_mode": "spotlight"} for s in CFG["subscribers"]]}
+        fj.http_json = fake_http()
+        with patch.dict(os.environ, env):
+            code = fj.refresh(spotlight_cfg, COMPANIES, root=self.root, today=date(2026, 11, 8), send_email=True, subscriber_id="lucas")
+        self.assertEqual(code, 0)
+        msg4 = mock_server.send_message.call_args_list[-1][0][0]
+        html4 = msg4.get_body(preferencelist=("html",)).get_content()
+        plain4 = msg4.get_body(preferencelist=("plain",)).get_content()
+        self.assertIn("Quiet-Market Momentum Spotlight", html4)
+        self.assertEqual(plain4.count("\n- "), 3)
+
+        # skip mode: no email at all on a quiet day
+        skip_cfg = {**CFG, "subscribers": [{**s, "quiet_day_mode": "skip"} for s in CFG["subscribers"]]}
+        sent_before = mock_server.send_message.call_count
+        with patch.dict(os.environ, env):
+            code = fj.refresh(skip_cfg, COMPANIES, root=self.root, today=date(2026, 11, 9), send_email=True, subscriber_id="lucas")
+        self.assertEqual(code, 0)
+        self.assertEqual(mock_server.send_message.call_count, sent_before)
+
+    @patch("smtplib.SMTP_SSL")
+    def test_only_never_sent_roles_are_emailed_with_cap_and_carry_over(self, mock_smtp_ssl):
+        """A role is emailed to a subscriber exactly once: not again the next day, not as a clone
+        under a new requisition id, and manual --email-all stays the only way to re-send. Large
+        drops are capped at `max_email_jobs` with carry-over + a personal board attachment."""
+        mock_server = MagicMock()
+        mock_smtp_ssl.return_value.__enter__.return_value = mock_server
+        env = {"GMAIL_USER": "sender@gmail.com", "GMAIL_APP_PASSWORD": "app-secret-password"}
+
+        def lucas_msgs():
+            return [c[0][0] for c in mock_server.send_message.call_args_list if c[0][0]["To"] == "lucasschollmatter@gmail.com"]
+
+        # Day 1 baseline: every current match is delivered once
+        with patch.dict(os.environ, env):
+            self.run_refresh(date(2026, 11, 5), send_email=True)
+        plain1 = lucas_msgs()[-1].get_body(preferencelist=("plain",)).get_content()
+        self.assertIn("Director, Engineering at Acme", plain1)
+        seen = fj.load_json(self.root / "state" / "seen.json", {})
+        ledger = seen["subscribers"]["lucas"]["emailed"]
+        self.assertIn("greenhouse:Acme:1", ledger)
+        self.assertEqual(ledger["greenhouse:Acme:1"]["date"], "2026-11-05")
+
+        # Day 2: a CLONE of an already-sent role (same company + title, new requisition id) must NOT be re-sent
+        gh_clone = {"jobs": GH["jobs"] + [{"id": 8, "title": "Director, Engineering", "location": {"name": "Zapopan, Jalisco"},
+                                           "absolute_url": "https://boards.greenhouse.io/acme/jobs/8"}]}
+        with patch.dict(os.environ, env):
+            self.run_refresh(date(2026, 11, 6), {"greenhouse.io": gh_clone}, send_email=True)
+        msg2 = lucas_msgs()[-1]
+        self.assertIn("Quiet day", msg2["Subject"])
+        self.assertNotIn("Director, Engineering", msg2.get_body(preferencelist=("plain",)).get_content())
+
+        # Day 3: one genuinely new role -> the email lists ONLY that role
+        gh_new = {"jobs": gh_clone["jobs"] + [{"id": 9, "title": "Director, Finance", "location": {"name": "Guadalajara"},
+                                               "absolute_url": "https://boards.greenhouse.io/acme/jobs/9"}]}
+        with patch.dict(os.environ, env):
+            self.run_refresh(date(2026, 11, 7), {"greenhouse.io": gh_new}, send_email=True)
+        msg3 = lucas_msgs()[-1]
         plain3 = msg3.get_body(preferencelist=("plain",)).get_content()
-        # Spotlighted roles rotate rather than repeating the exact same 3 roles
-        self.assertNotEqual(plain2, plain3)
+        self.assertIn("1 new role for you · Acme", msg3["Subject"])
+        self.assertEqual(plain3.count("\n- "), 1)
+        self.assertIn("Director, Finance at Acme", plain3)
+        self.assertNotIn("Director, Engineering at Acme", plain3)
+
+        # Day 4: same feed again -> quiet day, the Finance role is NOT repeated
+        with patch.dict(os.environ, env):
+            self.run_refresh(date(2026, 11, 8), {"greenhouse.io": gh_new}, send_email=True)
+        msg4 = lucas_msgs()[-1]
+        self.assertIn("Quiet day", msg4["Subject"])
+        self.assertNotIn("Director, Finance", msg4.get_body(preferencelist=("plain",)).get_content())
+
+        # Manual --email-all (email_mode=all) remains the explicit way to re-send everything
+        all_cfg = {**CFG, "email_mode": "all", "subscribers": [{**s, "email_mode": "all"} for s in CFG["subscribers"]]}
+        fj.http_json = fake_http({"greenhouse.io": gh_new})
+        with patch.dict(os.environ, env):
+            fj.refresh(all_cfg, COMPANIES, root=self.root, today=date(2026, 11, 9), send_email=True, subscriber_id="lucas")
+        msg5 = lucas_msgs()[-1]
+        self.assertIn("matching roles", msg5["Subject"])
+        self.assertIn("Director, Finance at Acme", msg5.get_body(preferencelist=("plain",)).get_content())
+
+        # Cap + carry-over + personal board: max_email_jobs=3 on a fresh subscriber state
+        cap_root = Path(self.tmp.name) / "cap_root"
+        cap_root.mkdir()
+        cap_cfg = {**CFG, "max_email_jobs": 3, "subscribers": [{**s, "max_email_jobs": 3} for s in CFG["subscribers"]]}
+        fj.http_json = fake_http()
+        with patch.dict(os.environ, env):
+            fj.refresh(cap_cfg, COMPANIES, root=cap_root, today=date(2026, 11, 5), send_email=True, subscriber_id="lucas")
+        cap_msg = lucas_msgs()[-1]
+        cap_plain = cap_msg.get_body(preferencelist=("plain",)).get_content()
+        self.assertEqual(cap_plain.count("\n- "), 3)
+        self.assertIn("more never-sent role(s) are waiting on your personal board", cap_plain)
+        board_atts = [a for a in cap_msg.iter_attachments() if a.get_filename().startswith("Lucy_Board_lucas_")]
+        self.assertEqual(len(board_atts), 1)
+        self.assertIn("Lucy Personal Board", board_atts[0].get_content())
+        # Next day: nothing new posted, but the carried-over roles are delivered (not a quiet day)
+        with patch.dict(os.environ, env):
+            fj.refresh(cap_cfg, COMPANIES, root=cap_root, today=date(2026, 11, 6), send_email=True, subscriber_id="lucas")
+        carry_msg = lucas_msgs()[-1]
+        carry_plain = carry_msg.get_body(preferencelist=("plain",)).get_content()
+        self.assertNotIn("Quiet day", carry_msg["Subject"])
+        self.assertEqual(carry_plain.count("\n- "), 3)
+        for line in [ln for ln in cap_plain.splitlines() if ln.startswith("- ")]:
+            self.assertNotIn(line, carry_plain)                # no overlap with day 1
+
+        # Legacy state without an 'emailed' ledger is seeded so nothing old is re-sent after upgrading
+        legacy_state = {"initialized": True, "jobs": {"greenhouse:Acme:1": {"first_seen": "2026-10-01", "last_seen": "2026-11-05"}}}
+        self.assertIn("greenhouse:Acme:1", fj.ensure_emailed_state(legacy_state))
+        self.assertTrue(legacy_state["emailed"]["greenhouse:Acme:1"]["legacy"])
 
     @patch("smtplib.SMTP_SSL")
     def test_email_failure_rolls_back_subscriber_state(self, mock_smtp_ssl):
@@ -1409,6 +1532,9 @@ class EndToEnd(unittest.TestCase):
         wf_txt = wf_path.read_text(encoding="utf-8")
         self.assertNotIn("\t", wf_txt, "Workflow YAML must not contain tab indentation")
         self.assertIn("-m unittest discover -s tests -b -v", wf_txt)
+        self.assertIn("Re-send ALL current matching roles (testing only)", wf_txt)
+        email_all_block = wf_txt.split("email_all:")[1].split("subscriber:")[0]
+        self.assertIn("default: false", email_all_block, "Manual runs must not re-send every role by default")
         for action_ref in ("actions/checkout@v7", "actions/setup-python@v7", "actions/upload-artifact@v7"):
             self.assertIn(action_ref, wf_txt)
         for sub in fj.get_subscribers(CFG):
