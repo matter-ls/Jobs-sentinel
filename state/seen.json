@@ -1,0 +1,40 @@
+{
+ "jobs": {
+  "workday:Flex:WD228976": {
+   "first_seen": "2026-11-08",
+   "baseline": true,
+   "last_seen": "2026-11-08"
+  },
+  "workday:Flex:WD230884": {
+   "first_seen": "2026-11-08",
+   "baseline": true,
+   "last_seen": "2026-11-08"
+  },
+  "workday:Flex:WD231552": {
+   "first_seen": "2026-11-08",
+   "baseline": true,
+   "last_seen": "2026-11-08"
+  },
+  "workday:Flex:WD229135": {
+   "first_seen": "2026-11-08",
+   "baseline": true,
+   "last_seen": "2026-11-08"
+  },
+  "workday:HP Inc.:3165460": {
+   "first_seen": "2026-11-08",
+   "baseline": true,
+   "last_seen": "2026-11-08"
+  },
+  "workday:AstraZeneca:R-262125": {
+   "first_seen": "2026-11-08",
+   "baseline": true,
+   "last_seen": "2026-11-08"
+  },
+  "workday:Jabil:J2470435": {
+   "first_seen": "2026-11-08",
+   "baseline": true,
+   "last_seen": "2026-11-08"
+  }
+ },
+ "initialized": true
+}

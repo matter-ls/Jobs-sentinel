@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Openings</title>
+<style>
+:root{--bg:#fafaf9;--card:#fff;--ink:#1c1917;--mute:#78716c;--line:#e7e5e4;--accent:#0f766e;--new:#b45309;--newbg:#fef3c7}
+@media (prefers-color-scheme:dark){:root{--bg:#141413;--card:#1e1d1b;--ink:#f5f5f4;--mute:#a8a29e;--line:#2e2c29;--accent:#5eead4;--new:#fcd34d;--newbg:#3b2f0b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:860px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:1.35rem;margin:0 0 2px}
+.sub{color:var(--mute);font-size:.875rem;margin:0 0 16px}
+.controls{display:grid;gap:8px;grid-template-columns:1fr;margin-bottom:12px}
+@media (min-width:640px){.controls{grid-template-columns:2fr 1fr}}
+input[type=search],select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font:inherit}
+.toggles{display:flex;flex-wrap:wrap;gap:14px;margin:0 0 14px;font-size:.9rem}
+.toggles label{display:flex;gap:6px;align-items:center}
+.count{color:var(--mute);font-size:.85rem;margin:0 0 8px}
+.job{display:block;padding:14px 16px;margin-bottom:8px;background:var(--card);border:1px solid var(--line);border-radius:12px;color:inherit;text-decoration:none}
+.job:hover,.job:focus-visible{border-color:var(--accent);outline:none}
+.t{font-weight:600}
+.m{color:var(--mute);font-size:.875rem;margin-top:2px}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.b{font-size:.75rem;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--mute)}
+.b.new{background:var(--newbg);color:var(--new);border-color:transparent;font-weight:600}
+.empty{color:var(--mute);padding:32px 0;text-align:center}
+</style>
+</head>
+<body>
+<main>
+<h1>Openings</h1>
+<p class="sub">Updated 2026-11-08 03:34 UTC</p>
+<div class="controls">
+<input id="q" type="search" placeholder="Search title, company, team" aria-label="Search">
+<select id="co" aria-label="Company"><option value="">All companies</option></select>
+</div>
+<div class="toggles">
+<label><input id="onlyNew" type="checkbox"> New only</label>
+<label><input id="onlyJal" type="checkbox"> Jalisco only</label>
+</div>
+<p class="count" id="count"></p>
+<div id="list"></div>
+</main>
+<script>
+const DATA = [{"key": "workday:Flex:WD229135", "company": "Flex", "ats": "workday", "title": "Director, Facilities", "location": "Mexico, Guadalajara", "team": "", "url": "https://flextronics.wd1.myworkdayjobs.com/en-US/Careers/job/Mexico-Guadalajara/Director--Facilities_WD229135", "posted_at": null, "loc_class": "jalisco", "discovered_now": false, "first_seen": "2026-11-08", "baseline": true, "is_new": false, "eff_date": "2026-11-08"}, {"key": "workday:HP Inc.:3165460", "company": "HP Inc.", "ats": "workday", "title": "Director, LATAM Market Commercial Organization People Leader", "location": "2 Locations (matched 'Jalisco')", "team": "", "url": "https://hp.wd5.myworkdayjobs.com/en-US/ExternalCareerSite/job/Barueri-So-Paulo-Brazil/Director--LATAM-Market-Commercial-Organization-People-Leader_3165460-1", "posted_at": null, "loc_class": "jalisco", "discovered_now": false, "first_seen": "2026-11-08", "baseline": true, "is_new": false, "eff_date": "2026-11-08"}, {"key": "workday:Flex:WD228976", "company": "Flex", "ats": "workday", "title": "Director, Operations (NPI Background )", "location": "Mexico, Guadalajara", "team": "", "url": "https://flextronics.wd1.myworkdayjobs.com/en-US/Careers/job/Mexico-Guadalajara/Director--Operations--NPI-Background--_WD228976", "posted_at": "2026-11-07", "loc_class": "jalisco", "discovered_now": false, "first_seen": "2026-11-08", "baseline": true, "is_new": true, "eff_date": "2026-11-07"}, {"key": "workday:Jabil:J2470435", "company": "Jabil", "ats": "workday", "title": "Business Unit Director", "location": "Guadalajara", "team": "", "url": "https://jabil.wd5.myworkdayjobs.com/en-US/Jabil_Careers/job/Guadalajara/Business-Unit-Director_J2470435", "posted_at": "2026-11-05", "loc_class": "jalisco", "discovered_now": false, "first_seen": "2026-11-08", "baseline": true, "is_new": true, "eff_date": "2026-11-05"}, {"key": "workday:Flex:WD230884", "company": "Flex", "ats": "workday", "title": "Director, Global Account Management", "location": "Mexico, Guadalajara", "team": "", "url": "https://flextronics.wd1.myworkdayjobs.com/en-US/Careers/job/Mexico-Guadalajara/Director--Global-Account-Management_WD230884", "posted_at": "2026-10-30", "loc_class": "jalisco", "discovered_now": false, "first_seen": "2026-11-08", "baseline": true, "is_new": false, "eff_date": "2026-10-30"}, {"key": "workday:AstraZeneca:R-262125", "company": "AstraZeneca", "ats": "workday", "title": "Director, Cyber Security Access Management", "location": "Mexico - Guadalajara", "team": "", "url": "https://astrazeneca.wd3.myworkdayjobs.com/en-US/Careers/job/Mexico---Guadalajara/Director--Cyber-Security-Access-Management_R-262125", "posted_at": "2026-10-27", "loc_class": "jalisco", "discovered_now": false, "first_seen": "2026-11-08", "baseline": true, "is_new": false, "eff_date": "2026-10-27"}, {"key": "workday:Flex:WD231552", "company": "Flex", "ats": "workday", "title": "Sr. Quality Director", "location": "Mexico, Guadalajara", "team": "", "url": "https://flextronics.wd1.myworkdayjobs.com/en-US/Careers/job/Mexico-Guadalajara/Sr-Quality-Director_WD231552-1", "posted_at": "2026-10-15", "loc_class": "jalisco", "discovered_now": false, "first_seen": "2026-11-08", "baseline": true, "is_new": false, "eff_date": "2026-10-15"}];
+const $ = id => document.getElementById(id);
+const LOC = {jalisco: "Jalisco", remote_mx: "Remote · Mexico", mx_country: "Mexico · city not listed"};
+const DAY = 86400000;
+function daysAgo(s) {
+  const d = new Date(s + "T00:00:00"), t = new Date();
+  t.setHours(0, 0, 0, 0);
+  return Math.max(0, Math.round((t - d) / DAY));
+}
+function when(n) { return n === 0 ? "today" : n === 1 ? "yesterday" : n + " days ago"; }
+function safeUrl(u) { return /^https?:\/\//i.test(u) ? u : "#"; }
+const co = $("co");
+[...new Set(DATA.map(j => j.company))].sort((a, b) => a.localeCompare(b)).forEach(name => {
+  const o = document.createElement("option");
+  o.value = name; o.textContent = name; co.appendChild(o);
+});
+function render() {
+  const q = $("q").value.trim().toLowerCase();
+  const rows = DATA.filter(j =>
+    (!co.value || j.company === co.value) &&
+    (!$("onlyNew").checked || j.is_new) &&
+    (!$("onlyJal").checked || j.loc_class === "jalisco") &&
+    (!q || (j.title + " " + j.company + " " + j.team + " " + j.location).toLowerCase().includes(q)));
+  $("count").textContent = rows.length + " of " + DATA.length + " roles";
+  const list = $("list");
+  list.replaceChildren();
+  if (!rows.length) {
+    const p = document.createElement("p");
+    p.className = "empty"; p.textContent = "Nothing matches."; list.appendChild(p);
+    return;
+  }
+  rows.forEach(j => {
+    const a = document.createElement("a");
+    a.className = "job"; a.href = safeUrl(j.url); a.target = "_blank"; a.rel = "noopener noreferrer";
+    const t = document.createElement("div"); t.className = "t"; t.textContent = j.title;
+    const m = document.createElement("div"); m.className = "m";
+    m.textContent = [j.company, j.location, j.team].filter(Boolean).join(" · ");
+    const b = document.createElement("div"); b.className = "badges";
+    const add = (txt, cls) => {
+      const s = document.createElement("span");
+      s.className = "b" + (cls ? " " + cls : ""); s.textContent = txt; b.appendChild(s);
+    };
+    if (j.is_new) add("NEW", "new");
+    add(LOC[j.loc_class] || j.loc_class);
+    add((j.posted_at ? "Posted " : "First seen ") + when(daysAgo(j.posted_at || j.first_seen)));
+    if (j.stale) add("last refresh failed");
+    a.append(t, m, b);
+    list.appendChild(a);
+  });
+}
+["input", "change"].forEach(ev => ["q", "co", "onlyNew", "onlyJal"].forEach(id => $(id).addEventListener(ev, render)));
+render();
+</script>
+</body>
+</html>
