@@ -514,13 +514,15 @@ class EndToEnd(unittest.TestCase):
             self.assertNotIn("Director, Engineering", msg_sofia.get_body(preferencelist=("plain",)).get_content())
 
 
+    @patch("fetch_jobs._invoke_gemini_json", return_value=None)
     @patch("fetch_jobs.call_gemini_json")
     @patch("smtplib.SMTP_SSL")
-    def test_llm_cv_tailoring_and_attachment(self, mock_smtp_ssl, mock_gemini):
+    def test_llm_cv_tailoring_and_attachment(self, mock_smtp_ssl, mock_gemini, _mock_aux_gemini):
         mock_server = MagicMock()
         mock_smtp_ssl.return_value.__enter__.return_value = mock_server
 
         mock_gemini.return_value = {
+            "_llm_model": "gemini-3.8-flash",
             "match_score": 94,
             "lucy_why_it_fits": "Your experience scaling engineering hubs in Guadalajara aligns directly with Acme's Director of Engineering role.",
             "matched_keywords": ["Engineering Leadership", "Guadalajara", "Cloud Velocity"],
@@ -576,9 +578,11 @@ class EndToEnd(unittest.TestCase):
             self.assertIn("Director of Engineering | Cloud & AI Platform Leadership", att_text)
             self.assertEqual(len(list((self.root / "docs" / "cvs" / "lucas").glob("*.docx"))), 3)
             self.assertEqual(len(list((self.root / "docs" / "cvs" / "lucas").glob("*.pdf"))), 3)
-            self.assertEqual(len(list((self.root / "docs" / "cvs" / "lucas").glob("*.html"))), 3)
+            html_cvs = list((self.root / "docs" / "cvs" / "lucas").glob("*.html"))
+            self.assertEqual(len(html_cvs), 3)
+            self.assertIn("Gemini AI &middot; gemini-3.8-flash", html_cvs[0].read_text(encoding="utf-8"))
 
-    @patch("fetch_jobs.call_gemini_json", side_effect=RuntimeError("gemini 429 quota"))
+    @patch("fetch_jobs._invoke_gemini_json", side_effect=RuntimeError("gemini 429 quota"))
     @patch("smtplib.SMTP_SSL")
     def test_llm_fallback_still_sends_tailored_cvs(self, mock_smtp_ssl, _mock_gemini):
         """Even if Gemini throws (429/503/JSON error), deterministic fallback still builds & attaches 3 CVs."""
@@ -603,6 +607,8 @@ class EndToEnd(unittest.TestCase):
             self.assertIn("AstraZeneca", att_text)
             pdf_files = list((self.root / "docs" / "cvs" / "lucas").glob("*.pdf"))
             self.assertTrue(pdf_files[0].read_bytes().startswith(b"%PDF-1.4"))
+            html_cvs = list((self.root / "docs" / "cvs" / "lucas").glob("*.html"))
+            self.assertIn("Deterministic ATS Fallback", html_cvs[0].read_text(encoding="utf-8"))
 
     def test_workday_dates(self):
         t = date(2026, 11, 5)
@@ -1225,11 +1231,64 @@ class EndToEnd(unittest.TestCase):
         finally:
             fj._DEAD_GEMINI_API_KEYS.clear()
 
-        # 6. Validate .github/workflows/main.yml covers every active subscriber & uses Node-24 actions
+        # 6. Verify gha_summary never pollutes GITHUB_STEP_SUMMARY while running under unittest
+        step_sum = self.root / "gha_summary.md"
+        with patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": str(step_sum)}):
+            fj.gha_summary("### Simulated Test Summary")
+        self.assertFalse(step_sum.exists(), "gha_summary must not write during unittest runs")
+
+        # 7. Verify classify_career_upgrades runs only ONCE across prepare_tailored_cvs + build_email_message
+        upgrade_calls = []
+
+        def track_upgrade_gemini(prompt_text, **kwargs):
+            upgrade_calls.append(prompt_text)
+            return {"upgrades": [{"id": 0, "is_career_upgrade": True, "upgrade_reason": "Executive scope at Acme."}]}
+
+        sample_batch = [
+            {"key": "k1", "title": "Director, Platform", "company": "Acme", "location": "Zapopan", "loc_class": "jalisco", "url": "https://example.com/1"},
+            {"key": "k2", "title": "Head of Ops", "company": "Beta", "location": "Guadalajara", "loc_class": "jalisco", "url": "https://example.com/2"},
+        ]
+        sub_lucas = next(s for s in fj.get_subscribers(CFG) if s["id"] == "lucas")
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "valid-key"}), patch("fetch_jobs._invoke_gemini_json", side_effect=track_upgrade_gemini):
+            fj.classify_career_upgrades(sample_batch, sub_lucas)
+            fj.classify_career_upgrades(sample_batch, sub_lucas)
+        self.assertEqual(len(upgrade_calls), 1, "classify_career_upgrades must not fire duplicate LLM calls on already-classified jobs")
+
+        # 8. Verify multi-page PDF pagination never truncates bottom sections (Education / Languages)
+        long_cv = {
+            "full_name": "Lucas Scholl Matter",
+            "target_direction": "Target Role Direction: Executive Leadership - Global Operations",
+            "target_headline": "Director | Global Business Services & Process Intelligence",
+            "contact_line": "Zapopan, Jalisco | lucasschollmatter@gmail.com",
+            "summary": "Executive leader with extensive multi-region transformation experience across global enterprise operations. " * 3,
+            "core_skills": [f"Enterprise Competency {i}" for i in range(10)],
+            "experience": [
+                {
+                    "company": f"Global Enterprise {i}",
+                    "role": f"Director of Operations {i}",
+                    "location": "Guadalajara, Mexico",
+                    "dates": f"201{i} - 202{i}",
+                    "bullets": [
+                        f"Delivered enterprise transformation milestone {b} driving measurable cycle-time reduction across global hubs and cross-functional teams."
+                        for b in range(6)
+                    ],
+                }
+                for i in range(6)
+            ],
+            "education": [{"degree": "MBA Executive Management", "institution": "IPADE Business School", "dates": "2022"}],
+            "languages": ["Portuguese (Native)", "Spanish (Fluent)", "English (Fluent)"],
+        }
+        long_pdf = fj.render_minimalist_cv_pdf(long_cv).decode("latin-1", errors="replace")
+        self.assertIn("/Count 2", long_pdf)
+        self.assertIn("IPADE Business School", long_pdf)
+        self.assertIn("Portuguese", long_pdf)
+
+        # 9. Validate .github/workflows/main.yml covers every active subscriber, uses Node-24 actions & buffered unittest
         wf_path = Path(fj.ROOT) / ".github" / "workflows" / "main.yml"
         self.assertTrue(wf_path.exists())
         wf_txt = wf_path.read_text(encoding="utf-8")
         self.assertNotIn("\t", wf_txt, "Workflow YAML must not contain tab indentation")
+        self.assertIn("-m unittest discover -s tests -b -v", wf_txt)
         for action_ref in ("actions/checkout@v7", "actions/setup-python@v7", "actions/upload-artifact@v7"):
             self.assertIn(action_ref, wf_txt)
         for sub in fj.get_subscribers(CFG):
