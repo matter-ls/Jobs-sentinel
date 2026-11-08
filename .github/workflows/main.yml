@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       email_all:
-        description: "Send all matching roles in email (not just newly discovered)"
+        description: "Re-send ALL current matching roles (testing only). Normal runs email only roles never sent before."
         required: false
-        default: true
+        default: false
         type: boolean
       subscriber:
         description: "Target subscriber (select 'all' to run for everyone)"
