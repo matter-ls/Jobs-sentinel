@@ -129,44 +129,80 @@ class TitleAndLocation(unittest.TestCase):
         self.assertIn("ewerson", subs)
         cfg = subs["ewerson"]
         self.assertEqual(cfg["recipient_email"], "ewerson.lira@live.com")
-        self.assertTrue(fj.load_subscriber_cv(cfg).startswith("# EWERSON LIRA"))
+        self.assertIn("sales", cfg.get("career_goal", "").lower())
+        cv_txt = fj.load_subscriber_cv(cfg)
+        self.assertTrue(cv_txt.startswith("# EWERSON LIRA"))
+        self.assertIn("B2B Enterprise & Digital Sales", cv_txt)
         rules = fj.build_rules(cfg)
         yes = [
-            "Business Development Representative, LATAM",
-            "Senior Sales Operations Analyst",
-            "Business Operations Analyst",
-            "Revenue Operations Specialist",
-            "Data Analyst, Sales Reporting",
-            "Power BI Analyst",
+            "Account Executive, Mid-Market",
+            "Enterprise Account Executive - LATAM",
+            "Key Account Manager (KAM)",
             "Account Manager - Enterprise",
-            "Customer Success Manager",
-            "Software Asset Management Analyst",
-            "Customer Support Team Lead",
-            "Sales Enablement Manager",
-            "Analista de Ventas y Operaciones",
-            "Ejecutivo de Desarrollo de Negocios",
-            "Project Coordinator",
+            "Territory Sales Representative",
             "Inside Sales Representative",
-            "Forecasting & Pipeline Analyst",
+            "Digital Sales Specialist - Brazil",
+            "Channel & Partner Account Manager",
+            "Business Development Representative, LATAM",
+            "Sales Manager, Mexico",
+            "Customer Success & Renewals Manager",
+            "Sales Enablement Manager",
+            "Senior Sales Operations Analyst",
+            "Ejecutivo de Ventas Empresariales",
+            "Ejecutivo de Desarrollo de Negocios",
+            "Gerente Comercial Regional",
+            "Ejecutivo de Cuentas Clave",
         ]
         no = [
             "Software Engineer",
             "Data Engineer",
             "Machine Learning Engineer",
+            "Power BI Analyst",
+            "Project Coordinator",
+            "Software Asset Management Analyst",
             "QA Analyst",
             "Vice President of Sales",
             "Chief Revenue Officer",
             "Sales Intern",
             "Executive Assistant to the Sales Director",
             "Retail Store Sales Associate",
-            "Tax Analyst",
+            "Promotor de Cambaceo",
+            "Call Center Agent",
+            "Tax Accountant",
             "Director, Fab Operations",
-            "Becario de Analisis de Datos",
+            "Becario Comercial",
         ]
         for t in yes:
             self.assertTrue(fj.is_director(t, rules), t)
         for t in no:
             self.assertFalse(fj.is_director(t, rules), t)
+
+        # Closing & Sales Leadership roles should flag as Career Upgrade Moves for Ewerson
+        for up_t in [
+            "Enterprise Account Executive - LATAM",
+            "Key Account Manager",
+            "Inside Sales Manager",
+            "Ejecutivo de Ventas Empresariales",
+            "Gerente Comercial Regional",
+        ]:
+            is_up, _ = fj.is_career_upgrade_heuristic({"title": up_t, "company": "Stripe"}, cfg)
+            self.assertTrue(is_up, up_t)
+
+        # Lateral BDR role should match radar but not flag as upgrade move
+        is_up_bdr, _ = fj.is_career_upgrade_heuristic(
+            {"title": "Business Development Representative, LATAM", "company": "Stripe"}, cfg
+        )
+        self.assertFalse(is_up_bdr)
+
+        # Deterministic CV tailoring & target direction should steer squarely toward B2B Sales
+        tailored = fj.tailor_cv_deterministic(
+            {"title": "Enterprise Account Executive", "company": "Stripe", "location": "Guadalajara, Mexico"},
+            cv_txt,
+            cfg,
+        )
+        self.assertTrue(tailored["is_career_upgrade"])
+        self.assertIn("Enterprise & Digital Sales", tailored["cv"]["target_direction"])
+        self.assertIn("B2B Enterprise Sales", tailored["cv"]["target_direction"])
 
     def test_monica_cv_rules(self):
         subs = {s["id"]: s for s in fj.get_subscribers(CFG)}
@@ -229,7 +265,7 @@ class TitleAndLocation(unittest.TestCase):
 
     def test_companies_json_integrity(self):
         companies = fj.load_companies()
-        self.assertGreaterEqual(len(companies), 100)
+        self.assertGreaterEqual(len(companies), 105)
         seen_names = set()
         seen_targets = set()
         for c in companies:
@@ -239,7 +275,7 @@ class TitleAndLocation(unittest.TestCase):
             self.assertIn(ats, fj.FETCHERS, f"Unsupported ATS for {name}: {ats}")
             self.assertNotIn(name.lower(), seen_names, f"Duplicate company name: {name}")
             seen_names.add(name.lower())
-            if ats in ("greenhouse", "lever", "ashby", "workable", "smartrecruiters"):
+            if ats in ("greenhouse", "lever", "ashby", "workable", "smartrecruiters", "bamboohr"):
                 self.assertTrue(c.get("board"), f"Missing board for {name}")
                 target_id = (ats, c["board"].lower())
             elif ats == "workday":
@@ -787,6 +823,36 @@ class EndToEnd(unittest.TestCase):
         self.assertEqual(code, 0)
         sent = [c[0][0] for c in mock_server.send_message.call_args_list if c[0][0]["To"] == "lucasschollmatter@gmail.com"]
         self.assertIn("Director, Finance", sent[-1].get_body(preferencelist=("plain",)).get_content())
+
+    def test_bamboohr_fetcher_and_detail_enrichment(self):
+        fj.http_json = fake_http({
+            "bitso.bamboohr.com/careers/list": {
+                "meta": {"totalCount": 1},
+                "result": [{
+                    "id": "1002",
+                    "jobOpeningName": "Enterprise Account Executive (B2B)",
+                    "departmentLabel": "Bitso Business",
+                    "location": {"city": "Guadalajara", "state": "Jalisco"},
+                    "atsLocation": {"country": "Mexico"},
+                    "isRemote": True,
+                }],
+            },
+            "bitso.bamboohr.com/careers/1002/detail": {
+                "result": {
+                    "jobOpening": {
+                        "description": "<p>Drive B2B enterprise crypto payment sales across LATAM.</p>"
+                    }
+                }
+            },
+        })
+        c = {"name": "Bitso", "ats": "bamboohr", "board": "bitso", "default_country": "Mexico"}
+        jobs = fj.fetch_bamboohr(c)
+        self.assertEqual(len(jobs), 1)
+        self.assertEqual(jobs[0]["title"], "Enterprise Account Executive (B2B)")
+        self.assertIn("Guadalajara", jobs[0]["location"])
+        self.assertIn("Remote", jobs[0]["location"])
+        desc = fj.enrich_job_description(jobs[0])
+        self.assertIn("Drive B2B enterprise crypto payment sales", desc)
 
 
 if __name__ == "__main__":
