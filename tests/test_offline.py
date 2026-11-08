@@ -60,6 +60,50 @@ class TitleAndLocation(unittest.TestCase):
         for t in no:
             self.assertFalse(fj.is_director(t, luis_rules), t)
 
+    def test_ewerson_cv_rules(self):
+        subs = {s["id"]: s for s in fj.get_subscribers(CFG)}
+        self.assertIn("ewerson", subs)
+        cfg = subs["ewerson"]
+        self.assertEqual(cfg["recipient_email"], "ewerson.lira@live.com")
+        self.assertTrue(fj.load_subscriber_cv(cfg).startswith("# EWERSON LIRA"))
+        rules = fj.build_rules(cfg)
+        yes = [
+            "Business Development Representative, LATAM",
+            "Senior Sales Operations Analyst",
+            "Business Operations Analyst",
+            "Revenue Operations Specialist",
+            "Data Analyst, Sales Reporting",
+            "Power BI Analyst",
+            "Account Manager - Enterprise",
+            "Customer Success Manager",
+            "Software Asset Management Analyst",
+            "Customer Support Team Lead",
+            "Sales Enablement Manager",
+            "Analista de Ventas y Operaciones",
+            "Ejecutivo de Desarrollo de Negocios",
+            "Project Coordinator",
+            "Inside Sales Representative",
+            "Forecasting & Pipeline Analyst",
+        ]
+        no = [
+            "Software Engineer",
+            "Data Engineer",
+            "Machine Learning Engineer",
+            "QA Analyst",
+            "Vice President of Sales",
+            "Chief Revenue Officer",
+            "Sales Intern",
+            "Executive Assistant to the Sales Director",
+            "Retail Store Sales Associate",
+            "Tax Analyst",
+            "Director, Fab Operations",
+            "Becario de Analisis de Datos",
+        ]
+        for t in yes:
+            self.assertTrue(fj.is_director(t, rules), t)
+        for t in no:
+            self.assertFalse(fj.is_director(t, rules), t)
+
     def test_locations(self):
         lc = lambda s: fj.location_class(s, RULES, CFG)
         self.assertEqual(lc("Guadalajara, Mexico"), "jalisco")
@@ -288,12 +332,103 @@ class EndToEnd(unittest.TestCase):
             self.assertIn("Software Engineer at Acme", msg_sofia.get_body(preferencelist=("plain",)).get_content())
             self.assertNotIn("Director, Engineering", msg_sofia.get_body(preferencelist=("plain",)).get_content())
 
+
+    @patch("fetch_jobs.call_gemini_json")
+    @patch("smtplib.SMTP_SSL")
+    def test_llm_cv_tailoring_and_attachment(self, mock_smtp_ssl, mock_gemini):
+        mock_server = MagicMock()
+        mock_smtp_ssl.return_value.__enter__.return_value = mock_server
+
+        mock_gemini.return_value = {
+            "match_score": 94,
+            "lucy_why_it_fits": "Your experience scaling engineering hubs in Guadalajara aligns directly with Acme's Director of Engineering role.",
+            "matched_keywords": ["Engineering Leadership", "Guadalajara", "Cloud Velocity"],
+            "gaps_to_address": ["Highlight semiconductor or hardware exposure if any"],
+            "cv": {
+                "full_name": "Lucas Scholl Matter",
+                "target_headline": "Director of Engineering | Cloud & AI Platform Leadership",
+                "contact_line": "Zapopan, Jalisco | lucasschollmatter@gmail.com",
+                "summary": "Executive engineering leader driving high-velocity platform teams in Guadalajara.",
+                "core_skills": ["Engineering Leadership", "Cloud Platforms", "Site Operations"],
+                "experience": [
+                    {
+                        "company": "Global Tech",
+                        "role": "Engineering & Operations Leader",
+                        "location": "Guadalajara, Mexico",
+                        "dates": "2020 - Present",
+                        "bullets": ["Scaled engineering and data platform delivery across LatAm."]
+                    }
+                ],
+                "education": [
+                    {"degree": "B.S. Engineering", "institution": "University", "dates": "2015"}
+                ]
+            }
+        }
+
+        fj.http_json = fake_http()
+        with patch.dict(os.environ, {
+            "GMAIL_USER": "sender@gmail.com",
+            "GMAIL_APP_PASSWORD": "app-secret-password",
+            "GEMINI_API_KEY": "fake-gemini-key",
+        }):
+            code = fj.refresh(CFG, COMPANIES, root=self.root, today=date(2026, 11, 5), send_email=True, subscriber_id="lucas")
+            self.assertEqual(code, 0)
+            self.assertTrue(mock_gemini.called)
+            self.assertTrue(mock_server.send_message.called)
+
+            sent_msg = mock_server.send_message.call_args_list[0][0][0]
+            self.assertIn("Tailored CV(s)", sent_msg["Subject"])
+            html_part = sent_msg.get_body(preferencelist=("html",)).get_content()
+            self.assertIn("94% CV Match", html_part)
+            self.assertIn("Lucy&rsquo;s Headhunter Take &amp; Tailored CV", html_part)
+
+            attachments = list(sent_msg.iter_attachments())
+            self.assertEqual(len(attachments), 3)  # max_tailored_cvs = 3
+            att_html = attachments[0].get_content()
+            self.assertIn("Lucas Scholl Matter", att_html)
+            self.assertIn("Director of Engineering | Cloud &amp; AI Platform Leadership", att_html)
+
     def test_workday_dates(self):
         t = date(2026, 11, 5)
         self.assertEqual(fj.workday_posted("Posted Today", t), "2026-11-05")
         self.assertEqual(fj.workday_posted("Posted Yesterday", t), "2026-11-04")
         self.assertEqual(fj.workday_posted("Posted 3 Days Ago", t), "2026-11-02")
         self.assertIsNone(fj.workday_posted("Posted 30+ Days Ago", t))
+
+    @patch("smtplib.SMTP_SSL")
+    def test_email_failure_rolls_back_subscriber_state(self, mock_smtp_ssl):
+        """If SMTP blows up, exit code is 2, outputs are still written, and the
+        subscriber's seen-state is NOT advanced, so the same roles are emailed next run."""
+        mock_server = MagicMock()
+        mock_smtp_ssl.return_value.__enter__.return_value = mock_server
+        env = {"GMAIL_USER": "sender@gmail.com", "GMAIL_APP_PASSWORD": "app-secret-password"}
+
+        # run 1: baseline, delivery works -> state for 'lucas' is persisted
+        with patch.dict(os.environ, env):
+            code, _ = self.run_refresh(date(2026, 11, 5), send_email=True)
+        self.assertEqual(code, 0)
+        seen1 = fj.load_json(self.root / "state" / "seen.json", {})
+        self.assertIn("lucas", seen1["subscribers"])
+
+        # run 2: a brand-new role appears but SMTP fails
+        gh2 = {"jobs": GH["jobs"] + [{"id": 7, "title": "Director, Finance", "location": {"name": "Guadalajara"},
+                                      "absolute_url": "https://boards.greenhouse.io/acme/jobs/7"}]}
+        mock_server.send_message.side_effect = OSError("smtp down")
+        with patch.dict(os.environ, env):
+            code, jobs = self.run_refresh(date(2026, 11, 6), {"greenhouse.io": gh2}, send_email=True)
+        self.assertEqual(code, 2)
+        self.assertIn("7", jobs)                                    # main board still updated
+        seen2 = fj.load_json(self.root / "state" / "seen.json", {})
+        self.assertNotIn("greenhouse:Acme:7", seen2["subscribers"]["lucas"]["jobs"])   # rolled back
+        self.assertIn("greenhouse:Acme:7", seen2["jobs"])                               # global state advanced
+
+        # run 3: SMTP is back -> the role is re-discovered for lucas and finally emailed
+        mock_server.send_message.side_effect = None
+        with patch.dict(os.environ, env):
+            code, _ = self.run_refresh(date(2026, 11, 7), {"greenhouse.io": gh2}, send_email=True)
+        self.assertEqual(code, 0)
+        sent = [c[0][0] for c in mock_server.send_message.call_args_list if c[0][0]["To"] == "lucasschollmatter@gmail.com"]
+        self.assertIn("Director, Finance", sent[-1].get_body(preferencelist=("plain",)).get_content())
 
 
 if __name__ == "__main__":
