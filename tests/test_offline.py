@@ -30,6 +30,36 @@ class TitleAndLocation(unittest.TestCase):
         for t in no:
             self.assertFalse(fj.is_director(t, RULES), t)
 
+    def test_luis_cv_rules(self):
+        subs = {s["id"]: s for s in fj.get_subscribers(CFG)}
+        self.assertIn("luis", subs)
+        luis_cfg = subs["luis"]
+        self.assertEqual(luis_cfg["recipient_email"], "luisgallegosp@gmail.com")
+        luis_rules = fj.build_rules(luis_cfg)
+        yes = [
+            "Senior Automation Consultant",
+            "RCC Senior Process Analyst",
+            "GBS Project Lead",
+            "RPA Developer",
+            "Operational Excellence Specialist",
+            "Business Process Optimization Analyst",
+            "Power Platform Solution Architect",
+            "Digital Transformation Program Manager",
+            "Agile Delivery Lead",
+        ]
+        no = [
+            "QA Automation Engineer",
+            "Senior Test Automation Engineer (SDET)",
+            "Marketing Automation Specialist",
+            "Industrial Automation Controls Engineer",
+            "Junior Business Process Analyst",
+            "Business Process Intern",
+        ]
+        for t in yes:
+            self.assertTrue(fj.is_director(t, luis_rules), t)
+        for t in no:
+            self.assertFalse(fj.is_director(t, luis_rules), t)
+
     def test_locations(self):
         lc = lambda s: fj.location_class(s, RULES, CFG)
         self.assertEqual(lc("Guadalajara, Mexico"), "jalisco")
@@ -189,13 +219,68 @@ class EndToEnd(unittest.TestCase):
         mock_smtp_ssl.return_value.__enter__.return_value = mock_server
 
         with patch.dict(os.environ, {"GMAIL_USER": "sender@gmail.com", "GMAIL_APP_PASSWORD": "app-secret-password"}):
-            # Baseline run emails initial new roles when email_on_baseline=True
+            # Baseline run emails initial roles for Lucas when email_on_baseline=True
             code, _ = self.run_refresh(date(2026, 11, 5), send_email=True)
             self.assertEqual(code, 0)
             self.assertTrue(mock_server.send_message.called)
-            sent_msg = mock_server.send_message.call_args[0][0]
+            sent_msg = mock_server.send_message.call_args_list[0][0][0]
             self.assertEqual(sent_msg["To"], "lucasschollmatter@gmail.com")
-            self.assertIn("Relevant Director Opening(s)", sent_msg["Subject"])
+            self.assertIn("Relevant Opening(s)", sent_msg["Subject"])
+
+
+    @patch("smtplib.SMTP_SSL")
+    def test_multi_subscriber_preferences_and_state(self, mock_smtp_ssl):
+        mock_server = MagicMock()
+        mock_smtp_ssl.return_value.__enter__.return_value = mock_server
+
+        multi_cfg = {
+            **CFG,
+            "subscribers": [
+                {
+                    "id": "lucas",
+                    "name": "Lucas",
+                    "recipient_email": "lucasschollmatter@gmail.com",
+                    "enabled": True,
+                    "email_on_baseline": True,
+                    # Uses default director rules in Jalisco
+                },
+                {
+                    "id": "sofia",
+                    "name": "Sofia",
+                    "recipient_email": "sofia@example.com",
+                    "enabled": True,
+                    "email_on_baseline": True,
+                    # Sofia wants Software Engineer roles in Guadalajara, not Director roles
+                    "title_include": [r"\bsoftware engineer\b", r"\bengineer\b"],
+                    "title_exclude": [r"\bdirector\b"],
+                    "locations": ["guadalajara"],
+                },
+                {
+                    "id": "disabled_user",
+                    "name": "Disabled",
+                    "recipient_email": "nobody@example.com",
+                    "enabled": False,
+                },
+            ],
+        }
+
+        fj.http_json = fake_http()
+        with patch.dict(os.environ, {"GMAIL_USER": "sender@gmail.com", "GMAIL_APP_PASSWORD": "app-secret-password"}):
+            code = fj.refresh(multi_cfg, COMPANIES, root=self.root, today=date(2026, 11, 5), send_email=True)
+            self.assertEqual(code, 0)
+            # Exactly 2 emails sent (Lucas and Sofia; disabled_user is skipped)
+            self.assertEqual(mock_server.send_message.call_count, 2)
+
+            msg_lucas = mock_server.send_message.call_args_list[0][0][0]
+            msg_sofia = mock_server.send_message.call_args_list[1][0][0]
+
+            self.assertEqual(msg_lucas["To"], "lucasschollmatter@gmail.com")
+            self.assertIn("Director, Engineering", msg_lucas.get_body(preferencelist=("plain",)).get_content())
+            self.assertNotIn("Software Engineer at Acme", msg_lucas.get_body(preferencelist=("plain",)).get_content())
+
+            self.assertEqual(msg_sofia["To"], "sofia@example.com")
+            self.assertIn("Software Engineer at Acme", msg_sofia.get_body(preferencelist=("plain",)).get_content())
+            self.assertNotIn("Director, Engineering", msg_sofia.get_body(preferencelist=("plain",)).get_content())
 
     def test_workday_dates(self):
         t = date(2026, 11, 5)
