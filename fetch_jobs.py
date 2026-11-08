@@ -41,6 +41,9 @@ from urllib import error, parse, request
 ROOT = Path(__file__).resolve().parent
 UA = "job-radar/1.0 (personal job board)"
 
+DEFAULT_LLM_MODEL = "gemini-3.8-flash"
+FALLBACK_LLM_MODELS = ("gemini-3.8-flash", "gemini-flash-latest", "gemini-3.8-flash-lite")
+
 CFG_DEFAULTS = {
     "page_title": "Openings",
     "recipient_email": "lucasschollmatter@gmail.com",
@@ -48,7 +51,7 @@ CFG_DEFAULTS = {
     "email_mode": "new_or_discovered",
     "daily_top_when_quiet": False,
     "quiet_spotlight_count": 3,
-    "llm_model": "gemini-2.5-flash",
+    "llm_model": DEFAULT_LLM_MODEL,
     "max_tailored_cvs": 3,
     "cv_attachment_format": "docx",
     "include_remote_mexico": True,
@@ -773,43 +776,121 @@ def parse_llm_json(raw_text):
     raise last_err or ValueError("Empty LLM JSON response")
 
 
-def call_gemini_json(prompt_text, model="gemini-2.5-flash", api_key=None):
-    """Call Gemini generateContent endpoint and return parsed JSON object.
+_DEAD_GEMINI_MODELS = set()
+_DISCOVERED_GEMINI_MODELS = None
 
-    Uses `thinkingBudget: 0` on 2.5 models (so thinking tokens don't consume the
-    output budget or truncate the JSON), sets `maxOutputTokens: 4096`, and falls
-    back across models if a model is unavailable or returns malformed output."""
+
+def _normalize_gemini_model(m):
+    return re.sub(r"^models/", "", str(m or "").strip())
+
+
+def _discover_gemini_flash_models(api_key):
+    """Query /v1beta/models once per run if hardcoded model IDs are ever retired (HTTP 404)."""
+    global _DISCOVERED_GEMINI_MODELS
+    if _DISCOVERED_GEMINI_MODELS is not None:
+        return _DISCOVERED_GEMINI_MODELS
+    try:
+        d = http_json(
+            "https://generativelanguage.googleapis.com/v1beta/models",
+            retries=1,
+            headers={"x-goog-api-key": api_key},
+            timeout=15,
+        )
+        found = []
+        skip_tokens = ("tts", "image", "audio", "embedding", "live", "vision", "veo", "imagen")
+        for item in d.get("models") or []:
+            if not isinstance(item, dict):
+                continue
+            methods = item.get("supportedGenerationMethods") or []
+            if "generateContent" not in methods:
+                continue
+            short = _normalize_gemini_model(item.get("name", ""))
+            low = short.lower()
+            if not low.startswith("gemini-") or "flash" not in low:
+                continue
+            if any(tok in low for tok in skip_tokens):
+                continue
+            found.append(short)
+
+        def _rank(name):
+            m = re.search(r"gemini-(\d+)(?:\.(\d+))?", name)
+            maj = int(m.group(1)) if m else 0
+            min_v = int(m.group(2) or 0) if m else 0
+            not_lite = 0 if "lite" in name else 1
+            not_preview = 0 if ("preview" in name or "exp" in name) else 1
+            return (maj, min_v, not_lite, not_preview)
+
+        found.sort(key=_rank, reverse=True)
+        _DISCOVERED_GEMINI_MODELS = found[:4]
+    except Exception:
+        _DISCOVERED_GEMINI_MODELS = []
+    return _DISCOVERED_GEMINI_MODELS
+
+
+def _invoke_gemini_json(
+    prompt_text,
+    system_text=None,
+    model=DEFAULT_LLM_MODEL,
+    api_key=None,
+    temperature=0.2,
+    max_output_tokens=4096,
+    timeout=60,
+    retries=2,
+    validator=None,
+):
+    """Call Gemini generateContent across primary + fallback + auto-discovered Flash models."""
     api_key = (api_key or os.environ.get("GEMINI_API_KEY") or "").strip()
     if not api_key:
         return None
 
-    models_to_try = [model]
-    for fallback_model in ("gemini-2.5-flash", "gemini-2.0-flash"):
-        if fallback_model not in models_to_try:
-            models_to_try.append(fallback_model)
+    primary = _normalize_gemini_model(model) or DEFAULT_LLM_MODEL
+    models_to_try = []
+    for cand in (primary,) + FALLBACK_LLM_MODELS:
+        c_norm = _normalize_gemini_model(cand)
+        if c_norm and c_norm not in models_to_try and c_norm not in _DEAD_GEMINI_MODELS:
+            models_to_try.append(c_norm)
+    if not models_to_try:
+        models_to_try = [DEFAULT_LLM_MODEL]
 
     last_err = None
-    for m_name in models_to_try:
+    discovered_added = False
+    idx = 0
+    while idx < len(models_to_try):
+        m_name = models_to_try[idx]
+        idx += 1
+        if m_name in _DEAD_GEMINI_MODELS:
+            continue
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{m_name}:generateContent"
         gen_cfg = {
-            "temperature": 0.2,
-            "maxOutputTokens": 4096,
+            "temperature": temperature,
+            "maxOutputTokens": max_output_tokens,
             "responseMimeType": "application/json",
         }
-        if m_name.startswith("gemini-2.5"):
+        if m_name.startswith("gemini-3"):
+            gen_cfg["thinkingConfig"] = {"thinkingLevel": "low"}
+        elif m_name.startswith("gemini-2.5"):
             gen_cfg["thinkingConfig"] = {"thinkingBudget": 0}
         payload = {
-            "systemInstruction": {"parts": [{"text": LLM_SYSTEM_PROMPT}]},
             "contents": [{"parts": [{"text": prompt_text}]}],
             "generationConfig": gen_cfg,
         }
+        if system_text:
+            payload["systemInstruction"] = {"parts": [{"text": system_text}]}
         try:
             try:
-                body = http_json(url, payload, retries=2, headers={"x-goog-api-key": api_key}, timeout=60)
+                body = http_json(url, payload, retries=retries, headers={"x-goog-api-key": api_key}, timeout=timeout)
             except error.HTTPError as e:
                 if e.code == 400 and "thinkingConfig" in payload["generationConfig"]:
                     payload["generationConfig"].pop("thinkingConfig", None)
-                    body = http_json(url, payload, retries=1, headers={"x-goog-api-key": api_key}, timeout=60)
+                    body = http_json(url, payload, retries=1, headers={"x-goog-api-key": api_key}, timeout=timeout)
+                elif e.code == 404:
+                    _DEAD_GEMINI_MODELS.add(m_name)
+                    if not discovered_added and idx >= len(models_to_try):
+                        discovered_added = True
+                        for dyn_m in _discover_gemini_flash_models(api_key):
+                            if dyn_m not in models_to_try and dyn_m not in _DEAD_GEMINI_MODELS:
+                                models_to_try.append(dyn_m)
+                    raise
                 else:
                     raise
             cand0 = (body.get("candidates") or [{}])[0]
@@ -822,15 +903,30 @@ def call_gemini_json(prompt_text, model="gemini-2.5-flash", api_key=None):
                 reason = cand0.get("finishReason") or body.get("promptFeedback") or "empty candidates"
                 raise ValueError(f"Gemini ({m_name}) returned no text ({reason})")
             parsed = parse_llm_json(raw_text)
-            if isinstance(parsed, dict) and isinstance(parsed.get("cv"), dict):
-                return parsed
-            raise ValueError(f"Gemini ({m_name}) JSON missing 'cv' object")
+            if validator and not validator(parsed):
+                raise ValueError(f"Gemini ({m_name}) JSON failed schema check")
+            return parsed
         except Exception as e:
             last_err = e
             print(f"  [gemini] model {m_name} attempt failed: {type(e).__name__}: {e}", file=sys.stderr)
     if last_err:
         raise last_err
     return None
+
+
+def call_gemini_json(prompt_text, model=DEFAULT_LLM_MODEL, api_key=None):
+    """Call Gemini generateContent endpoint and return parsed CV tailoring JSON object."""
+    return _invoke_gemini_json(
+        prompt_text,
+        system_text=LLM_SYSTEM_PROMPT,
+        model=model,
+        api_key=api_key,
+        temperature=0.2,
+        max_output_tokens=4096,
+        timeout=60,
+        retries=2,
+        validator=lambda p: isinstance(p, dict) and isinstance(p.get("cv"), dict),
+    )
 
 
 DEFAULT_UPGRADE_PATTERNS = [
@@ -890,24 +986,19 @@ def classify_career_upgrades(jobs, sub_cfg, root=ROOT):
         'Return ONLY valid JSON matching: {"upgrades": [{"key": "<job key>", "is_career_upgrade": true, "upgrade_reason": "1 concise sentence why this is a career upgrade move"}]}\n\n'
         f"JOBS:\n{items_txt}\n\n---\nCANDIDATE MASTER CV:\n{master_cv[:4000]}"
     )
-    model = os.environ.get("GEMINI_MODEL") or sub_cfg.get("llm_model", "gemini-2.5-flash")
+    model = (os.environ.get("GEMINI_MODEL") or "").strip() or sub_cfg.get("llm_model", DEFAULT_LLM_MODEL)
     try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-        gen_cfg = {"temperature": 0.1, "maxOutputTokens": 2048, "responseMimeType": "application/json"}
-        if model.startswith("gemini-2.5"):
-            gen_cfg["thinkingConfig"] = {"thinkingBudget": 0}
-        body = http_json(
-            url,
-            {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": gen_cfg},
-            retries=1,
-            headers={"x-goog-api-key": api_key},
+        parsed = _invoke_gemini_json(
+            prompt,
+            model=model,
+            api_key=api_key,
+            temperature=0.1,
+            max_output_tokens=2048,
             timeout=35,
+            retries=1,
+            validator=lambda p: isinstance(p, dict) and isinstance(p.get("upgrades"), list),
         )
-        parts = (((body.get("candidates") or [{}])[0].get("content") or {}).get("parts") or [])
-        text_parts = [p.get("text", "") for p in parts if isinstance(p, dict) and p.get("text") and not p.get("thought")]
-        raw = "\n".join(text_parts).strip()
-        if raw:
-            parsed = parse_llm_json(raw)
+        if parsed:
             by_key = {u.get("key"): u for u in (parsed.get("upgrades") or []) if isinstance(u, dict) and u.get("key")}
             if by_key:
                 for j in batch:
@@ -1142,7 +1233,7 @@ def tailor_cv_with_llm(job_item, master_cv_text, sub_cfg):
         f"{goal_section}"
         f"CANDIDATE MASTER CV:\n{master_cv_text}"
     )
-    model = os.environ.get("GEMINI_MODEL") or sub_cfg.get("llm_model", "gemini-2.5-flash")
+    model = (os.environ.get("GEMINI_MODEL") or "").strip() or sub_cfg.get("llm_model", DEFAULT_LLM_MODEL)
     try:
         res = call_gemini_json(prompt, model=model, api_key=api_key)
         if res and isinstance(res.get("cv"), dict):
@@ -2075,55 +2166,30 @@ def commit_relationship_state(sub_state, rel_ctx, pack, jobs_sent, today):
     rel["recent_spotlight_keys"] = spotlights[-18:]
 
 
-def call_gemini_daily_motivation(prompt_text, model="gemini-2.5-flash", api_key=None):
+def call_gemini_daily_motivation(prompt_text, model=DEFAULT_LLM_MODEL, api_key=None):
     """Call Gemini for a fresh daily 5-part 'Us vs. The System' dopamine & connection briefing."""
-    api_key = (api_key or os.environ.get("GEMINI_API_KEY") or "").strip()
-    if not api_key:
-        return None
-    models_to_try = [model]
-    for fb in ("gemini-2.5-flash", "gemini-2.0-flash"):
-        if fb not in models_to_try:
-            models_to_try.append(fb)
-
-    for m_name in models_to_try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{m_name}:generateContent"
-        gen_cfg = {
-            "temperature": 0.9,
-            "maxOutputTokens": 1024,
-            "responseMimeType": "application/json",
-        }
-        if m_name.startswith("gemini-2.5"):
-            gen_cfg["thinkingConfig"] = {"thinkingBudget": 0}
-        payload = {
-            "systemInstruction": {"parts": [{"text": DAILY_MOTIVATION_SYSTEM_PROMPT}]},
-            "contents": [{"parts": [{"text": prompt_text}]}],
-            "generationConfig": gen_cfg,
-        }
-        try:
-            try:
-                body = http_json(url, payload, retries=1, headers={"x-goog-api-key": api_key}, timeout=25)
-            except error.HTTPError as e:
-                if e.code == 400 and "thinkingConfig" in payload["generationConfig"]:
-                    payload["generationConfig"].pop("thinkingConfig", None)
-                    body = http_json(url, payload, retries=1, headers={"x-goog-api-key": api_key}, timeout=25)
-                else:
-                    raise
-            parts = (((body.get("candidates") or [{}])[0].get("content") or {}).get("parts") or [])
-            text_parts = [p.get("text", "") for p in parts if isinstance(p, dict) and p.get("text") and not p.get("thought")]
-            raw = "\n".join(text_parts).strip()
-            if not raw:
-                continue
-            parsed = parse_llm_json(raw)
-            if isinstance(parsed, dict) and parsed.get("headline") and parsed.get("message"):
-                return {
-                    "subject_spark": str(parsed.get("subject_spark") or "").strip(),
-                    "headline": str(parsed["headline"]).strip(),
-                    "message": str(parsed["message"]).strip(),
-                    "connection_ps": str(parsed.get("connection_ps") or "").strip(),
-                    "micro_challenge": str(parsed.get("micro_challenge") or "").strip(),
-                }
-        except Exception:
-            continue
+    try:
+        parsed = _invoke_gemini_json(
+            prompt_text,
+            system_text=DAILY_MOTIVATION_SYSTEM_PROMPT,
+            model=model,
+            api_key=api_key,
+            temperature=0.9,
+            max_output_tokens=2048,
+            timeout=25,
+            retries=1,
+            validator=lambda p: isinstance(p, dict) and bool(p.get("headline")) and bool(p.get("message")),
+        )
+        if parsed:
+            return {
+                "subject_spark": str(parsed.get("subject_spark") or "").strip(),
+                "headline": str(parsed["headline"]).strip(),
+                "message": str(parsed["message"]).strip(),
+                "connection_ps": str(parsed.get("connection_ps") or "").strip(),
+                "micro_challenge": str(parsed.get("micro_challenge") or "").strip(),
+            }
+    except Exception:
+        pass
     return None
 
 
@@ -2189,7 +2255,7 @@ def generate_daily_briefing_pack(
             if is_quiet_spotlight
             else "Fresh market drop with newly discovered openings."
         )
-        model = os.environ.get("GEMINI_MODEL") or (sub_cfg or {}).get("llm_model", "gemini-2.5-flash")
+        model = (os.environ.get("GEMINI_MODEL") or "").strip() or (sub_cfg or {}).get("llm_model", DEFAULT_LLM_MODEL)
         prompt = (
             f"Date: {today.isoformat()} ({cadence_title} — {cadence_subline})\n"
             f"Briefing Edition Together: #{edition} | Active Streak: {rel_ctx.get('streak_days', 1)} day(s) | "
