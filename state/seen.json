@@ -34,6 +34,41 @@
    "first_seen": "2026-11-08",
    "baseline": true,
    "last_seen": "2026-11-08"
+  },
+  "workday:Eli Lilly:R-110993": {
+   "first_seen": "2026-11-08",
+   "baseline": false,
+   "last_seen": "2026-11-08"
+  },
+  "ashby:Kueski:e1261953-7bcc-45db-a54e-fc2e0bdfbc89": {
+   "first_seen": "2026-11-08",
+   "baseline": false,
+   "last_seen": "2026-11-08"
+  },
+  "workday:Citi:26996393": {
+   "first_seen": "2026-11-08",
+   "baseline": false,
+   "last_seen": "2026-11-08"
+  },
+  "oracle_hcm:JPMorgan Chase:210802450": {
+   "first_seen": "2026-11-08",
+   "baseline": false,
+   "last_seen": "2026-11-08"
+  },
+  "greenhouse:Flexport:7651413": {
+   "first_seen": "2026-11-08",
+   "baseline": false,
+   "last_seen": "2026-11-08"
+  },
+  "workday:Workday:JR-0109770": {
+   "first_seen": "2026-11-08",
+   "baseline": false,
+   "last_seen": "2026-11-08"
+  },
+  "workday:Workday:JR-0110856": {
+   "first_seen": "2026-11-08",
+   "baseline": false,
+   "last_seen": "2026-11-08"
   }
  },
  "initialized": true,
@@ -89,9 +124,63 @@
      "first_seen": "2026-11-08",
      "baseline": false,
      "last_seen": "2026-11-08"
+    },
+    "workday:Eli Lilly:R-110993": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "ashby:Kueski:e1261953-7bcc-45db-a54e-fc2e0bdfbc89": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Citi:26996393": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "oracle_hcm:JPMorgan Chase:210802450": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "greenhouse:Flexport:7651413": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Workday:JR-0109770": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Workday:JR-0110306": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Workday:JR-0110856": {
+     "first_seen": "2026-11-08",
+     "baseline": false,
+     "last_seen": "2026-11-08"
     }
    },
-   "initialized": true
+   "initialized": true,
+   "relationship": {
+    "edition": 1,
+    "streak_days": 1,
+    "last_briefing_date": "2026-11-08",
+    "total_roles_surfaced": 18,
+    "total_cvs_tailored": 3,
+    "recent_angle_ids": [
+     26
+    ],
+    "recent_headlines": [
+     "Turn Ambition Into Pipeline Today."
+    ],
+    "recent_spotlight_keys": []
+   }
   },
   "luis": {
    "jobs": {

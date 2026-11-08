@@ -1,5 +1,21 @@
 [
  {
+  "key": "workday:Citi:26996393",
+  "company": "Citi",
+  "ats": "workday",
+  "title": "Banamex Director Banca Corporativa Guadalajara",
+  "location": "Zapopan Jalisco Mexico",
+  "team": "",
+  "url": "https://citi.wd5.myworkdayjobs.com/en-US/2/job/Zapopan-Jalisco-Mexico/Banamex-Director-Banca-Corporativa-Guadalajara_26996393-1",
+  "posted_at": null,
+  "loc_class": "jalisco",
+  "discovered_now": true,
+  "first_seen": "2026-11-08",
+  "baseline": false,
+  "is_new": true,
+  "eff_date": "2026-11-08"
+ },
+ {
   "key": "workday:Flex:WD229135",
   "company": "Flex",
   "ats": "workday",
@@ -32,6 +48,22 @@
   "eff_date": "2026-11-08"
  },
  {
+  "key": "workday:Workday:JR-0109770",
+  "company": "Workday",
+  "ats": "workday",
+  "title": "Director of Program Management, M&A & Growth",
+  "location": "3 Locations (matched 'El Salto')",
+  "team": "",
+  "url": "https://workday.wd5.myworkdayjobs.com/en-US/Workday/job/USA-CA-Pleasanton/Director-of-Program-Management--M-A---Growth_JR-0109770",
+  "posted_at": null,
+  "loc_class": "jalisco",
+  "discovered_now": true,
+  "first_seen": "2026-11-08",
+  "baseline": false,
+  "is_new": true,
+  "eff_date": "2026-11-08"
+ },
+ {
   "key": "workday:Flex:WD228976",
   "company": "Flex",
   "ats": "workday",
@@ -44,6 +76,22 @@
   "discovered_now": false,
   "first_seen": "2026-11-08",
   "baseline": true,
+  "is_new": true,
+  "eff_date": "2026-11-07"
+ },
+ {
+  "key": "workday:Workday:JR-0110856",
+  "company": "Workday",
+  "ats": "workday",
+  "title": "Director, Sales Compensation Strategy",
+  "location": "8 Locations (matched 'El Salto')",
+  "team": "",
+  "url": "https://workday.wd5.myworkdayjobs.com/en-US/Workday/job/USACAHome-Office-Bay-Area/Director--Sales-Compensation-Strategy_JR-0110856",
+  "posted_at": "2026-11-07",
+  "loc_class": "jalisco",
+  "discovered_now": true,
+  "first_seen": "2026-11-08",
+  "baseline": false,
   "is_new": true,
   "eff_date": "2026-11-07"
  },
@@ -62,6 +110,22 @@
   "baseline": true,
   "is_new": true,
   "eff_date": "2026-11-05"
+ },
+ {
+  "key": "workday:Eli Lilly:R-110993",
+  "company": "Eli Lilly",
+  "ats": "workday",
+  "title": "Associate Director - Medical Science Liaison - Dermatology - Denver CO & Salt Lake City UT",
+  "location": "2 Locations (matched 'El Salto')",
+  "team": "",
+  "url": "https://lilly.wd115.myworkdayjobs.com/en-US/LLY/job/US-Denver-CO/Associate-Director---Medical-Science-Liaison---Dermatology---Denver-CO---Salt-Lake-City-UT_R-110993",
+  "posted_at": "2026-11-04",
+  "loc_class": "jalisco",
+  "discovered_now": true,
+  "first_seen": "2026-11-08",
+  "baseline": false,
+  "is_new": true,
+  "eff_date": "2026-11-04"
  },
  {
   "key": "workday:Flex:WD230884",
@@ -96,6 +160,22 @@
   "eff_date": "2026-10-27"
  },
  {
+  "key": "oracle_hcm:JPMorgan Chase:210802450",
+  "company": "JPMorgan Chase",
+  "ats": "oracle_hcm",
+  "title": "Global Financial Crimes Compliance - Payments Latin America & Canada - Vice President",
+  "location": "Mexico",
+  "team": "CCOR LOB/CF/Country Coverage",
+  "url": "https://jpmc.fa.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001/job/210802450",
+  "posted_at": "2026-10-21",
+  "loc_class": "mx_country",
+  "discovered_now": true,
+  "first_seen": "2026-11-08",
+  "baseline": false,
+  "is_new": false,
+  "eff_date": "2026-10-21"
+ },
+ {
   "key": "workday:Flex:WD231552",
   "company": "Flex",
   "ats": "workday",
@@ -110,5 +190,37 @@
   "baseline": true,
   "is_new": false,
   "eff_date": "2026-10-15"
+ },
+ {
+  "key": "ashby:Kueski:e1261953-7bcc-45db-a54e-fc2e0bdfbc89",
+  "company": "Kueski",
+  "ats": "ashby",
+  "title": "Director of Product Management, Customer Products & Platform",
+  "location": "Mexico (remote); Mexico",
+  "team": "Product",
+  "url": "https://jobs.ashbyhq.com/Kueski/e1261953-7bcc-45db-a54e-fc2e0bdfbc89",
+  "posted_at": "2026-07-17",
+  "loc_class": "remote_mx",
+  "discovered_now": true,
+  "first_seen": "2026-11-08",
+  "baseline": false,
+  "is_new": false,
+  "eff_date": "2026-07-17"
+ },
+ {
+  "key": "greenhouse:Flexport:7651413",
+  "company": "Flexport",
+  "ats": "greenhouse",
+  "title": "Country Manager, Mexico",
+  "location": "Guadalajara, Mexico",
+  "team": "",
+  "url": "https://job-boards.greenhouse.io/flexport/jobs/7651413",
+  "posted_at": "2026-03-04",
+  "loc_class": "jalisco",
+  "discovered_now": true,
+  "first_seen": "2026-11-08",
+  "baseline": false,
+  "is_new": false,
+  "eff_date": "2026-03-04"
  }
 ]
