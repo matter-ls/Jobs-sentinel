@@ -329,6 +329,14 @@ SR = {"content": [
 
 
 def workday(payload):
+    if payload is None:
+        return {
+            "jobPostingInfo": {
+                "location": "Guadalajara, Jalisco, Mexico",
+                "additionalLocations": ["Austin, TX, USA"],
+                "jobDescription": "<p>Head of Quality leadership in Guadalajara.</p>",
+            }
+        }
     posts = [
         {"title": "Director, Fab Operations", "externalPath": "/job/Guadalajara/Director_JR1",
          "locationsText": "Guadalajara, Mexico", "postedOn": "Posted 3 Days Ago", "bulletFields": ["JR1"]},
@@ -357,7 +365,7 @@ def fake_http(overrides=None):
              "workable.com": WORKABLE, "smartrecruiters.com": SR, "myworkdayjobs.com": workday}
     table.update(overrides or {})
 
-    def fake(url, payload=None, retries=2):
+    def fake(url, payload=None, retries=2, **kwargs):
         for key, val in table.items():
             if key in url:
                 if isinstance(val, Exception):
@@ -853,6 +861,379 @@ class EndToEnd(unittest.TestCase):
         self.assertIn("Remote", jobs[0]["location"])
         desc = fj.enrich_job_description(jobs[0])
         self.assertIn("Drive B2B enterprise crypto payment sales", desc)
+
+    def test_gemini_3_8_flash_default_and_404_auto_discovery(self):
+        self.assertEqual(CFG["llm_model"], "gemini-3.8-flash")
+        self.assertEqual(fj.DEFAULT_LLM_MODEL, "gemini-3.8-flash")
+
+        fj._DEAD_GEMINI_MODELS.clear()
+        fj._DISCOVERED_GEMINI_MODELS = None
+
+        calls = []
+
+        def mock_gemini_http(url, payload=None, retries=2, headers=None, timeout=60):
+            calls.append((url, payload))
+            if url.endswith("/v1beta/models"):
+                return {
+                    "models": [
+                        {"name": "models/gemini-4.2-flash-tts", "supportedGenerationMethods": ["generateContent"]},
+                        {"name": "models/gemini-4.2-flash", "supportedGenerationMethods": ["generateContent"]},
+                    ]
+                }
+            if "gemini-4.2-flash:generateContent" in url:
+                return {
+                    "candidates": [{
+                        "content": {
+                            "parts": [{"text": '{"match_score": 95, "cv": {"full_name": "Lucas Matter"}}'}]
+                        }
+                    }]
+                }
+            raise error.HTTPError(url, 404, "Not Found", hdrs=None, fp=None)
+
+        fj.http_json = mock_gemini_http
+        try:
+            out = fj.call_gemini_json("test prompt", model="models/gemini-2.5-flash", api_key="test-key")
+            self.assertEqual(out["match_score"], 95)
+            # First call normalized 'models/gemini-2.5-flash' -> '/models/gemini-2.5-flash:generateContent'
+            self.assertIn("/v1beta/models/gemini-2.5-flash:generateContent", calls[0][0])
+            # Also tried gemini-3.8-flash with thinkingLevel: low
+            c38 = [p for u, p in calls if "gemini-3.8-flash:generateContent" in u][0]
+            self.assertEqual(c38["generationConfig"]["thinkingConfig"], {"thinkingLevel": "low"})
+            # Auto-discovered gemini-4.2-flash (skipping -tts) and succeeded
+            self.assertTrue(any("gemini-4.2-flash:generateContent" in u for u, _ in calls))
+            self.assertIn("gemini-2.5-flash", fj._DEAD_GEMINI_MODELS)
+        finally:
+            fj._DEAD_GEMINI_MODELS.clear()
+            fj._DISCOVERED_GEMINI_MODELS = None
+
+    def test_ats_portal_illegal_characters_scrubbed(self):
+        """Ensure generated .docx and .pdf CVs never contain ATS-rejected characters: < > [ ] " { } \\"""
+        import re
+
+        def extract_pdf_strings(pdf_bytes):
+            raw = pdf_bytes.decode("latin-1", errors="replace")
+            tokens = re.findall(r"Tm \((.*?)\) Tj ET", raw)
+            decoded = []
+            for tok in tokens:
+                # Reverse PDF string literal escaping (\(, \), \\) in single pass
+                s = re.sub(r"\\([()\\])", r"\1", tok)
+                decoded.append(s)
+            return "\n".join(decoded)
+
+        # 1. Verify all real subscriber master CVs produce 100% clean .docx & .pdf outputs
+        sample_job = {
+            "title": "Director, Enterprise Operations [LATAM] </script><b>x</b>",
+            "company": 'Citi "Banamex"',
+            "location": "Guadalajara, Jalisco, Mexico",
+            "team": "Operations {Global}",
+        }
+        for sub in fj.get_subscribers(CFG):
+            cv_md = fj.load_subscriber_cv(sub)
+            self.assertIsNone(
+                fj.ATS_ILLEGAL_CHARS_RE.search(cv_md),
+                f"Master CV for {sub['id']} contains ATS-illegal characters",
+            )
+            tailored = fj.tailor_cv_deterministic(sample_job, cv_md, sub)
+            docx_text = fj.extract_docx_text(fj.render_minimalist_cv_docx(tailored["cv"], sample_job))
+            pdf_text = extract_pdf_strings(fj.render_minimalist_cv_pdf(tailored["cv"], sample_job))
+            self.assertIsNone(
+                fj.ATS_ILLEGAL_CHARS_RE.search(docx_text),
+                f"DOCX text for {sub['id']} leaked illegal chars: {docx_text}",
+            )
+            self.assertIsNone(
+                fj.ATS_ILLEGAL_CHARS_RE.search(pdf_text),
+                f"PDF text for {sub['id']} leaked illegal chars: {pdf_text}",
+            )
+
+        # 2. Verify hostile LLM / noisy ATS payload is semantically preserved while 100% scrubbed
+        noisy_cv = {
+            "full_name": 'Lucas "L." Matter [MBA]',
+            "target_direction": "Target Role Direction: [VP / Director of Operations & AI]",
+            "target_headline": 'Director <LATAM> | Cloud\\AI {Enterprise} "Transformation"',
+            "contact_line": "Zapopan, Jalisco | lucas@example.com | [LinkedIn]",
+            "summary": 'Delivered <5-minute streaming SLO, >95% forecast accuracy, and >=$12M savings across "As-Is" -> “To-Be” platforms.',
+            "core_skills": ['CI\\CD Pipelines', 'Process Mining [Celonis]', 'Cloud {GCP}'],
+            "experience": [
+                {
+                    "company": 'Global "Tech" Corp [MX]',
+                    "role": "Sr. Manager → Director {Operations}",
+                    "location": "Guadalajara [Hybrid]",
+                    "dates": "2022 - Present",
+                    "bullets": [
+                        'Cut cycle time to <=24 hours (<5% variance) and lifted CSAT >92% across [LATAM] \\ {EMEA}.',
+                        "Hardened data ingestion </script><b>x</b> with zero downtime.",
+                    ],
+                }
+            ],
+            "education": [
+                {"degree": 'B.S. "Engineering"', "institution": "University [Brazil]", "dates": "2018"}
+            ],
+            "languages": ['English [Fluent]', 'Spanish {Professional}', 'Portuguese "Native"'],
+        }
+        docx_out = fj.extract_docx_text(fj.render_minimalist_cv_docx(noisy_cv, sample_job))
+        pdf_out = extract_pdf_strings(fj.render_minimalist_cv_pdf(noisy_cv, sample_job))
+
+        self.assertIsNone(fj.ATS_ILLEGAL_CHARS_RE.search(docx_out), f"Illegal char in DOCX: {docx_out}")
+        self.assertIsNone(fj.ATS_ILLEGAL_CHARS_RE.search(pdf_out), f"Illegal char in PDF: {pdf_out}")
+        self.assertIn("under 5-minute streaming SLO", docx_out)
+        self.assertIn("over 95% forecast accuracy", docx_out)
+        self.assertIn("at least $12M savings", docx_out)
+        self.assertIn("up to 24 hours", docx_out)
+        self.assertIn("CI/CD Pipelines", docx_out)
+        self.assertIn("Target Role Direction: VP / Director of Operations & AI", docx_out)
+
+    def test_salt_lake_city_and_location_discrepancies(self):
+        """Ensure Salt Lake City / US-only multi-location postings, Salto (Brazil), Jal (NM),
+        redundant CDMX '; Mexico' segments, and cross-segment US-Remote never leak as Jalisco/MX."""
+        lc = lambda s: fj.location_class(s, RULES, CFG)
+        # False-positive traps must all return None
+        self.assertIsNone(lc("Salt Lake City, UT"))
+        self.assertIsNone(lc("USA, CA, Pleasanton; USA, UT, Salt Lake City"))
+        self.assertIsNone(lc("Salto, Sao Paulo, Brazil"))
+        self.assertIsNone(lc("Jal, NM, USA"))
+        self.assertIsNone(lc("CIUDAD DE MEXICO, Mexico; Mexico"))
+        self.assertIsNone(lc("Monterrey, Nuevo Leon, Mexico; Mexico"))
+        self.assertIsNone(lc("United States - Colorado - Remote; Mexico City, Mexico"))
+
+        # True positives & Workday ERP location cleanup
+        self.assertEqual(fj._clean_workday_location("MEX.Zapopan"), "Zapopan, Mexico")
+        self.assertEqual(lc(fj._clean_workday_location("MEX.Zapopan")), "jalisco")
+        self.assertEqual(fj._dedupe_location_segments("Mexico (remote); Mexico"), "Mexico (remote)")
+        self.assertEqual(lc("Mexico (remote); Mexico"), "remote_mx")
+        self.assertEqual(lc("El Salto, Jalisco, Mexico; Salt Lake City, UT"), "jalisco")
+
+        # Workday CXS stemmer audit: 'El Salto' search returning '3 Locations' (Salt Lake City) vs real Jalisco
+        def wd_multi_router(url, payload=None, retries=2, timeout=25):
+            if url.endswith("/jobs"):
+                return {
+                    "total": 2,
+                    "jobPostings": [
+                        {
+                            "title": "Director, Sales Operations",
+                            "externalPath": "/job/USA-CA-Pleasanton/Director-Sales_JR_SLC",
+                            "locationsText": "3 Locations",
+                            "postedOn": "Posted Today",
+                            "bulletFields": ["JR_SLC"],
+                        },
+                        {
+                            "title": "Director, Supply Chain",
+                            "externalPath": "/job/Spring-Texas/Director-SC_JR_GDL",
+                            "locationsText": "2 Locations",
+                            "postedOn": "Posted Today",
+                            "bulletFields": ["JR_GDL"],
+                        },
+                    ],
+                }
+            if "JR_SLC" in url:
+                return {
+                    "jobPostingInfo": {
+                        "location": "USA, CA, Pleasanton",
+                        "additionalLocations": ["USA, GA, Atlanta", "USA, UT, Salt Lake City"],
+                        "jobDescription": "<p>US-only role.</p>",
+                    }
+                }
+            if "JR_GDL" in url:
+                return {
+                    "jobPostingInfo": {
+                        "location": "Spring, Texas, United States of America",
+                        "additionalLocations": ["Tlaquepaque, Jalisco, Mexico"],
+                        "jobDescription": "<p>Global role with hub in Tlaquepaque.</p>",
+                    }
+                }
+            raise AssertionError("unexpected url " + url)
+
+        fj.http_json = wd_multi_router
+        co = {"name": "Workday, Inc.", "ats": "workday", "tenant": "workday", "wd": "wd5", "site": "Workday", "search_terms": ["El Salto"]}
+        fetched = fj.fetch_workday(co, today=date(2026, 11, 8))
+        self.assertEqual(len(fetched), 2)
+        fj.resolve_workday_multi_locations(fetched, [RULES], RULES, CFG)
+        selected = fj.select(fetched, RULES, CFG)
+        self.assertEqual(len(selected), 1)
+        self.assertIn("JR_GDL", selected[0]["key"])
+        self.assertEqual(selected[0]["location"], "Tlaquepaque, Jalisco, Mexico (+1 other location)")
+
+    @patch("fetch_jobs._invoke_gemini_json")
+    def test_ats_platform_vs_employer_name_discrepancy(self, mock_invoke):
+        """Ensure Flex (and other employers hosted on Workday) never get called 'Workday' in emails/CVs."""
+        companies = fj.load_companies()
+        names = {c["name"] for c in companies}
+        self.assertIn("Workday, Inc.", names)
+        self.assertNotIn("Workday", names)
+
+        # Direct scrubber checks
+        self.assertEqual(
+            fj._fix_ats_employer_confusion(
+                "This step-up Director seat at Workday leverages Workday's Guadalajara footprint.",
+                "Flex",
+                "Director, Operations",
+            ),
+            "This step-up Director seat at Flex leverages Flex's Guadalajara footprint.",
+        )
+        # Never alter Workday, Inc. or genuine Workday HRIS role references
+        self.assertIn(
+            "Workday, Inc.",
+            fj._fix_ats_employer_confusion("Lead enterprise sales at Workday, Inc.", "Workday, Inc.", "Account Executive"),
+        )
+        self.assertIn(
+            "Workday",
+            fj._fix_ats_employer_confusion("Own HRIS Workday configuration at Flex.", "Flex", "Workday HRIS Analyst"),
+        )
+
+        # Verify classify_career_upgrades sends integer IDs (never 'workday:Flex:...' keys) & scrubs output
+        captured_prompts = []
+
+        def fake_gemini(prompt, **kwargs):
+            captured_prompts.append(prompt)
+            return {
+                "upgrades": [
+                    {"id": 0, "is_career_upgrade": True, "upgrade_reason": "Step-up regional leadership scope at Workday."},
+                ]
+            }
+
+        mock_invoke.side_effect = fake_gemini
+        lucas_cfg = next(s for s in fj.get_subscribers(CFG) if s["id"] == "lucas")
+        jobs = [
+            {"key": "workday:Flex:WD228976", "title": "Director, Program Management", "company": "Flex", "team": "Ops"},
+            {"key": "workday:Flex:WD228977", "title": "Senior Manager, Logistics", "company": "Flex", "team": "SCM"},
+        ]
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "fake-key"}):
+            fj.classify_career_upgrades(jobs, lucas_cfg)
+        self.assertTrue(captured_prompts)
+        self.assertNotIn("workday:Flex:", captured_prompts[0])
+        self.assertEqual(jobs[0]["upgrade_reason"], "Step-up regional leadership scope at Flex.")
+
+    def test_city_spam_deduplication_and_luis_factory_exclusions(self):
+        """Collapse remote multi-city clones into 1 clean card and filter hardware technicians from Luis."""
+        clones = [
+            {
+                "key": f"lever:Bluelight:{i}",
+                "company": "Bluelight Consulting",
+                "title": "Mid-Level Account Executive - LATAM",
+                "team": "Sales",
+                "location": f"Remote - {city}, Mexico",
+                "loc_class": "remote_mx",
+                "posted_at": "2026-11-06",
+                "discovered_now": True,
+            }
+            for i, city in enumerate(["Guadalajara", "Monterrey", "Mexico City", "Queretaro", "Puebla"])
+        ]
+        deduped = fj.dedupe_subscriber_jobs(clones)
+        self.assertEqual(len(deduped), 1)
+        self.assertEqual(deduped[0]["location"], "Remote - Mexico")
+        self.assertTrue(deduped[0]["discovered_now"])
+
+        luis_cfg = next(s for s in fj.get_subscribers(CFG) if s["id"] == "luis")
+        luis_rules = fj.build_rules(luis_cfg)
+        for noisy_title in (
+            "Process Engineering Technician",
+            "SMT Process Engineer",
+            "Surface Mount Process Engineer",
+            "Billing Operations Analyst 1",
+        ):
+            self.assertFalse(fj.is_director(noisy_title, luis_rules), noisy_title)
+
+    @patch("smtplib.SMTP_SSL")
+    def test_extreme_reliability_and_workflow_integrity(self, mock_smtp_ssl):
+        """Verify corrupted state self-healing, malformed ATS items, SMTP transient retry,
+        bad regex resilience, Gemini auth circuit-breaker, and workflow YAML sync."""
+        import smtplib
+
+        # 1. Corrupted state/seen.json + malformed ATS entries must self-heal without crashing
+        (self.root / "state").mkdir(parents=True, exist_ok=True)
+        (self.root / "state" / "seen.json").write_text("[]", encoding="utf-8")  # wrong JSON type
+        (self.root / "state" / "jobs.json").write_text("{truncated", encoding="utf-8")  # invalid JSON
+
+        noisy_gh = {
+            "jobs": [
+                None,
+                {},
+                {"id": "", "title": "Director, Empty ID"},
+                {
+                    "id": 99,
+                    "title": "Director, Platform Reliability",
+                    "location": {"name": "Guadalajara, Jalisco, Mexico"},
+                    "absolute_url": "https://boards.greenhouse.io/acme/jobs/99",
+                    "first_published": "not-a-valid-date",
+                },
+            ]
+        }
+        code, jobs = self.run_refresh(date(2026, 11, 8), {"greenhouse.io": noisy_gh}, send_email=False)
+        self.assertEqual(code, 0)
+        self.assertIn("99", jobs)
+        healed_seen = fj.load_json(self.root / "state" / "seen.json", {})
+        self.assertTrue(healed_seen.get("initialized"))
+
+        # 2. Bad regex pattern in config never crashes build_rules
+        rules_with_typo = fj.build_rules({
+            "title_include": ["[unclosed_regex", r"\bdirector\b"],
+            "title_exclude": ["(unclosed_exc"],
+            "jalisco_locations": ["guadalajara"],
+        })
+        self.assertTrue(fj.is_director("Director of Operations", rules_with_typo))
+
+        # 3. SMTP transient disconnect retries automatically and succeeds on 2nd attempt
+        mock_server = MagicMock()
+        mock_server.send_message.side_effect = [
+            smtplib.SMTPServerDisconnected("transient reset"),
+            None,
+        ]
+        mock_smtp_ssl.return_value.__enter__.return_value = mock_server
+        with patch.dict(os.environ, {"GMAIL_USER": " sender@gmail.com ", "GMAIL_APP_PASSWORD": " app-pass "}):
+            sent_ok = fj.send_email_digest(
+                [jobs["99"]],
+                1,
+                {"id": "lucas", "name": "Lucas", "recipient_email": "lucasschollmatter@gmail.com"},
+                date(2026, 11, 8),
+                root=self.root,
+                attachments=[],
+            )
+        self.assertTrue(sent_ok)
+        self.assertEqual(mock_server.send_message.call_count, 2)
+
+        # 4. SMTPAuthenticationError fails fast (1 attempt, zero retries)
+        mock_auth_server = MagicMock()
+        mock_auth_server.login.side_effect = smtplib.SMTPAuthenticationError(535, b"Bad credentials")
+        mock_smtp_ssl.return_value.__enter__.return_value = mock_auth_server
+        with patch.dict(os.environ, {"GMAIL_USER": "sender@gmail.com", "GMAIL_APP_PASSWORD": "wrong"}):
+            with self.assertRaises(smtplib.SMTPAuthenticationError):
+                fj.send_email_digest(
+                    [jobs["99"]],
+                    1,
+                    {"id": "lucas", "name": "Lucas", "recipient_email": "lucasschollmatter@gmail.com"},
+                    date(2026, 11, 8),
+                    root=self.root,
+                    attachments=[],
+                )
+        self.assertEqual(mock_auth_server.login.call_count, 1)
+
+        # 5. Gemini HTTP 403 trips auth circuit-breaker immediately so subsequent calls skip network
+        fj._DEAD_GEMINI_API_KEYS.clear()
+        gemini_hits = []
+
+        def forbidden_gemini(url, payload=None, retries=2, headers=None, timeout=60):
+            gemini_hits.append(url)
+            raise error.HTTPError(url, 403, "Forbidden", hdrs=None, fp=None)
+
+        fj.http_json = forbidden_gemini
+        try:
+            with self.assertRaises(error.HTTPError):
+                fj.call_gemini_json("p1", api_key="revoked-key")
+            self.assertEqual(len(gemini_hits), 1)
+            # Second call returns None immediately with 0 HTTP hits
+            self.assertIsNone(fj.call_gemini_json("p2", api_key="revoked-key"))
+            self.assertEqual(len(gemini_hits), 1)
+        finally:
+            fj._DEAD_GEMINI_API_KEYS.clear()
+
+        # 6. Validate .github/workflows/main.yml covers every active subscriber & uses Node-24 actions
+        wf_path = Path(fj.ROOT) / ".github" / "workflows" / "main.yml"
+        self.assertTrue(wf_path.exists())
+        wf_txt = wf_path.read_text(encoding="utf-8")
+        self.assertNotIn("\t", wf_txt, "Workflow YAML must not contain tab indentation")
+        for action_ref in ("actions/checkout@v7", "actions/setup-python@v7", "actions/upload-artifact@v7"):
+            self.assertIn(action_ref, wf_txt)
+        for sub in fj.get_subscribers(CFG):
+            self.assertIn(f"- {sub['id']}", wf_txt, f"Subscriber {sub['id']} missing from workflow_dispatch options")
 
 
 if __name__ == "__main__":
