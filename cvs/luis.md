@@ -15,7 +15,7 @@ Results-driven Business and Process Analyst with over 9 years of experience driv
 
 ### SpartanNash | Guadalajara, Mexico
 **Senior Automation Consultant** | August 2026 – Present
-- Bridge business stakeholders and cross-functional technical teams to evaluate complex "As-Is" enterprise workflows and re-engineer optimized "To-Be" processes for scalable automation.
+- Bridge business stakeholders and cross-functional technical teams to evaluate complex As-Is enterprise workflows and re-engineer optimized To-Be processes for scalable automation.
 - Author and collaborate on core solution architecture documentation (PDDs, SDDs, and TDDs), conducting gap analyses to guarantee logic clarity, technical feasibility, and end-to-end traceability.
 - Drive process validation and quality assurance throughout the lifecycle, aligning technical pod deliverables with overarching business intent and functional expectations.
 
