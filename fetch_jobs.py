@@ -46,7 +46,7 @@ ROOT = Path(__file__).resolve().parent
 UA = "job-radar/1.0 (personal job board)"
 
 DEFAULT_LLM_MODEL = "gemini-3.8-flash"
-FALLBACK_LLM_MODELS = ("gemini-3.8-flash", "gemini-flash-latest", "gemini-3.8-flash-lite")
+FALLBACK_LLM_MODELS = ("gemini-3.8-flash", "gemini-3.8-flash-lite", "gemini-flash-latest")
 
 CFG_DEFAULTS = {
     "page_title": "Openings",
@@ -272,18 +272,23 @@ def http_json(url, payload=None, retries=2, headers=None, timeout=25):
                     raw_bytes = gzip.decompress(raw_bytes)
                 return json.loads(raw_bytes.decode("utf-8-sig", errors="replace"))
         except error.HTTPError as e:
+            detail = ""
+            try:
+                detail = e.read().decode("utf-8", errors="replace")[:500].strip()
+                if detail:
+                    e.msg = f"{e.msg} — {detail[:300]}"
+            except Exception:
+                pass
             if e.code < 500 and e.code not in (408, 425, 429):
-                try:
-                    detail = e.read().decode("utf-8", errors="replace")[:300].strip()
-                    if detail:
-                        e.msg = f"{e.msg} — {detail}"
-                except Exception:
-                    pass
                 raise
             if e.headers:
                 ra = e.headers.get("Retry-After")
                 if ra and str(ra).strip().isdigit():
-                    retry_wait = min(10.0, max(1.0, float(ra)))
+                    retry_wait = min(12.0, max(1.0, float(ra)))
+            if retry_wait is None and e.code == 429 and detail:
+                m_wait = re.search(r'(?:retry in|retryDelay"\s*:\s*")\s*(\d+(?:\.\d+)?)s', detail, re.I)
+                if m_wait:
+                    retry_wait = min(12.0, max(1.0, float(m_wait.group(1))))
             err = e
         except (
             error.URLError,
@@ -309,9 +314,10 @@ def gha_annotate(level, text):
 
 
 def gha_summary(markdown):
-    """Append Markdown to the GitHub Actions step summary when running in CI (no-op locally)."""
+    """Append Markdown to the GitHub Actions step summary when running in CI.
+    Suppressed under unittest so offline test runs never pollute the live Run Summary."""
     path = os.environ.get("GITHUB_STEP_SUMMARY")
-    if path:
+    if path and "unittest" not in sys.modules:
         with open(path, "a", encoding="utf-8") as fh:
             fh.write(markdown + "\n")
 
@@ -1181,10 +1187,13 @@ def _invoke_gemini_json(
             parsed = parse_llm_json(raw_text)
             if validator and not validator(parsed):
                 raise ValueError(f"Gemini ({m_name}) JSON failed schema check")
+            if isinstance(parsed, dict):
+                parsed.setdefault("_llm_model", m_name)
             return parsed
         except Exception as e:
             last_err = e
-            print(f"  [gemini] model {m_name} attempt failed: {type(e).__name__}: {e}", file=sys.stderr)
+            if "unittest" not in sys.modules:
+                print(f"  [gemini] model {m_name} attempt failed: {type(e).__name__}: {e}", file=sys.stderr)
     if last_err:
         raise last_err
     return None
@@ -1200,7 +1209,7 @@ def call_gemini_json(prompt_text, model=DEFAULT_LLM_MODEL, api_key=None):
         temperature=0.2,
         max_output_tokens=4096,
         timeout=60,
-        retries=2,
+        retries=1,
         validator=lambda p: isinstance(p, dict) and isinstance(p.get("cv"), dict),
     )
 
@@ -1249,6 +1258,8 @@ def classify_career_upgrades(jobs, sub_cfg, root=ROOT):
     challenge vs. lateral match) against the subscriber's Master CV."""
     if not jobs:
         return
+    if all(j.get("_upgrades_classified") for j in jobs):
+        return
     for j in jobs:
         if "is_career_upgrade" not in j:
             is_up, reason = is_career_upgrade_heuristic(j, sub_cfg)
@@ -1259,6 +1270,8 @@ def classify_career_upgrades(jobs, sub_cfg, root=ROOT):
     api_key = (os.environ.get("GEMINI_API_KEY") or "").strip()
     master_cv = load_subscriber_cv(sub_cfg, root=root)
     if not api_key or not master_cv or len(jobs) <= 1:
+        for j in jobs:
+            j["_upgrades_classified"] = True
         return
 
     # Single compact batch prompt using integer IDs (never pass internal `ats:Company:id` keys,
@@ -1315,6 +1328,8 @@ def classify_career_upgrades(jobs, sub_cfg, root=ROOT):
     except Exception:
         # Heuristic labels are already applied on `jobs`
         pass
+    for j in jobs:
+        j["_upgrades_classified"] = True
 
 
 ATS_ILLEGAL_CHARS_RE = re.compile(r'[<>\[\]"{}\\]')
@@ -1583,6 +1598,8 @@ def tailor_cv_deterministic(job_item, master_cv_text, sub_cfg):
         "languages": languages[:4],
     })
     return {
+        "tailor_source": "deterministic",
+        "tailor_model": "deterministic-fallback",
         "match_score": score,
         "is_career_upgrade": is_up,
         "upgrade_reason": up_reason,
@@ -1634,8 +1651,12 @@ def tailor_cv_with_llm(job_item, master_cv_text, sub_cfg):
     )
     model = (os.environ.get("GEMINI_MODEL") or "").strip() or sub_cfg.get("llm_model", DEFAULT_LLM_MODEL)
     try:
-        res = call_gemini_json(prompt, model=model, api_key=api_key)
-        if res and isinstance(res.get("cv"), dict):
+        raw_res = call_gemini_json(prompt, model=model, api_key=api_key)
+        if raw_res and isinstance(raw_res.get("cv"), dict):
+            res = copy.deepcopy(raw_res)
+            used_model = res.pop("_llm_model", None) or _normalize_gemini_model(model) or DEFAULT_LLM_MODEL
+            res["tailor_source"] = "gemini"
+            res["tailor_model"] = used_model
             if res.get("lucy_why_it_fits"):
                 res["lucy_why_it_fits"] = _fix_ats_employer_confusion(res["lucy_why_it_fits"], co_name, job_title)
             if res.get("upgrade_reason"):
@@ -1928,14 +1949,15 @@ def render_minimalist_cv_pdf(cv_data, job_item=None):
     summary = cv_data.get("summary") or ""
     skills = [s for s in (cv_data.get("core_skills") or []) if s]
 
-    ops = []
+    pages_ops = [[]]
     y = 750
 
     def add_line(txt, font="F1", size=9.5, leading=13, x=48):
         nonlocal y
         if y < 52:
-            return
-        ops.append(f"BT /{font} {size} Tf 1 0 0 1 {x} {y:.1f} Tm ({pdf_str(txt)}) Tj ET")
+            pages_ops.append([])
+            y = 750
+        pages_ops[-1].append(f"BT /{font} {size} Tf 1 0 0 1 {x} {y:.1f} Tm ({pdf_str(txt)}) Tj ET")
         y -= leading
 
     def add_wrapped(txt, width=95, font="F1", size=9.5, leading=13, x=48, prefix=""):
@@ -1950,7 +1972,7 @@ def render_minimalist_cv_pdf(cv_data, job_item=None):
         add_wrapped(headline, width=92, font="F2", size=9.5, leading=13)
     if contact:
         add_line(contact, font="F1", size=8.5, leading=14)
-    ops.append(f"0.7 w 48 {y + 6:.1f} m 564 {y + 6:.1f} l S")
+    pages_ops[-1].append(f"0.7 w 48 {y + 6:.1f} m 564 {y + 6:.1f} l S")
     y -= 6
 
     if summary:
@@ -1977,23 +1999,34 @@ def render_minimalist_cv_pdf(cv_data, job_item=None):
                     add_wrapped(b, width=92, font="F1", size=9.0, leading=12, x=56, prefix="- ")
             y -= 3
 
-    if cv_data.get("education"):
-        add_line("EDUCATION & CERTIFICATIONS", font="F2", size=9.5, leading=13)
+    languages = [s for s in (cv_data.get("languages") or []) if s]
+    if cv_data.get("education") or languages:
+        add_line("EDUCATION, CERTIFICATIONS & LANGUAGES", font="F2", size=9.5, leading=13)
         for edu in cv_data.get("education") or []:
             line_edu = f"{edu.get('degree', '')} - {edu.get('institution', '')}"
             if edu.get("dates"):
                 line_edu += f" ({edu.get('dates')})"
             add_wrapped(line_edu, width=95, font="F1", size=9.0, leading=12.5)
+        if languages:
+            add_wrapped("Languages: " + " | ".join(languages), width=95, font="F1", size=9.0, leading=12.5)
 
-    stream_bytes = "\n".join(ops).encode("latin-1", errors="replace")
+    kid_refs = " ".join(f"{5 + 2 * i} 0 R" for i in range(len(pages_ops)))
     objs = [
         b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
-        b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
-        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>\nendobj\n",
-        b"4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n",
-        b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>\nendobj\n",
-        f"6 0 obj\n<< /Length {len(stream_bytes)} >>\nstream\n".encode("ascii") + stream_bytes + b"\nendstream\nendobj\n",
+        f"2 0 obj\n<< /Type /Pages /Kids [{kid_refs}] /Count {len(pages_ops)} >>\nendobj\n".encode("ascii"),
+        b"3 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n",
+        b"4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>\nendobj\n",
     ]
+    for i, p_ops in enumerate(pages_ops):
+        page_id = 5 + 2 * i
+        content_id = 6 + 2 * i
+        stream_bytes = "\n".join(p_ops).encode("latin-1", errors="replace")
+        objs.append(
+            f"{page_id} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents {content_id} 0 R >>\nendobj\n".encode("ascii")
+        )
+        objs.append(
+            f"{content_id} 0 obj\n<< /Length {len(stream_bytes)} >>\nstream\n".encode("ascii") + stream_bytes + b"\nendstream\nendobj\n"
+        )
     out = bytearray(b"%PDF-1.4\n")
     offsets = []
     for o in objs:
@@ -2050,8 +2083,15 @@ def render_minimalist_cv_html(cv_data, job_item=None):
 
     target_note = ""
     if job_item:
+        an_meta = job_item.get("llm_analysis") if isinstance(job_item, dict) else None
+        src_badge = ""
+        if isinstance(an_meta, dict):
+            if an_meta.get("tailor_source") == "gemini":
+                src_badge = f" (Gemini AI &middot; {esc(str(an_meta.get('tailor_model') or DEFAULT_LLM_MODEL))})"
+            elif an_meta.get("tailor_source") == "deterministic":
+                src_badge = " (Deterministic ATS Fallback)"
         target_note = (
-            f"Tailored by Lucy for: {esc(sanitize_ats_text(job_item.get('title', '')))} "
+            f"Tailored by Lucy{src_badge} for: {esc(sanitize_ats_text(job_item.get('title', '')))} "
             f"at {esc(sanitize_ats_text(job_item.get('company', '')))}"
         )
 
@@ -2595,6 +2635,7 @@ def call_gemini_daily_motivation(prompt_text, model=DEFAULT_LLM_MODEL, api_key=N
         )
         if parsed:
             return {
+                "_llm_model": str(parsed.get("_llm_model") or _normalize_gemini_model(model) or DEFAULT_LLM_MODEL),
                 "subject_spark": str(parsed.get("subject_spark") or "").strip(),
                 "headline": str(parsed["headline"]).strip(),
                 "message": str(parsed["message"]).strip(),
@@ -2693,6 +2734,8 @@ def generate_daily_briefing_pack(
                 headline = _fix_ats_employer_confusion(str(res[0]).strip(), top_co, top_title) if top_job else str(res[0]).strip()
                 message = _fix_ats_employer_confusion(str(res[1]).strip(), top_co, top_title) if top_job else str(res[1]).strip()
                 return {
+                    "briefing_source": "gemini",
+                    "briefing_model": _normalize_gemini_model(model) or DEFAULT_LLM_MODEL,
                     "subject_spark": headline.rstrip(".!")[:42],
                     "headline": headline,
                     "message": message,
@@ -2708,6 +2751,8 @@ def generate_daily_briefing_pack(
                 spark = _fix_ats_employer_confusion(res.get("subject_spark") or hl.rstrip(".!"), top_co, top_title) if top_job else (res.get("subject_spark") or hl.rstrip(".!"))
                 chal = _fix_ats_employer_confusion(res.get("micro_challenge") or default_challenge, top_co, top_title) if top_job else (res.get("micro_challenge") or default_challenge)
                 return {
+                    "briefing_source": "gemini",
+                    "briefing_model": str(res.get("_llm_model") or _normalize_gemini_model(model) or DEFAULT_LLM_MODEL),
                     "subject_spark": spark[:46],
                     "headline": hl,
                     "message": msg_txt,
@@ -2721,6 +2766,8 @@ def generate_daily_briefing_pack(
             pass
 
     return {
+        "briefing_source": "vault",
+        "briefing_model": "deterministic-vault",
         "subject_spark": default_spark[:46],
         "headline": vault_headline,
         "message": vault_message,
@@ -3203,10 +3250,35 @@ def prepare_tailored_cvs(jobs_to_send, sub_cfg, today, root=ROOT):
     cv_out_dir.mkdir(parents=True, exist_ok=True)
     cv_docs_dir.mkdir(parents=True, exist_ok=True)
 
+    target_jobs = ranked[:max_cvs]
+
+    def _tailor_one(j_item):
+        return tailor_cv_with_llm(j_item, master_cv, sub_cfg)
+
+    # Tailor up to 3 CVs concurrently per subscriber (cuts 12 sequential JD + LLM calls by ~3x)
+    if len(target_jobs) > 1:
+        with ThreadPoolExecutor(max_workers=min(3, len(target_jobs))) as ex:
+            futures = [ex.submit(_tailor_one, j_item) for j_item in target_jobs]
+            tailored_results = []
+            for j_item, fut in zip(target_jobs, futures):
+                try:
+                    tailored_results.append((j_item, fut.result(), None))
+                except Exception as exc:
+                    tailored_results.append((j_item, None, exc))
+    else:
+        tailored_results = []
+        for j_item in target_jobs:
+            try:
+                tailored_results.append((j_item, _tailor_one(j_item), None))
+            except Exception as exc:
+                tailored_results.append((j_item, None, exc))
+
     summary_blocks = []
-    for j in ranked[:max_cvs]:
+    for j, analysis, err in tailored_results:
+        if err is not None:
+            gha_annotate("warning", f"LLM CV tailoring failed for {sub_name} ({j.get('title')}): {type(err).__name__}: {err}")
+            continue
         try:
-            analysis = tailor_cv_with_llm(j, master_cv, sub_cfg)
             if not analysis or not isinstance(analysis.get("cv"), dict):
                 continue
             cv_obj = analysis["cv"]
@@ -3219,6 +3291,7 @@ def prepare_tailored_cvs(jobs_to_send, sub_cfg, today, root=ROOT):
             if analysis.get("upgrade_reason"):
                 j["upgrade_reason"] = str(analysis["upgrade_reason"]).strip()
 
+            j["llm_analysis"] = analysis
             docx_name = cv_attachment_filename(sub_name, j, ext="docx")
             pdf_name = cv_attachment_filename(sub_name, j, ext="pdf")
             html_name = cv_attachment_filename(sub_name, j, ext="html")
@@ -3238,16 +3311,21 @@ def prepare_tailored_cvs(jobs_to_send, sub_cfg, today, root=ROOT):
             else:
                 att_filename, att_bytes = docx_name, docx_bytes
 
-            j["llm_analysis"] = analysis
             j["cv_filename"] = att_filename
             attachments.append((att_filename, att_bytes))
             score = analysis.get("match_score", "?")
             up_badge = " [CAREER UPGRADE MOVE]" if j.get("is_career_upgrade") else ""
-            print(f"  [{sub_name}] Tailored CV generated for {j['title']} at {j['company']}{up_badge} ({score}% match) -> docs/cvs/{sub_id}/{att_filename}")
+            t_src = analysis.get("tailor_source", "gemini")
+            t_mod = analysis.get("tailor_model") or DEFAULT_LLM_MODEL
+            engine_tag = f"AI: {t_mod}" if t_src == "gemini" else "FALLBACK: deterministic"
+            print(
+                f"  [{sub_name}] Tailored CV [{engine_tag}] for {j['title']} at {j['company']}"
+                f"{up_badge} ({score}% match) -> docs/cvs/{sub_id}/{att_filename}"
+            )
             kws = ", ".join(analysis.get("matched_keywords") or [])
             summary_blocks.append(
                 f"- **{j.get('title')}** at **{j.get('company')}** ({j.get('location', '')}){up_badge} — "
-                f"**{score}% CV Match** · saved to `docs/cvs/{sub_id}/{att_filename}`\n"
+                f"**{score}% CV Match** · `{engine_tag}` · saved to `docs/cvs/{sub_id}/{att_filename}`\n"
                 f"  - *Target Role Direction:* {cv_obj.get('target_direction', '')}\n"
                 f"  - *Lucy's take:* {analysis.get('lucy_why_it_fits', '')}\n"
                 + (f"  - *Career upgrade rationale:* {j.get('upgrade_reason')}\n" if j.get("upgrade_reason") else "")
@@ -3267,10 +3345,11 @@ def prepare_tailored_cvs(jobs_to_send, sub_cfg, today, root=ROOT):
 
 def send_email_digest(
     jobs_to_send, all_jobs_count, sub_cfg, today, root=ROOT,
-    attachments=None, sub_state=None, board_count=109
+    attachments=None, sub_state=None, board_count=109, ai_stats=None
 ):
     """Send a single subscriber's daily digest via Gmail/SMTP if credentials are configured."""
     sub_name = sub_cfg.get("name") or sub_cfg.get("recipient_email", "subscriber")
+    sub_id = sub_cfg.get("id") or sub_name
     if not jobs_to_send:
         print(f"  [{sub_name}] No new roles to email today.")
         return False
@@ -3324,14 +3403,38 @@ def send_email_digest(
         raise last_smtp_err
 
     commit_relationship_state(sub_state, rel_ctx, pack, jobs_to_send, today)
+    ai_cvs = sum(1 for j in jobs_to_send if (j.get("llm_analysis") or {}).get("tailor_source") == "gemini")
+    fb_cvs = sum(1 for j in jobs_to_send if (j.get("llm_analysis") or {}).get("tailor_source") == "deterministic")
+    b_src = pack.get("briefing_source", "vault")
+    b_mod = pack.get("briefing_model", "deterministic-vault")
+    if isinstance(ai_stats, dict):
+        ai_stats["gemini_cvs"] = ai_stats.get("gemini_cvs", 0) + ai_cvs
+        ai_stats["fallback_cvs"] = ai_stats.get("fallback_cvs", 0) + fb_cvs
+        if b_src == "gemini":
+            ai_stats["gemini_briefings"] = ai_stats.get("gemini_briefings", 0) + 1
+            ai_stats.setdefault("models_used", set()).add(b_mod)
+        else:
+            ai_stats["vault_briefings"] = ai_stats.get("vault_briefings", 0) + 1
+        for j in jobs_to_send:
+            an = j.get("llm_analysis") or {}
+            if an.get("tailor_source") == "gemini" and an.get("tailor_model"):
+                ai_stats.setdefault("models_used", set()).add(an["tailor_model"])
+    cv_detail = (
+        f"{len(attachments)} tailored CVs [{ai_cvs} Gemini AI, {fb_cvs} fallback]"
+        if attachments
+        else "0 tailored CVs"
+    )
+    b_tag = f"AI:{b_mod}" if b_src == "gemini" else "vault"
     print(
         f"  [{sub_name}] Sent Briefing #{rel_ctx['edition']} ({len(jobs_to_send)} roles, "
-        f"{len(attachments)} tailored CVs, angle #{pack['angle_number']}) to {msg['To']}."
+        f"{cv_detail}, briefing={b_tag}, angle #{pack['angle_number']}) -> subscriber '{sub_id}'."
     )
     return True
 
 
-def process_subscribers(fetched, state, cfg, today, send_email=True, only_id=None, root=ROOT, board_count=109):
+def process_subscribers(
+    fetched, state, cfg, today, send_email=True, only_id=None, root=ROOT, board_count=109, ai_stats=None
+):
     """Filter fetched jobs for each active subscriber, update their personal seen
     state in state['subscribers'][sub_id], and send each subscriber's email.
 
@@ -3378,6 +3481,7 @@ def process_subscribers(fetched, state, cfg, today, send_email=True, only_id=Non
                 send_email_digest(
                     to_email, len(sub_matched), sub_cfg, today, root=root,
                     attachments=attachments, sub_state=sub_state, board_count=board_count,
+                    ai_stats=ai_stats,
                 )
         except Exception as e:
             gha_annotate("error", f"email delivery failed for {sub_id}: {type(e).__name__}: {e}")
@@ -3393,7 +3497,7 @@ def strip_transient_fields(jobs):
     """Remove heavy job description / detail_api fields before writing static JSON files."""
     clean = []
     for j in jobs:
-         item = {k: v for k, v in j.items() if k not in ("description", "detail_api", "llm_analysis", "cv_filename", "is_career_upgrade", "upgrade_reason", "quiet_spotlight", "_wd_multi_term")}
+         item = {k: v for k, v in j.items() if k not in ("description", "detail_api", "llm_analysis", "cv_filename", "is_career_upgrade", "upgrade_reason", "quiet_spotlight", "_wd_multi_term", "_upgrades_classified")}
          clean.append(item)
     return clean
 
@@ -3458,21 +3562,38 @@ def refresh(cfg, companies, root=ROOT, today=None, send_email=True, subscriber_i
     jobs.sort(key=lambda j: j["eff_date"], reverse=True)
 
     # Process per-subscriber filtering, LLM CV tailoring, state updates, and email digests
-    email_failures = process_subscribers(fetched, state, cfg, today, send_email=send_email,
-                                         only_id=subscriber_id, root=root, board_count=len(companies))
+    ai_stats = {"gemini_cvs": 0, "fallback_cvs": 0, "gemini_briefings": 0, "vault_briefings": 0, "models_used": set()}
+    email_failures = process_subscribers(
+        fetched, state, cfg, today, send_email=send_email,
+        only_id=subscriber_id, root=root, board_count=len(companies), ai_stats=ai_stats,
+    )
 
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     fresh = write_outputs(root, cfg, jobs, state, today, stamp)
     ok = len(results) - len(failed)
     n_new = sum(1 for j in jobs if j["is_new"])
+    total_cvs = ai_stats["gemini_cvs"] + ai_stats["fallback_cvs"]
+    models_str = ", ".join(sorted(ai_stats["models_used"])) or "none"
     print(f"Fetched {ok}/{len(results)} boards. {len(jobs)} matching roles on main board, "
           f"{n_new} marked NEW, {len(fresh)} first seen this run.")
+    if send_email:
+        print(
+            f"AI Telemetry: {ai_stats['gemini_cvs']}/{total_cvs} CVs generated by Gemini AI "
+            f"({ai_stats['fallback_cvs']} fallback) | {ai_stats['gemini_briefings']} AI briefings "
+            f"({ai_stats['vault_briefings']} vault) | models: {models_str}"
+        )
     print(f"Page: {root / 'docs' / 'index.html'}")
 
     summary = [f"### Jobs Sentinel · {stamp}",
                f"- Boards fetched: **{ok}/{len(results)}**"
                + (f" (failed: {', '.join(c['name'] for c, _ in failed)})" if failed else ""),
                f"- Matching roles: **{len(jobs)}** · NEW: **{n_new}** · first seen this run: **{len(fresh)}**"]
+    if send_email:
+        summary.append(
+            f"- Gemini AI Telemetry: **{ai_stats['gemini_cvs']}/{total_cvs} CVs tailored by Gemini AI** "
+            f"({ai_stats['fallback_cvs']} deterministic fallback) · **{ai_stats['gemini_briefings']} AI daily briefings** "
+            f"({ai_stats['vault_briefings']} vault) · active model(s): `{models_str}`"
+        )
     if email_failures:
         summary.append(f"- :x: Email delivery failed for: **{', '.join(email_failures)}** "
                        "(their state was rolled back; they will be retried next run)")
