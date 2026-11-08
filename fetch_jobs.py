@@ -730,7 +730,9 @@ def infer_target_direction(job_item, sub_cfg=None, core_skills=None):
     else:
         level = "Senior Operations & Domain Specialist"
 
-    if re.search(r"\b(process mining|celonis|process intelligence|process excellence|operational excellence|continuous improvement|lean|six sigma|bpi)\b", blob):
+    if re.search(r"\b(organizational change|change management|change enablement|digital adoption|customer experience|partner experience|\bcx\b)\b", blob):
+        domain = "Organizational Change Management, Customer/Partner Experience (CX) & Digital Transformation"
+    elif re.search(r"\b(process mining|celonis|process intelligence|process excellence|operational excellence|continuous improvement|lean|six sigma|bpi)\b", blob):
         domain = "Process Intelligence, Operational Excellence & Continuous Improvement"
     elif re.search(r"\b(automation|rpa|power platform|power apps|power automate|low[- ]code|hyperautomation|blue prism|uipath)\b", blob):
         domain = "Intelligent Automation, Low-Code Architecture & Process Transformation"
@@ -1597,26 +1599,128 @@ def job_age_info(j, today):
     return days, is_hot, label
 
 
-DAILY_DOPAMINE_HOOKS = [
-    "Good morning, {first_name} — your track record puts you in the top 1% of candidates on the market today. Here is your highest-leverage play:",
-    "{first_name}, momentum compounds: 1 high-conviction application today puts you ahead of 95% of passive candidates.",
-    "I scanned the market while you slept, {first_name}, and unlocked {highlight_count} high-impact move(s) built for your background.",
-    "Your unfair advantage is proven execution at scale, {first_name}. Today's #1 opening at {top_company} has your name written all over it.",
-    "New day, new ceiling, {first_name}. Your ATS-ready CV is already tailored — all it takes is 60 seconds to take your shot.",
+DAILY_MOTIVATION_SYSTEM_PROMPT = """You are Lucy, an elite, sharp-witted private executive headhunter writing a 45-second morning briefing to your star client.
+Your philosophy is 'Us Against the System' & 'Relentless Career Velocity':
+- Staying comfortable in one seat pays the 'loyalty tax' (3-4% raises and slow internal queues), whereas strategic job moves are the #1 proven lever to unlock 25-50% compensation jumps, bigger titles, and fresh architectural scope.
+- Challenge the candidate never to get stuck where they are—move from a position of strength before comfort turns into stagnation.
+- Most applicants blindly toss generic PDFs into ATS black holes; YOU and the candidate are gaming the hiring machine together—you scanned the market overnight, isolated the upgrade moves, and pre-built ATS-ready CVs so firing off a top-1% application takes 60 seconds.
+
+Rules:
+- Address the candidate naturally by first name.
+- Keep the tone sharp, insider, confident, and executive—never cheesy corporate-speak.
+- Write 1 punchy headline (4-8 words) and a 2-3 sentence message (40-65 words) that sparks an immediate dopamine hit and makes them want to submit 1 application right now.
+- Return ONLY valid JSON: {"headline": "...", "message": "..."}"""
+
+DAILY_MOTIVATION_THEMES = [
+    "Refuse the corporate loyalty tax: strategic external moves unlock 30%+ leaps that internal review cycles stall for years.",
+    "Challenge yourself before comfort becomes a cage: if you aren't stretching your scope right now, you're leaving ceiling on the table.",
+    "Us vs. the hiring black box: while 95% of people spray generic resumes, we already reverse-engineered the ATS and armed your CVs.",
+    "Move from strength, not urgency: interviewing while you're winning lets you negotiate like an executive peer, never a supplicant.",
+    "Asymmetric daily upside: 60 seconds to send one surgical application costs nothing—and one 'yes' reprices your entire career trajectory.",
+    "Outgrow the waiting line: when your execution outpaces your current title, the open market is the fastest promotion committee on earth.",
+    "Momentum beats perfection: one high-conviction shot fired before 9 AM puts you leagues ahead of talented people who stay stuck.",
+]
+
+DAILY_INSIDER_VAULT = [
+    (
+        "Stop Paying the Comfort Tax.",
+        "{first_name}, staying comfortable in one seat hands you 3% adjustments while strategic external moves unlock 30%+ leaps in scope and comp. It's you and me against the hiring black box—I already isolated {highlight_count} high-leverage play(s) including {top_company} and armed your ATS-ready CVs. Take 60 seconds and fire one shot.",
+    ),
+    (
+        "Don't Wait in Somebody Else's Queue.",
+        "{first_name}, internal promotion cycles are designed to keep great operators patiently producing in place. The fastest way to level up your title and leverage is moving seats on your own terms—and today's radar at {top_company} is wide open for your track record.",
+    ),
+    (
+        "Comfort Is Crowded. Growth Is Open.",
+        "The moment a role stops stretching you is the moment to look up, {first_name}. While 95% of passive talent waits for permission, we already scanned the market overnight and tailored your CVs to beat the triage engine—pick one role below and make them tell you no.",
+    ),
+    (
+        "You + Lucy vs. The Hiring Machine.",
+        "Most candidates lose before a human ever reads their name; we flipped the script, {first_name}. Your experience is framed for both the ATS algorithm and the hiring manager's 6-second scan—grab your pre-built .docx for {top_company} and claim your unfair advantage today.",
+    ),
+    (
+        "Interview From Power, Never Need.",
+        "{first_name}, the smartest executives test the market when they are already winning—that is how you command step-up scope and top-of-band offers. Challenge yourself with one stretch conversation at {top_company} today; one 60-second click can reprice your next three years.",
+    ),
+    (
+        "The Market Promotes Faster Than HR.",
+        "Loyalty rarely compounds as fast as mobility, {first_name}: every major jump in authority comes from stepping into a bigger arena. I surfaced {highlight_count} target move(s) built for where you're going next, not just where you've been—let's put your name at the top of the stack.",
+    ),
+    (
+        "One Surgical Shot Beats Stagnation.",
+        "Getting stuck happens one 'maybe tomorrow' at a time, {first_name}. We took all the friction out of the game—your top targets led by {top_company} are ranked below and your CVs are ready in Gmail. Hit send on one before your first meeting.",
+    ),
 ]
 
 
-def _daily_dopamine_boost(sub_name, top_job, upgrade_count, today):
-    """Return a motivating, personalized morning headhunter boost that rotates daily."""
-    first_name = (sub_name or "there").split()[0]
+def call_gemini_daily_motivation(prompt_text, model="gemini-2.5-flash", api_key=None):
+    """Call Gemini for a fresh daily 'Us vs. The System' career motivation note."""
+    api_key = (api_key or os.environ.get("GEMINI_API_KEY") or "").strip()
+    if not api_key:
+        return None
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    gen_cfg = {
+        "temperature": 0.85,
+        "maxOutputTokens": 320,
+        "responseMimeType": "application/json",
+    }
+    if model.startswith("gemini-2.5"):
+        gen_cfg["thinkingConfig"] = {"thinkingBudget": 0}
+    payload = {
+        "systemInstruction": {"parts": [{"text": DAILY_MOTIVATION_SYSTEM_PROMPT}]},
+        "contents": [{"parts": [{"text": prompt_text}]}],
+        "generationConfig": gen_cfg,
+    }
+    body = http_json(url, payload, retries=1, headers={"x-goog-api-key": api_key}, timeout=25)
+    parts = (((body.get("candidates") or [{}])[0].get("content") or {}).get("parts") or [])
+    text_parts = [p.get("text", "") for p in parts if isinstance(p, dict) and p.get("text") and not p.get("thought")]
+    raw = "\n".join(text_parts).strip()
+    if not raw:
+        return None
+    parsed = parse_llm_json(raw)
+    if isinstance(parsed, dict) and parsed.get("headline") and parsed.get("message"):
+        return str(parsed["headline"]).strip(), str(parsed["message"]).strip()
+    return None
+
+
+def generate_daily_insider_note(sub_cfg, top_job, upgrade_count, hot_count, total_count, today):
+    """Generate a daily 'Us vs. The System' career-velocity headline & message via Gemini,
+    falling back seamlessly to the curated `DAILY_INSIDER_VAULT` when offline."""
+    sub_name = (sub_cfg or {}).get("name") or "Candidate"
+    first_name = sub_name.split()[0]
     top_co = (top_job or {}).get("company") or "a top employer"
-    hi_cnt = upgrade_count if upgrade_count > 0 else 1
-    template = DAILY_DOPAMINE_HOOKS[today.toordinal() % len(DAILY_DOPAMINE_HOOKS)]
-    return template.format(first_name=first_name, top_company=top_co, highlight_count=hi_cnt)
+    hi_cnt = upgrade_count if upgrade_count > 0 else max(1, total_count)
+    day_idx = today.toordinal()
+
+    api_key = (os.environ.get("GEMINI_API_KEY") or "").strip()
+    if api_key:
+        theme = DAILY_MOTIVATION_THEMES[day_idx % len(DAILY_MOTIVATION_THEMES)]
+        model = os.environ.get("GEMINI_MODEL") or (sub_cfg or {}).get("llm_model", "gemini-2.5-flash")
+        prompt = (
+            f"Date: {today.isoformat()}\n"
+            f"Candidate First Name: {first_name}\n"
+            f"Today's Angle: {theme}\n"
+            f"Radar Stats Today: {upgrade_count} Career Upgrade Moves, {hot_count} Hot (0-2d) openings, "
+            f"{total_count} total curated matches. Top spotlight company: {top_co}.\n"
+            "Write today's fresh 'Us Against the System' career-move briefing."
+        )
+        try:
+            res = call_gemini_daily_motivation(prompt, model=model, api_key=api_key)
+            if res:
+                return res
+        except Exception:
+            pass
+
+    h_tmpl, m_tmpl = DAILY_INSIDER_VAULT[day_idx % len(DAILY_INSIDER_VAULT)]
+    return (
+        h_tmpl.format(first_name=first_name, top_company=top_co, highlight_count=hi_cnt),
+        m_tmpl.format(first_name=first_name, top_company=top_co, highlight_count=hi_cnt),
+    )
 
 
 def _render_job_card_html(j, today):
-    """Render a minimalist executive job card with Career Upgrade emphasis and visual reward cues."""
+    """Render an email-safe, ultra-clean executive job card (using presentation tables so
+    alignment stays razor-sharp in Gmail Web, iOS, Android, Apple Mail, and Outlook)."""
     days, is_hot, age_label = job_age_info(j, today)
     loc_tag = html.escape(LOC_LABELS.get(j.get("loc_class"), j.get("loc_class", "")))
     title_esc = html.escape(j.get("title", "Untitled Role"))
@@ -1634,40 +1738,40 @@ def _render_job_card_html(j, today):
     if team_esc:
         meta_parts.append(team_esc)
     meta_parts.append(age_esc)
-    meta_html = " &middot; ".join(meta_parts)
+    meta_html = " &nbsp;&middot;&nbsp; ".join(meta_parts)
 
     badges = []
     if is_upgrade:
         badges.append(
-            "<span style='display:inline-block;background:#18181b;color:#ffffff;"
-            "font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;"
-            "letter-spacing:0.5px;margin-right:6px;text-transform:uppercase;'>"
+            "<span style='display:inline-block;background-color:#09090b;color:#ffffff;"
+            "font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px;"
+            "letter-spacing:0.6px;margin:0 6px 4px 0;text-transform:uppercase;'>"
             "&uarr; Career Upgrade Move</span>"
         )
     if is_hot:
         badges.append(
-            f"<span style='display:inline-block;background:#fef3c7;color:#92400e;"
-            f"font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;"
-            f"letter-spacing:0.3px;margin-right:6px;'>🔥 HOT &middot; {age_esc.upper()}</span>"
+            f"<span style='display:inline-block;background-color:#fef3c7;color:#92400e;"
+            f"border:1px solid #fde68a;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;"
+            f"letter-spacing:0.4px;margin:0 6px 4px 0;'>&#128293; HOT &middot; {age_esc.upper()}</span>"
         )
     elif j.get("is_new"):
         badges.append(
-            "<span style='display:inline-block;background:#f4f4f5;color:#27272a;"
+            "<span style='display:inline-block;background-color:#f4f4f5;color:#27272a;"
             "font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;"
-            "margin-right:6px;'>NEW</span>"
+            "margin:0 6px 4px 0;'>NEW</span>"
         )
 
     score = analysis.get("match_score")
     score_int = int(score) if isinstance(score, (int, float)) else None
     if score_int is not None:
         badges.append(
-            f"<span style='display:inline-block;background:#ecfdf5;color:#065f46;"
-            f"border:1px solid #a7f3d0;font-size:10px;font-weight:700;padding:1px 7px;"
-            f"border-radius:4px;margin-right:6px;'>&#9733; {score_int}% CV Match</span>"
+            f"<span style='display:inline-block;background-color:#ecfdf5;color:#065f46;"
+            f"border:1px solid #a7f3d0;font-size:10px;font-weight:700;padding:2px 8px;"
+            f"border-radius:4px;margin:0 6px 4px 0;'>&#9733; {score_int}% CV Match</span>"
         )
 
     upgrade_html = (
-        f"<div style='font-size:12.5px;color:#0f766e;font-weight:600;margin:4px 0 6px;'>"
+        f"<div style='font-size:12.5px;color:#047857;font-weight:600;margin:6px 0 4px;line-height:1.4;'>"
         f"&uarr; {html.escape(upgrade_reason)}</div>"
         if is_upgrade and upgrade_reason
         else ""
@@ -1681,71 +1785,78 @@ def _render_job_card_html(j, today):
             j, None, cv_obj.get("core_skills") or []
         )
         dir_esc = html.escape(dir_txt)
-        kws = ", ".join(html.escape(k) for k in (analysis.get("matched_keywords") or [])[:6])
+        kw_pills = "".join(
+            f"<span style='display:inline-block;background-color:#ffffff;border:1px solid #e4e4e7;"
+            f"color:#3f3f46;font-size:10.5px;padding:1px 6px;border-radius:4px;margin:2px 4px 2px 0;'>"
+            f"{html.escape(k)}</span>"
+            for k in (analysis.get("matched_keywords") or [])[:6]
+        )
         att_name = html.escape(j.get("cv_filename", "Tailored_CV.docx"))
         bar_pct = max(50, min(100, score_int or 90))
         meter_html = (
-            f"<div style='background:#e4e4e7;height:4px;border-radius:999px;overflow:hidden;margin:4px 0 7px;'>"
-            f"<div style='background:#10b981;width:{bar_pct}%;height:4px;border-radius:999px;'></div>"
+            f"<div style='background-color:#e4e4e7;height:4px;border-radius:999px;overflow:hidden;margin:5px 0 8px;'>"
+            f"<div style='background-color:#10b981;width:{bar_pct}%;height:4px;border-radius:999px;'></div>"
             f"</div>"
         )
         dir_line = (
-            f"<div style='font-size:11.5px;color:#0f766e;font-weight:700;margin-bottom:3px;'>"
+            f"<div style='font-size:11.5px;color:#0f766e;font-weight:700;margin-bottom:4px;'>"
             f"{dir_esc}</div>"
             if dir_esc else ""
         )
-        kw_line = (
-            f"<div style='margin-top:4px;font-size:11.5px;color:#52525b;'>"
-            f"<strong>ATS Keywords:</strong> {kws}</div>"
-            if kws else ""
-        )
+        kw_line = f"<div style='margin-top:6px;'>{kw_pills}</div>" if kw_pills else ""
         llm_box_html = f"""
-      <div style="background:#fafafa;border-left:3px solid #10b981;border-radius:0 6px 6px 0;padding:9px 12px;margin:8px 0 6px;font-size:12.5px;line-height:1.45;color:#27272a;">
-        <div style="font-weight:700;color:#18181b;margin-bottom:2px;">&#10024; Lucy&rsquo;s Headhunter Take &amp; Tailored CV</div>
+      <div style="background-color:#fafafa;border:1px solid #e4e4e7;border-left:3px solid #10b981;border-radius:6px;padding:10px 13px;margin-top:10px;font-size:12.5px;line-height:1.5;color:#27272a;">
+        <div style="font-size:11.5px;font-weight:700;color:#09090b;letter-spacing:0.1px;">&#10024; Lucy&rsquo;s Headhunter Take &amp; Tailored CV</div>
         {meter_html}
         {dir_line}
-        <div>{why_esc}</div>
+        <div style="color:#27272a;">{why_esc}</div>
         {kw_line}
-        <div style="margin-top:6px;font-size:11.5px;color:#0f766e;font-weight:600;">
-          &#9889; Ready to Send (ATS .docx): <code style="background:#f4f4f5;color:#18181b;padding:1px 5px;border-radius:3px;">{att_name}</code>
+        <div style="margin-top:8px;padding-top:6px;border-top:1px solid #e4e4e7;font-size:11.5px;color:#0f766e;font-weight:700;">
+          &#128206; ATS-Armed &amp; Attached: <code style="background-color:#ffffff;border:1px solid #e4e4e7;color:#09090b;padding:1px 6px;border-radius:4px;font-size:11px;">{att_name}</code>
         </div>
       </div>"""
 
-    border_style = (
-        "border:1px solid #18181b;border-left:4px solid #18181b;background:#ffffff;"
+    card_style = (
+        "border:1.5px solid #18181b;border-left:4px solid #09090b;background-color:#ffffff;border-radius:10px;padding:15px 17px;margin-bottom:12px;"
         if is_upgrade
-        else "border:1px solid #e4e4e7;background:#ffffff;"
+        else "border:1px solid #e4e4e7;background-color:#ffffff;border-radius:10px;padding:13px 16px;margin-bottom:9px;"
     )
     btn_style = (
-        "background:#09090b;color:#ffffff;padding:5px 11px;border-radius:6px;font-size:11.5px;font-weight:700;text-decoration:none;white-space:nowrap;"
+        "display:inline-block;background-color:#09090b;color:#ffffff;padding:7px 13px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap;"
         if is_upgrade
-        else "background:#f0fdf4;color:#0f766e;border:1px solid #99f6e4;padding:4px 10px;border-radius:6px;font-size:11.5px;font-weight:700;text-decoration:none;white-space:nowrap;"
+        else "display:inline-block;background-color:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap;"
     )
-    badge_row = f"<div style='margin-bottom:6px;'>{''.join(badges)}</div>" if badges else ""
+    badge_row = f"<div style='margin-bottom:5px;'>{''.join(badges)}</div>" if badges else ""
 
     return f"""
-    <div style="{border_style}border-radius:8px;padding:14px 16px;margin-bottom:10px;">
+    <div style="{card_style}">
       {badge_row}
-      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;">
-        <div style="font-size:15px;font-weight:700;color:#09090b;line-height:1.35;">
-          <a href="{url_esc}" style="color:#09090b;text-decoration:none;">{title_esc}</a>
-        </div>
-        <a href="{url_esc}" style="{btn_style}">
-          Apply &rarr;
-        </a>
-      </div>
-      <div style="font-size:12.5px;color:#71717a;margin-top:2px;">
-        {meta_html}
-      </div>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
+        <tr>
+          <td valign="top" style="padding-right:12px;">
+            <div style="font-size:15.5px;font-weight:700;color:#09090b;line-height:1.35;">
+              <a href="{url_esc}" style="color:#09090b;text-decoration:none;">{title_esc}</a>
+            </div>
+            <div style="font-size:12.5px;color:#71717a;margin-top:3px;line-height:1.4;">
+              {meta_html}
+            </div>
+          </td>
+          <td valign="top" align="right" width="96" style="white-space:nowrap;">
+            <a href="{url_esc}" style="{btn_style}">Apply &rarr;</a>
+          </td>
+        </tr>
+      </table>
       {upgrade_html}
       {llm_box_html}
     </div>"""
 
 
 def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_email, attachments=None):
-    """Construct a minimalist, dopamine-boosting executive daily digest email."""
+    """Construct an editorial-grade, minimalist executive daily briefing with a daily GenAI
+    'Us Against the System' career-move manifesto and visual dopamine cues."""
     recipient = sub_cfg.get("recipient_email", "lucasschollmatter@gmail.com")
     sub_name = sub_cfg.get("name") or recipient
+    first_name = (sub_name or "there").split()[0]
     date_str = today.isoformat()
     attachments = attachments or []
 
@@ -1765,7 +1876,10 @@ def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_ema
     hot_jobs = [item[3] for item in enriched if item[4]]
     standard_jobs = [item[3] for item in enriched if not item[6]]
     top_job = enriched[0][3] if enriched else None
-    morning_boost = _daily_dopamine_boost(sub_name, top_job, len(upgrade_jobs), today)
+
+    insider_headline, insider_message = generate_daily_insider_note(
+        sub_cfg, top_job, len(upgrade_jobs), len(hot_jobs), len(jobs_to_send), today
+    )
 
     msg = EmailMessage()
     hot_prefix = f"🔥 {len(hot_jobs)} HOT · " if hot_jobs else "⚡ "
@@ -1779,9 +1893,12 @@ def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_ema
 
     # Minimalist plain-text version (preserves '- {title} at {company}' format)
     txt_lines = [
-        f"{sub_name} — Daily Curated Job Digest ({date_str})",
-        morning_boost,
+        f"{sub_name} — Lucy Private Talent Briefing ({date_str})",
         "Lucy, your personal headhunter — your daily reminder to check where to apply today.",
+        "",
+        f"⚡ {insider_headline}",
+        insider_message,
+        "",
         f"{len(upgrade_jobs)} Career Upgrade Move(s) · {len(hot_jobs)} Hot (0-2d) · {len(jobs_to_send)} shown ({all_jobs_count} active matches)",
         "",
     ]
@@ -1808,7 +1925,7 @@ def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_ema
             if j.get("cv_filename"):
                 txt_lines.append(f"  Attached CV: {j['cv_filename']}")
         txt_lines.append("")
-    txt_lines.append("🎯 Today's 60-Second Win: Pick 1 role above, attach your tailored .docx CV, and hit submit.")
+    txt_lines.append("🎯 60-Second Execution Play: Pick 1 role above, grab your pre-tailored .docx CV, and hit submit.")
     msg.set_content("\n".join(txt_lines))
 
     # Minimalist HTML sections
@@ -1816,9 +1933,9 @@ def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_ema
     if upgrade_jobs:
         up_cards = "".join(_render_job_card_html(j, today) for j in upgrade_jobs)
         sections_html.append(f"""
-        <div style="margin-bottom:22px;">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#18181b;border-bottom:1.5px solid #18181b;padding-bottom:4px;margin-bottom:10px;">
-            &#9889; Career Upgrade Moves ({len(upgrade_jobs)}) &middot; High-Reward Targets
+        <div style="margin-bottom:24px;">
+          <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.1px;color:#09090b;border-bottom:2px solid #09090b;padding-bottom:6px;margin-bottom:12px;">
+            &#9889; Career Upgrade Moves ({len(upgrade_jobs)}) &middot; Step-Up Targets
           </div>
           {up_cards}
         </div>""")
@@ -1827,12 +1944,12 @@ def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_ema
         std_heading = (
             "Hot Off the Press &amp; Additional Matches"
             if hot_jobs
-            else "Matching Roles"
+            else "Additional Curated Matches"
         )
         std_cards = "".join(_render_job_card_html(j, today) for j in standard_jobs)
         sections_html.append(f"""
-        <div style="margin-bottom:14px;">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#71717a;border-bottom:1px solid #e4e4e7;padding-bottom:4px;margin-bottom:10px;">
+        <div style="margin-bottom:16px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.1px;color:#71717a;border-bottom:1px solid #e4e4e7;padding-bottom:6px;margin-bottom:12px;">
             {std_heading} ({len(standard_jobs)})
           </div>
           {std_cards}
@@ -1840,55 +1957,89 @@ def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_ema
     elif hot_jobs:
         # Ensure "Hot Off the Press" marker is present when all roles are upgrades and hot
         sections_html.append(
-            "<div style='font-size:11px;color:#71717a;margin-top:4px;'>Hot Off the Press: includes roles posted in the last 1&ndash;2 days.</div>"
+            "<div style='font-size:11px;color:#71717a;margin:0 0 12px;'>Hot Off the Press: includes roles posted in the last 1&ndash;2 days.</div>"
         )
 
-    sub_name_esc = html.escape(sub_name)
-    boost_esc = html.escape(morning_boost)
-    preheader_txt = (
-        f"⚡ #1 Play Today: {top_job.get('title', '')} at {top_job.get('company', '')} — {morning_boost}"
-        if top_job else morning_boost
-    )
-    preheader_esc = html.escape(preheader_txt)
+    first_name_esc = html.escape(first_name)
+    headline_esc = html.escape(insider_headline)
+    message_esc = html.escape(insider_message)
+    preheader_esc = html.escape(f"⚡ {insider_headline} — {insider_message}")
 
-    stats_parts = [
-        f"<strong>{len(upgrade_jobs)}</strong> Career Upgrade Move(s)",
-        f"<strong>{len(hot_jobs)}</strong> Hot (0&ndash;2d)",
-        f"<strong>{len(jobs_to_send)}</strong> Today",
-    ]
-    if attachments:
-        stats_parts.append(f"<strong>{len(attachments)}</strong> Tailored CV(s) Attached")
-    stats_parts.append(f"{all_jobs_count} Active")
-    stats_line = " &nbsp;&middot;&nbsp; ".join(stats_parts)
+    up_color = "#059669" if upgrade_jobs else "#18181b"
+    hot_color = "#d97706" if hot_jobs else "#18181b"
+    cv_color = "#0f766e" if attachments else "#71717a"
 
     html_body = f"""<!doctype html>
-<html>
-<body style="margin:0;padding:24px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#18181b;background:#f4f4f5;">
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lucy &middot; Daily Briefing</title>
+</head>
+<body style="margin:0;padding:28px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:#18181b;background-color:#f4f4f5;-webkit-font-smoothing:antialiased;">
   <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">{preheader_esc}</div>
-  <div style="max-width:660px;margin:0 auto;background:#ffffff;border:1px solid #e4e4e7;border-radius:10px;padding:28px 28px 22px;">
-    <div style="border-bottom:1.5px solid #18181b;padding-bottom:14px;margin-bottom:18px;">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#0f766e;margin-bottom:4px;">
-        &#10024; Lucy &middot; Personal Headhunter &amp; Daily Radar
+
+  <div style="max-width:640px;margin:0 auto;background-color:#ffffff;border:1px solid #e4e4e7;border-radius:14px;padding:30px 28px 24px;">
+
+    <!-- Editorial Masthead -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin-bottom:10px;">
+      <tr>
+        <td align="left" style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:1.3px;color:#059669;">
+          &#10022; Lucy &middot; Personal Headhunter
+        </td>
+        <td align="right" style="font-size:11.5px;font-weight:600;color:#71717a;">
+          {date_str}
+        </td>
+      </tr>
+    </table>
+
+    <h1 style="margin:0 0 4px;font-size:23px;font-weight:800;letter-spacing:-0.5px;color:#09090b;line-height:1.25;">
+      Good morning, {first_name_esc}.
+    </h1>
+    <div style="font-size:13px;color:#52525b;margin-bottom:16px;line-height:1.45;">
+      Your daily reminder to check where to apply today &mdash; Career Upgrade Moves ranked first.
+    </div>
+
+    <!-- Dark Obsidian 'Us Against the System' Daily Manifesto Card -->
+    <div style="background-color:#09090b;color:#fafafa;border-radius:11px;padding:18px 20px;margin-bottom:16px;">
+      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1.4px;color:#34d399;margin-bottom:6px;">
+        &#9889; Today&rsquo;s Edge &middot; Us vs. The System
       </div>
-      <h1 style="margin:0 0 6px;font-size:20px;font-weight:800;letter-spacing:-0.3px;color:#09090b;">
-        {sub_name_esc} &mdash; {date_str}
-      </h1>
-      <div style="font-size:13px;font-weight:600;color:#0f766e;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px 11px;margin-bottom:8px;line-height:1.4;">
-        &#9889; {boost_esc}
+      <div style="font-size:16px;font-weight:800;color:#ffffff;letter-spacing:-0.2px;margin-bottom:6px;line-height:1.3;">
+        {headline_esc}
       </div>
-      <div style="font-size:12px;color:#52525b;margin-bottom:10px;">
-        Your daily reminder to check where to apply today &middot; Career Upgrade Moves highlighted first.
-      </div>
-      <div style="font-size:12px;color:#27272a;background:#fafafa;border:1px solid #e4e4e7;border-radius:6px;padding:7px 10px;">
-        {stats_line}
+      <div style="font-size:13px;color:#d4d4d8;line-height:1.55;">
+        {message_esc}
       </div>
     </div>
 
+    <!-- 4-Tile Minimalist Scoreboard Strip -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;border-spacing:0;background-color:#fafafa;border:1px solid #e4e4e7;border-radius:10px;margin-bottom:22px;text-align:center;">
+      <tr>
+        <td width="25%" style="padding:10px 6px;border-right:1px solid #e4e4e7;">
+          <div style="font-size:17px;font-weight:800;color:{up_color};line-height:1.1;">{len(upgrade_jobs)}</div>
+          <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#71717a;margin-top:3px;">Upgrade Moves</div>
+        </td>
+        <td width="25%" style="padding:10px 6px;border-right:1px solid #e4e4e7;">
+          <div style="font-size:17px;font-weight:800;color:{hot_color};line-height:1.1;">{len(hot_jobs)}</div>
+          <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#71717a;margin-top:3px;">Hot (0&ndash;2d)</div>
+        </td>
+        <td width="25%" style="padding:10px 6px;border-right:1px solid #e4e4e7;">
+          <div style="font-size:17px;font-weight:800;color:{cv_color};line-height:1.1;">{len(attachments)}</div>
+          <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#71717a;margin-top:3px;">Ready CVs</div>
+        </td>
+        <td width="25%" style="padding:10px 6px;">
+          <div style="font-size:17px;font-weight:800;color:#18181b;line-height:1.1;">{len(jobs_to_send)}</div>
+          <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#71717a;margin-top:3px;">Today ({all_jobs_count} Active)</div>
+        </td>
+      </tr>
+    </table>
+
     {''.join(sections_html)}
 
-    <div style="margin-top:16px;padding-top:12px;border-top:1px solid #e4e4e7;font-size:12px;color:#27272a;background:#fafafa;border-radius:6px;padding:10px 12px;">
-      <strong>&#127919; Today&rsquo;s 60-Second Win:</strong> Pick just <strong>1 role</strong> above, download your pre-tailored <code style="background:#f4f4f5;padding:1px 4px;border-radius:3px;">CV_*.docx</code> (previews directly in Gmail &amp; passes ATS triage), and hit submit. One high-leverage shot a day compounds fast.
-      <div style="font-size:11px;color:#71717a;margin-top:4px;">Curated by Lucy, your personal headhunter.</div>
+    <!-- 60-Second Execution Play Footer -->
+    <div style="margin-top:18px;padding:14px 16px;background-color:#fafafa;border:1px solid #e4e4e7;border-radius:9px;font-size:12px;color:#27272a;line-height:1.5;">
+      <strong style="color:#09090b;">&#127919; The 60-Second Play:</strong> Pick <strong>1 role</strong> above &rarr; preview or download your attached <code style="background-color:#ffffff;border:1px solid #e4e4e7;padding:1px 5px;border-radius:4px;font-size:11px;">CV_*.docx</code> right inside Gmail &rarr; submit before your next meeting. Comfort stays put; movers get paid.
     </div>
   </div>
 </body>

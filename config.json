@@ -197,6 +197,63 @@
       ],
       "include_remote_mexico": true,
       "include_country_only": true
+    },
+    {
+      "id": "monica",
+      "name": "Mónica Muñoz",
+      "recipient_email": "monica.munoz.san@gmail.com",
+      "enabled": true,
+      "email_on_baseline": true,
+      "email_mode": "new_or_discovered",
+      "cv_file": "cvs/monica.md",
+      "max_tailored_cvs": 3,
+      "upgrade_title_include": [
+        "\\b(director(a)?|head of|vp|vice[- ]?president(e|a)?)\\b",
+        "\\b(senior manager|sr\\.? manager|gerente (senior|sr)|manager|gerente)\\b",
+        "\\b(principal|coe lead|practice lead|global lead|regional lead|latam lead)\\b",
+        "\\b(lead|leader|lider)\\b.*\\b(change|transformation|customer experience|cx|partner|process|bpi|continuous improvement|operational excellence|enablement|adoption)\\b",
+        "\\b(change|transformation|customer experience|cx|partner|process|bpi|enablement)\\b.*\\b(lead|leader|lider|manager|gerente|head|director)\\b"
+      ],
+      "title_include": [
+        "\\b(organizational change|change management|change enablement|change & transformation|transformation & change|digital adoption|adoption)\\b",
+        "\\b(gestion del cambio|transformacion organizacional|cultura y cambio)\\b",
+        "\\b(customer experience|partner experience|employee experience|user adoption|\\bcx\\b)\\b.*\\b(manager|lead|leader|specialist|strategist|consultant|analyst|program|operations|innovation|director|head)\\b",
+        "\\b(senior|sr\\.?|lead|global|regional|manager|head|director)\\b.*\\b(customer experience|partner experience|\\bcx\\b)\\b",
+        "\\b(business process|process) (improvement|innovation|excellence|transformation|management|optimization|re-?engineering)\\b",
+        "\\b(\\bbpi\\b|\\bbpm\\b|continuous improvement|mejora continua|operational excellence|business transformation|digital transformation|transformacion digital)\\b",
+        "\\b(partner|channel|distributor|alliances?)\\b.*\\b(onboarding|lifecycle|enablement|operations|experience|program|transformation|success|engagement)\\b",
+        "\\b(sales|commercial|partner|field|global) enablement\\b",
+        "\\b(cpq|quote[- ]to[- ]cash|q2c|pricing|sales processing|sales operations)\\b.*\\b(lead|leader|manager|specialist|consultant|analyst|operations)\\b",
+        "\\b(self[- ]service|support operations|customer operations|customer success)\\b.*\\b(lead|leader|team lead|manager|program|strategist|head)\\b",
+        "\\b(program|project|transformation|pmo|agile)\\b.*\\b(manager|lead|leader|gerente|lider|consultant|specialist)\\b"
+      ],
+      "title_exclude": [
+        "\\bassistant to\\b",
+        "\\bexecutive assistant\\b",
+        "\\bdirector'?s? assistant\\b",
+        "\\bintern(ship)?\\b",
+        "\\bpracticante\\b",
+        "\\bbecari[oa]\\b",
+        "\\b(junior|jr)\\b",
+        "\\b(software|backend|frontend|front-end|back-end|full[- ]stack|devops|sre|cloud|platform|data|machine learning|ml|ai|network|security|firmware|hardware|mechanical|electrical)\\b.*\\b(engineer|developer|architect|scientist)\\b",
+        "\\b(qa|quality assurance|test|testing|sdet)\\b",
+        "\\b(call center agent|telemarketing|retail|store|cashier|warehouse associate)\\b",
+        "\\b(accountant|accounting|payroll|tax|legal|nurse|physician)\\b"
+      ],
+      "locations": [
+        "guadalajara",
+        "zapopan",
+        "tlaquepaque",
+        "tonala",
+        "tlajomulco",
+        "el salto",
+        "puerto vallarta",
+        "jalisco",
+        "gdl",
+        "jal"
+      ],
+      "include_remote_mexico": true,
+      "include_country_only": true
     }
   ]
 }
