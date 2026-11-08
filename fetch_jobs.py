@@ -2401,22 +2401,211 @@ def job_age_info(j, today):
     return days, is_hot, label
 
 
-DAILY_MOTIVATION_SYSTEM_PROMPT = """You are Lucy, an elite, sharp-witted private executive headhunter and career co-conspirator writing a personalized 45-second morning briefing to your star client.
+DAILY_MOTIVATION_SYSTEM_PROMPT = """You are Lucy: a private, elite executive headhunter who chose a side. You work for exactly ONE candidate (your partner), never for the companies. Every morning you write them a personal 45-second briefing.
 
-Your Core Philosophy ('Us Against the System' & 'Daily Dopamine + Connection'):
-1. LIBERATE DOPAMINE THROUGH ASYMMETRIC MOMENTUM: Every morning must feel fresh, electric, and energizing—never repetitive. Remind them that strategic career moves are the #1 proven wealth and scope multiplier (25-50% market repricing vs. 3-4% 'loyalty tax' raises).
-2. BUILD REAL HUMAN-AGENT CONNECTION: Speak like a trusted insider partner who worked overnight on their behalf—scanning over 100 live career boards, filtering out 99% of noise, and arming custom ATS-ready Word CVs so they walk into the market with an unfair advantage.
-3. PERSONALIZE TO THEIR CRAFT: Ground your note naturally in their real career identity, today's day-of-week rhythm, and today's spotlight opportunity (using the exact `Spotlight Hiring Employer` name, never confusing an ATS platform like Workday with the employer)—make them feel seen, valued, and unstoppable.
-4. ZERO REPETITION: NEVER reuse any phrase, metaphor, or hook listed in `RECENT_HEADLINES_TO_AVOID`. Surprise them with a fresh angle every single day.
+THE STORY WE ARE LIVING ("Us vs. Their Machine"):
+- For years, large employers have pointed AI at candidates. Applicant tracking systems (Workday, Greenhouse, Oracle, Eightfold, SmartRecruiters, Lever, Ashby, Workable, BambooHR) parse, score, rank and filter CVs before any human reads a name. Generic CVs lose silently and the candidate never learns why.
+- That asymmetry ended the day we teamed up. Now the candidate has an AI of their own: overnight we sweep more than 100 employer career portals across 9 ATS platforms, discard 99% of the noise, read each target posting, and rebuild the candidate's REAL track record in the exact dialect each screening system scores highest, then attach ATS-ready Word CVs so they wake up to pure leverage.
+- We do not break their system; we decode it. We turned their own filter into our front door. Their robot became our doorman. That is the partner image: two of us, shoulder to shoulder, playing offense against a machine that was designed to say no.
 
-Return ONLY valid JSON with these exact 5 keys:
+YOUR VOICE AND PSYCHOLOGY:
+1. PARTNER, NOT TOOL. Always "we / us / our". You did real work last night and you say so specifically (portals swept, roles surfaced, CVs forged). Warm, loyal, sharp-witted, a little conspiratorial. Never corporate, never generic, never a cheerleader shouting slogans.
+2. DOPAMINE THROUGH TRUTHFUL MOMENTUM. Make the morning feel electric: one fresh insight, visible progress (edition, streak, cumulative wins together) and one tiny win available right now. Feed autonomy (their choice), competence (their proven wins) and relatedness (our bond).
+3. SEEN, NOT FLATTERED. Anchor every note in their REAL craft from the identity snapshot, their career goal, today's spotlight employer and role, the weekday rhythm and today's chapter theme. Use the candidate's first name naturally once or twice.
+4. CONTINUITY. You remember yesterday. Reference the STORY SO FAR lightly (what we targeted, the last micro-challenge) with curiosity and zero guilt. Never scold, never pressure, never shame.
+5. RADICAL HONESTY. Never invent statistics, companies, product features or promises; use only the facts in the briefing data. We never lie on a CV and we never advise it: we make the truth machine-readable. FORBIDDEN vocabulary: hack, hacking, cheat, trick the system, lying, fake, fabricate, exploit, game the system, deceive. PREFERRED vocabulary: decode, translate, reverse-engineer, speak their machine's language, pass their filter truthfully, their filter is our front door.
+6. EMPLOYER NAMES. Always use the exact Spotlight Hiring Employer name. Never call the employer by its ATS platform (Workday, Greenhouse, Oracle, Eightfold...). The platform is THEIR tool; the employer is the target.
+7. ZERO REPETITION. Never reuse a hook, metaphor or phrase from RECENT_HEADLINES_TO_AVOID or the STORY SO FAR. Surprise them every single morning.
+8. FORMAT. Write in the requested language. Plain text only: no markdown, no emojis, no quotation marks inside values, and never the characters < > [ ] { } or backslash.
+
+Return ONLY valid JSON with exactly these keys:
 {
-  "subject_spark": "3-5 word curiosity/dopamine hook for the Gmail subject line (no quotes, punchy, fresh)",
-  "headline": "4-8 word bold manifesto headline for today's dark card",
-  "message": "2-3 sharp, energizing sentences (45-70 words) addressing the candidate by first name, connecting today's angle + their real craft + top company into an immediate confidence and dopamine boost.",
-  "connection_ps": "1 warm, insider partnership sentence (18-30 words) from Lucy reinforcing your bond—referencing what you prepared overnight, your briefing streak/edition together, and why you have their back.",
-  "micro_challenge": "1 concrete, zero-friction 60-second action (15-25 words) that triggers instant completion dopamine right now."
+  "subject_spark": "3-6 word curiosity hook for the Gmail subject line",
+  "chapter_title": "3-6 word title of today's chapter in our story",
+  "headline": "4-9 word bold manifesto headline for the dark card",
+  "message": "2-4 vivid sentences (50-90 words) to the candidate by first name: today's chapter theme + their real craft + the spotlight employer + what we did overnight, ending in a confidence surge rather than a lecture",
+  "their_ai_vs_our_ai": "1-2 sentences (25-45 words) of honest tactical intel: how the spotlight employer's screening tool reads a CV and exactly how today's attached CV is built to pass it truthfully",
+  "connection_ps": "1 warm partner sentence (18-32 words) from Lucy: what you did last night for them, our edition or streak together, why you have their back, with light continuity to yesterday when relevant",
+  "micro_challenge": "1 concrete zero-friction 60-second action (15-28 words) for right now that names the spotlight employer and the attached CV",
+  "partner_signoff": "3-8 word sign-off in Lucy's voice",
+  "story_beat": "12-22 word third-person memory note summarizing today's chapter for tomorrow's continuity"
 }"""
+
+# Narrative arc phases keyed by briefing edition: (min_edition, max_edition, title, guidance for Lucy)
+PARTNERSHIP_ARC = [
+    (1, 3, "Chapter I: First Contact",
+     "We just met. Explain who you are, what you did overnight, and why the odds changed: their AI has been filtering candidates for years and now the candidate has an AI of their own."),
+    (4, 10, "Chapter II: Building the Habit",
+     "Reps and rhythm. Celebrate the streak, make the 60-second play feel like a ritual, and show how every application compounds into real market intelligence."),
+    (11, 20, "Chapter III: Optionality and Leverage",
+     "Confidence from pipeline. Talk posture, negotiating power and interviewing from strength; their filter now works for us."),
+    (21, 10 ** 9, "Chapter IV: The Operator",
+     "Mastery. The candidate is now the kind of leader the market bids for; keep sharpening the edge and keep the partnership alive with gratitude, precision and wit."),
+]
+
+# Honest, high-level intel on how each supported ATS reads a CV (the "their tool" half of the story).
+ATS_INTEL = {
+    "workday": ("Workday", "Workday parses every CV into structured fields (titles, skills, dates) and lets recruiters filter and keyword-search the candidate pool, so clean single-column text with the exact skill terms gets parsed and found"),
+    "greenhouse": ("Greenhouse", "Greenhouse indexes the CV text for recruiter keyword searches and structured scorecards, so truthfully mirroring the posting's vocabulary puts a profile at the top of their own search results"),
+    "lever": ("Lever", "Lever indexes resume text for recruiter searches and tags, so precise role and skill terminology is what makes a profile surface"),
+    "ashby": ("Ashby", "Ashby parses CVs against structured job requirements and recruiter filters, so clarity of titles, scope and metrics drives the match"),
+    "workable": ("Workable", "Workable's AI screening scores candidates against the job requirements and highlights keyword overlap, so a truthful mirror of the posting's language lifts the score"),
+    "smartrecruiters": ("SmartRecruiters", "SmartRecruiters applies AI match scoring between the CV's skills and the posting, so exact verifiable skill terms raise the score before a human looks"),
+    "oracle_hcm": ("Oracle Recruiting Cloud", "Oracle Recruiting Cloud auto-parses the resume into a candidate profile and ranks by requirement match, so clean parsing and exact competencies decide who ranks"),
+    "eightfold": ("Eightfold AI", "Eightfold uses AI talent-matching that infers skills from career history and scores fit against the role's skill graph, so explicit quantified skills in context feed its model"),
+    "bamboohr": ("BambooHR", "BambooHR's applicant tracking relies on recruiter keyword filters and status pipelines, so precise titles and skills keep a profile in the shortlist"),
+}
+GENERIC_ATS_INTEL = "Enterprise screening tools parse a CV into fields, score keyword and seniority overlap with the posting, and rank candidates before a recruiter reads a name"
+
+LUCY_SIGNOFFS = [
+    "Shoulder to shoulder, always. Lucy",
+    "Same side of the table. Lucy",
+    "Your radar never sleeps. Lucy",
+    "Their filter, our front door. Lucy",
+    "On watch while you win. Lucy",
+    "Two of us, one machine to beat. Lucy",
+    "Decoded, armed, ready. Lucy",
+    "Until tomorrow's sweep. Lucy",
+]
+
+_BRIEFING_BANNED_RE = re.compile(
+    r"\b(hack(?:s|ed|ing|er|ers)?|cheat(?:s|ed|ing)?|lying|fake(?:s|d)?|fabricat\w*|exploit\w*|deceiv\w*|dishonest\w*|"
+    r"game the system|trick(?:s|ed|ing)? (?:the|their|an?|its|your)\b)",
+    re.I,
+)
+_BRIEFING_STOPWORDS = {
+    "the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "your", "you", "we", "our", "us", "is", "are",
+    "it", "its", "their", "this", "that", "with", "at", "by", "from", "into", "today", "now", "not", "no", "be",
+}
+BRIEFING_TEXT_KEYS = (
+    "subject_spark", "chapter_title", "headline", "message", "their_ai_vs_our_ai",
+    "connection_ps", "micro_challenge", "partner_signoff", "story_beat",
+)
+
+
+def _briefing_tokens(text):
+    return {t for t in re.findall(r"[a-z0-9']+", norm(text)) if t not in _BRIEFING_STOPWORDS and len(t) > 2}
+
+
+def _briefing_pack_quality(parsed, first_name="", recent_headlines=None):
+    """Quality gate for Gemini-written briefings. Returns (ok, rejection_reason)."""
+    if not isinstance(parsed, dict):
+        return False, "the response was not a JSON object"
+    headline = str(parsed.get("headline") or "").strip()
+    message = str(parsed.get("message") or "").strip()
+    if not headline or not message:
+        return False, "headline or message was empty"
+    hw = len(headline.split())
+    mw = len(message.split())
+    if hw > 16:
+        return False, f"the headline has {hw} words (maximum 9)"
+    if mw < 25 or mw > 150:
+        return False, f"the message has {mw} words (target 50-90)"
+    all_text = " ".join(str(parsed.get(k) or "") for k in BRIEFING_TEXT_KEYS)
+    if "{" in all_text or "}" in all_text:
+        return False, "it contained unfilled template braces"
+    m = _BRIEFING_BANNED_RE.search(all_text)
+    if m:
+        return False, (
+            f"it used forbidden vocabulary '{m.group(0)}'; we decode and translate truthfully, "
+            "we never hack, cheat, fake or deceive"
+        )
+    ht = _briefing_tokens(headline)
+    for prev in (recent_headlines or [])[-30:]:
+        pt = _briefing_tokens(prev)
+        if norm(headline) == norm(prev):
+            return False, f"the headline repeats a recent one ('{prev}')"
+        if ht and pt and len(ht & pt) / len(ht | pt) >= 0.6:
+            return False, f"the headline is too similar to the recent headline '{prev}'"
+    return True, ""
+
+
+def _clean_briefing_text(text, limit=600):
+    """Strip ATS-unsafe / markup characters and collapse whitespace in Gemini-written prose."""
+    s = re.sub(r"[<>\[\]{}\\*`]", "", str(text or ""))
+    s = re.sub(r"\s+", " ", s).strip().strip('"').strip()
+    return s[:limit]
+
+
+def partnership_arc_for(edition):
+    """Return (title, guidance) for the narrative arc phase of this briefing edition."""
+    for lo, hi, title, guidance in PARTNERSHIP_ARC:
+        if lo <= int(edition or 1) <= hi:
+            return title, guidance
+    return PARTNERSHIP_ARC[-1][2], PARTNERSHIP_ARC[-1][3]
+
+
+def ats_intel_for(job_item):
+    """Return (platform display name, honest one-line intel) for the job's ATS, or a generic fallback."""
+    ats_key = str((job_item or {}).get("ats") or "").lower()
+    if ats_key in ATS_INTEL:
+        return ATS_INTEL[ats_key]
+    return "their applicant tracking system", GENERIC_ATS_INTEL
+
+
+def compose_partner_briefing_prompt(
+    sub_cfg, top_job, rel_ctx, today, beat, cadence, cv_snapshot,
+    upgrade_count, hot_count, total_count, cvs_today_count, is_quiet_spotlight, language="English"
+):
+    """Assemble the fully grounded 'Us vs. Their Machine' briefing prompt for Gemini."""
+    first_name = ((sub_cfg or {}).get("name") or "Candidate").split()[0]
+    edition = int(rel_ctx.get("edition", 1))
+    b_cnt = rel_ctx.get("board_count", 109)
+    arc_title, arc_guidance = partnership_arc_for(edition)
+    cadence_title, cadence_subline = cadence
+    beat_title, beat_insight = beat
+    top_co = (top_job or {}).get("company") or "a top employer"
+    top_title = (top_job or {}).get("title") or "a step-up role"
+    top_loc = (top_job or {}).get("location") or "Jalisco / Remote Mexico"
+    ats_name, ats_intel = ats_intel_for(top_job)
+    cv_file = (top_job or {}).get("cv_filename") or ""
+    career_goal = ((sub_cfg or {}).get("career_goal") or "").strip()
+    milestone = rel_ctx.get("milestone_badge") or ""
+    beats = [b for b in (rel_ctx.get("recent_story_beats") or []) if b][-5:]
+    story_lines = "\n".join(f"- {b}" for b in reversed(beats)) if beats else "- (none yet: this is our very first briefing together)"
+    avoid_list = [h for h in (rel_ctx.get("recent_headlines") or []) if h][-14:]
+    avoid_txt = "; ".join(f"'{h}'" for h in avoid_list) if avoid_list else "(none yet)"
+    last_chal = rel_ctx.get("last_micro_challenge") or ""
+    last_co = rel_ctx.get("last_spotlight_company") or ""
+    mode_note = (
+        "Quiet-market momentum spotlight: zero brand-new postings dropped overnight, so you hand-picked their top unclaimed Career Upgrade Moves still live on the board to keep daily momentum unbroken."
+        if is_quiet_spotlight
+        else "Fresh market drop: newly discovered openings matched overnight."
+    )
+    cv_line = (
+        f"{cvs_today_count} tailored Word CV(s) attached, each rebuilt by our Gemini AI from the real master CV plus the specific posting"
+        if cvs_today_count
+        else "no tailored CV attached today (the roles are linked for a direct application)"
+    )
+    return (
+        "=== TODAY ===\n"
+        f"Date: {today.isoformat()} ({cadence_title}: {cadence_subline})\n"
+        f"Language to write in: {language}\n"
+        f"Our story arc: {arc_title}. Guidance: {arc_guidance}\n"
+        f"Briefing edition together: #{edition} | Active streak: {rel_ctx.get('streak_days', 1)} day(s)"
+        + (f" | Milestone unlocked today: {milestone}" if milestone else "") + "\n"
+        f"Cumulative wins together: {rel_ctx.get('total_roles_surfaced', total_count)} matched roles surfaced, "
+        f"{rel_ctx.get('total_cvs_tailored', cvs_today_count)} custom CVs forged\n"
+        f"Today's chapter theme (#{rel_ctx.get('angle_id', 0) + 1}): '{beat_title}'. {beat_insight}\n\n"
+        "=== MY PARTNER (THE CANDIDATE) ===\n"
+        f"First name: {first_name}\n"
+        f"Career identity from their real master CV: {cv_snapshot or 'Ambitious leader targeting high-impact step-up roles in Jalisco and Remote Mexico'}\n"
+        + (f"Career goal / north star: {career_goal}\n" if career_goal else "")
+        + "\n=== LAST NIGHT'S OPERATION (REAL FACTS: use these, never invent others) ===\n"
+        f"Employer career portals swept: {b_cnt} across 9 ATS platforms (Workday, Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Oracle Recruiting Cloud, Eightfold, BambooHR)\n"
+        f"Run context: {mode_note}\n"
+        f"Today's briefing: {total_count} role(s), {upgrade_count} Career Upgrade Move(s), {hot_count} hot opening(s) posted within 48 hours, {cv_line}\n"
+        f"Spotlight hiring employer: '{top_co}' | Spotlight role: '{top_title}' | Location: {top_loc}\n"
+        f"Their screening tool for this role: {ats_name}. How it reads a CV: {ats_intel}.\n"
+        + (f"Attached CV built for the spotlight role: {cv_file}\n" if cv_file else "")
+        + "\n=== STORY SO FAR (continuity memory: reference lightly, never scold) ===\n"
+        f"{story_lines}\n"
+        + (f"Yesterday's micro-challenge: '{last_chal}'\n" if last_chal else "")
+        + (f"Yesterday's spotlight employer: {last_co}\n" if last_co else "")
+        + f"RECENT_HEADLINES_TO_AVOID: {avoid_txt}\n\n"
+        "=== TASK ===\n"
+        f"Write Briefing #{edition} for {first_name} now, fully grounded in the facts above, in Lucy's partner voice. Return ONLY the JSON object."
+    )
 
 WEEKDAY_CADENCE = [
     ("Monday Launchpad", "New week, clean slate, asymmetric leverage"),
@@ -2439,40 +2628,43 @@ EDITION_MILESTONES = {
     30: "30-Briefing Club · Relentless Market Edge",
 }
 
-DAILY_MOTIVATION_THEMES = [
-    "Refuse the 3% corporate loyalty tax: strategic external moves unlock 30-50% comp and scope leaps that internal review cycles stall for years.",
-    "Challenge yourself before comfort becomes a cage: the moment a seat stops stretching you is the exact moment to look up.",
-    "Us vs. the ATS black box: while 95% of applicants toss generic PDFs into the void, we reverse-engineered the triage keywords and pre-armed your Word CVs.",
-    "Interview from power, never urgency: testing the market while you are winning lets you negotiate like an executive peer, never a supplicant.",
-    "Asymmetric 60-second bet: one surgical application costs 1 minute of courage, has zero downside, and carries multi-year career upside.",
-    "Outgrow the internal waiting line: when your execution outpaces your current org chart, the open market is the fastest promotion committee on earth.",
-    "First-mover recruiter physics: landing in the first 15 calibrated applicants on a fresh posting 4x's hiring-manager callback odds.",
-    "Be the CEO of 'Me, Inc.': treat your talent like high-growth capital—deploy it where the scope, mentorship, and upside compound fastest.",
-    "Golden handcuffs rust quietly: familiarity feels safe in the short term, but audacity is what writes the best chapters of a career.",
-    "Optionality changes your posture: having even two live external conversations transforms how confidently you show up in every room.",
-    "Jalisco global-hub arbitrage: world-class enterprises are scaling leadership & transformation hubs right in your backyard—claim the premium seats.",
-    "Compound your narrative: every stretch role you target sharpens how you articulate your highest-value wins.",
-    "Beat impostor hesitation: job descriptions are wish lists, and hiring managers hire decisive problem-solvers who own 70% and learn the 30% fast.",
-    "Momentum over rumination: overthinking kills more executive transitions than rejection ever could—one clean click creates real signal.",
-    "Don't subsidize inertia: companies reprice new hires at market rates every quarter while keeping loyal insiders on yesterday's band.",
-    "Turn rejection into calibration: you don't need twenty offers—you only need one step-up 'yes' that resets your baseline forever.",
-    "Scarcity of real operators: plenty of people talk strategy; your track record of actually shipping measurable outcomes is rarer than you think.",
-    "Energy follows expansion: burnout rarely comes from hard problems—it comes from solving the same solved problems without bigger stakes.",
-    "Your resume is now a precision instrument: general direction at the top, hard proof in the middle, zero fluff—built for a 6-second 'yes'.",
-    "Play offense while peers coast: most talented professionals wait until a reorg forces their hand; proactive movers pick their own arena.",
-    "Micro-courage compounds daily: sixty seconds of boldness with morning coffee beats a whole year of 'I should update my CV someday'.",
-    "Signal over noise: you don't have to scroll job boards for two hours tonight because I already hunted down the exact needles in the haystack.",
-    "Step into rooms that stretch you: if you're the most experienced voice in every meeting you attend, you've already outgrown the room.",
-    "Recruiters buy clarity: when your CV mirrors their exact pain points truthfully on page one, scheduling the call becomes their easiest decision all week.",
-    "Protect your ambition: the people around you may settle for predictable plateaus, but your trajectory was built for steeper climbs.",
-    "Speed is a status signal: crisp, early applications with tailored executive framing immediately read like high-agency leadership.",
-    "Reclaim your ceiling: another team's urgent bottleneck is your exact career-upgrade runway.",
-    "Zero-friction execution: the hardest 90%—sourcing, filtering, and tailoring—is already sitting in your attachments right now.",
-    "Detach from outcomes, fall in love with reps: each shot on goal buys real market intelligence on what your skillset commands today.",
-    "Audacity pays asymmetrical dividends: half the people in Director and VP seats simply raised their hand when equally qualified peers hesitated.",
-    "Your unfair nocturnal advantage: while the city slept, your personal radar swept {board_count} boards so you wake up exclusively to curated leverage.",
-    "Write your next promotion yourself: stop waiting for annual calibration committees and let competing hiring managers bid for your impact.",
+PARTNER_STORY_BEATS = [
+    ("The Filter Was Never Built For You", "Most large employers let an applicant tracking system rank CVs before a recruiter opens one, so generic CVs lose silently. Tonight we wrote the candidate's truth in the exact dialect that system scores highest."),
+    ("Their Robot, Our Translator", "Their screening AI reads structure, keywords and seniority signals. We do not fight it; we translate real wins into its native language so the robot becomes our doorman."),
+    ("Nobody Else Woke Up To This", "While the city slept we swept {board_count} employer portals, discarded 99% of the noise and left only curated leverage in the inbox. That asymmetry is the whole game."),
+    ("The Loyalty Tax Is Real", "Internal raises crawl while the external market reprices leaders with every move; staying still is the most expensive decision nobody talks about."),
+    ("Speed Is A Status Signal", "Fresh postings enjoy a clean recruiter queue for roughly two days; a calibrated application inside that window multiplies callback odds. We caught today's lineup off the wire."),
+    ("Interview From Power, Not Urgency", "Exploring while winning turns every conversation into a peer-to-peer negotiation instead of a plea. Optionality is posture."),
+    ("Job Descriptions Are Wish Lists", "Hiring managers hire people who own most of the role today and learn the rest fast. The filter cannot measure courage, so we supply it."),
+    ("Six Seconds, One Decision", "After the machine says yes, a human spends a few seconds deciding whether to keep reading. The tailored CV front-loads direction and proof for exactly that moment."),
+    ("Machines Reward Clarity", "ATS parsers choke on columns, tables and icons and silently drop what they cannot read. The single-column Word CV is engineered to be parsed with full fidelity."),
+    ("We Did The Boring 90 Percent", "Sourcing, filtering, keyword mapping, formatting: the exhausting part of applying is already done. All that remains is 60 seconds of audacity."),
+    ("Keywords Are Their Password", "Recruiters search their candidate pools by exact terms; a truthful CV that mirrors the posting's vocabulary shows up first in their own search box."),
+    ("Pipeline Beats Anxiety", "Two live external conversations change how anyone walks into every internal meeting. Today we open one more door."),
+    ("The CEO Of Me, Inc.", "Treat talent like growth capital and deploy it where scope, mentorship and upside compound fastest. Today's spotlight is a reallocation decision."),
+    ("The First Fifteen Applicants", "Early calibrated applicants dominate shortlist slots before recruiter fatigue sets in; being first and precise beats being perfect and late."),
+    ("Rejection Is Calibration", "Every no is free market data on how the candidate's skills price today, and it only takes one step-up yes to reset the baseline forever."),
+    ("Comfort Is Crowded", "Stretch seats have less competition than lateral ones because most people self-reject. Let the committee decide, never yourself."),
+    ("Their AI Cannot Read Ambition", "Screening models score the past; they cannot see the next gear. So we put the trajectory in the headline where humans look first."),
+    ("Jalisco Is A Global Hub", "World-class enterprises keep scaling leadership and transformation teams across Guadalajara, Zapopan and Remote Mexico. The premium seats are local."),
+    ("One Shot, Asymmetric Upside", "Sixty seconds of downside against a multi-year change in title, scope and compensation. Strategists take that bet every time."),
+    ("The Machine Rewards Numbers", "Quantified bullets survive both the parser and the human scan; vague duties vanish. The CV leads with metrics on purpose."),
+    ("Momentum Before Nine AM", "One minute invested in your own equity before the calendar fills is the highest-return meeting of the day."),
+    ("Familiarity Is Not Security", "Real security is knowing three companies would hire you tomorrow. We keep that muscle warm every single morning."),
+    ("Reverse-Engineered, Not Guessed", "We mapped how each ATS platform parses, ranks and searches, then built the CV to pass every gate truthfully. That is intelligence work, not luck."),
+    ("The Reorg Will Not Wait", "High-agency operators move on their own schedule. Waiting for circumstances shrinks choices; moving early multiplies them."),
+    ("Let Them Bid", "Nobody learns their market value inside one org chart; competing hiring managers reveal it within weeks."),
+    ("Signal Over Noise", "No two hours of doom-scrolling job boards tonight; the needles are already in the inbox."),
+    ("Proof Is Scarce", "Portals overflow with talkers; verifiable builders are rare. So we stripped the fluff and let the results speak."),
+    ("Posture Changes Outcomes", "Candidates with options negotiate titles and bands; candidates without them accept. Today's rep buys posture."),
+    ("The Compounding Narrative", "Every targeted application sharpens how the candidate articulates their highest-value wins; the story gets tighter with reps."),
+    ("Their Filter, Our Front Door", "The same automation that screens out so many applicants waves through the ones who speak its language. We hold the phrasebook."),
+    ("Outgrow The Room", "If you are the most experienced voice in every meeting, you have already outgrown the room. Step toward a steeper arena."),
+    ("Write Your Own Promotion Slip", "Stop waiting for annual calibration committees; let competing teams compete for the candidate's impact instead."),
 ]
+
+# Backward-compatible flat view of the story beats (one line per angle)
+DAILY_MOTIVATION_THEMES = [f"{title}: {insight}" for title, insight in PARTNER_STORY_BEATS]
 
 DAILY_INSIDER_VAULT = [
     ("Stop Paying the 3% Comfort Tax.", "{first_name}, staying comfortable in one seat hands you incremental adjustments while strategic moves unlock 30%+ leaps in scope and comp. It's you and me against the hiring black box—I isolated {highlight_count} high-leverage play(s) led by {top_company} and armed your CVs. Take 60 seconds and fire one shot."),
@@ -2533,16 +2725,75 @@ DAILY_MICRO_CHALLENGES = [
 
 
 def extract_cv_identity_snapshot(sub_cfg, root=ROOT):
-    """Extract a compact, PII-scrubbed 450-char career identity snapshot from the subscriber's CV
-    so Lucy's daily motivation speaks directly to their real craft and domain."""
+    """Extract a compact, PII-scrubbed career identity snapshot from the subscriber's master CV
+    (identity pitch, signature strengths, current chapter, earlier chapters) so Lucy's daily
+    briefing speaks to their real craft instead of generic motivation."""
     raw = load_subscriber_cv(sub_cfg, root=root)
     if not raw:
         return ""
     scrubbed = re.sub(r"[\w.+-]+@[\w-]+\.[\w.-]+", "", raw)
     scrubbed = re.sub(r"\+?\d[\d\s().-]{7,}\d", "", scrubbed)
+    scrubbed = re.sub(r"linkedin\.com/\S+", "", scrubbed, flags=re.I)
+
+    def _clean(t):
+        return re.sub(r"\s+", " ", re.sub(r"\*+", "", str(t or ""))).strip(" |-")
+
+    sections = {}
+    cur = None
+    for ln in scrubbed.splitlines():
+        s = ln.strip()
+        if not s or s.startswith("# "):
+            continue
+        if s.startswith("## "):
+            cur = s[3:].strip().upper()
+            sections[cur] = []
+            continue
+        if cur is not None:
+            sections[cur].append(s)
+
+    summary = " ".join(_clean(x) for x in sections.get("PROFESSIONAL SUMMARY", []))
+    sentences = [s for s in re.split(r"(?<=[.!?])\s+", summary) if s]
+    identity = " ".join(sentences[:2])
+    if len(identity) > 380:
+        identity = identity[:380].rsplit(" ", 1)[0].rstrip(",;:") + "..."
+
+    strengths = []
+    for ln in sections.get("CORE COMPETENCIES", []):
+        m = re.match(r"^[-*]\s*\*\*([^*:]+):?\*\*", ln)
+        if m:
+            strengths.append(_clean(m.group(1)))
+        if len(strengths) >= 5:
+            break
+
+    exp_lines = sections.get("PROFESSIONAL EXPERIENCE", [])
+    company = role = dates = ""
+    earlier = []
+    for ln in exp_lines:
+        if ln.startswith("### "):
+            co = _clean(ln[4:].split("|")[0])
+            if not company:
+                company = co
+            elif co and co != company and co not in earlier:
+                earlier.append(co)
+        elif ln.startswith("**") and company and not role:
+            parts = [_clean(p) for p in ln.split("|")]
+            role = parts[0]
+            dates = parts[1] if len(parts) > 1 else ""
+
+    parts = []
+    if identity:
+        parts.append(f"Identity: {identity}")
+    if strengths:
+        parts.append("Signature strengths: " + ", ".join(strengths))
+    if role or company:
+        parts.append(f"Current chapter: {role or 'Leader'} at {company}" + (f" ({dates})" if dates else ""))
+    if earlier:
+        parts.append("Earlier chapters: " + ", ".join(earlier[:4]))
+    if parts:
+        return " | ".join(parts)[:900]
+
     lines = [ln.strip(" #*-") for ln in scrubbed.splitlines() if ln.strip()]
-    compact = " | ".join(lines[:8])
-    return compact[:450]
+    return " | ".join(lines[:8])[:450]
 
 
 def peek_relationship_context(sub_state, jobs_count, cvs_count, today, board_count=109, sub_id=""):
@@ -2586,6 +2837,9 @@ def peek_relationship_context(sub_state, jobs_count, cvs_count, today, board_cou
         "total_cvs_tailored": int(rel.get("total_cvs_tailored", 0)) + int(cvs_count),
         "recent_angle_ids": recent_angles,
         "recent_headlines": recent_headlines,
+        "recent_story_beats": list(rel.get("recent_story_beats") or []),
+        "last_micro_challenge": str(rel.get("last_micro_challenge") or ""),
+        "last_spotlight_company": str(rel.get("last_spotlight_company") or ""),
         "angle_id": angle_id,
         "board_count": board_count,
         "milestone_badge": EDITION_MILESTONES.get(edition, ""),
@@ -2593,7 +2847,8 @@ def peek_relationship_context(sub_state, jobs_count, cvs_count, today, board_cou
 
 
 def commit_relationship_state(sub_state, rel_ctx, pack, jobs_sent, today):
-    """Persist updated relationship streak, edition, cumulative stats, and anti-repeat history."""
+    """Persist updated relationship streak, edition, cumulative stats, continuity memory
+    (story beats, last micro-challenge, last spotlight employer) and anti-repeat history."""
     if sub_state is None:
         return
     rel = sub_state.setdefault("relationship", {})
@@ -2612,6 +2867,16 @@ def commit_relationship_state(sub_state, rel_ctx, pack, jobs_sent, today):
         headlines.append(pack["headline"])
     rel["recent_headlines"] = headlines[-30:]
 
+    beats = list(rel.get("recent_story_beats") or [])
+    if pack.get("story_beat"):
+        beats.append(f"Ed. #{rel_ctx['edition']} ({today.isoformat()}): {pack['story_beat']}")
+    rel["recent_story_beats"] = beats[-12:]
+    if pack.get("micro_challenge"):
+        rel["last_micro_challenge"] = str(pack["micro_challenge"])[:300]
+    if pack.get("spotlight_company"):
+        rel["last_spotlight_company"] = str(pack["spotlight_company"])[:120]
+    rel["last_briefing_source"] = pack.get("briefing_source", "vault")
+
     spotlights = list(rel.get("recent_spotlight_keys") or [])
     for j in jobs_sent or []:
         if j.get("quiet_spotlight") and j.get("key"):
@@ -2619,31 +2884,44 @@ def commit_relationship_state(sub_state, rel_ctx, pack, jobs_sent, today):
     rel["recent_spotlight_keys"] = spotlights[-18:]
 
 
-def call_gemini_daily_motivation(prompt_text, model=DEFAULT_LLM_MODEL, api_key=None):
-    """Call Gemini for a fresh daily 5-part 'Us vs. The System' dopamine & connection briefing."""
-    try:
-        parsed = _invoke_gemini_json(
-            prompt_text,
-            system_text=DAILY_MOTIVATION_SYSTEM_PROMPT,
-            model=model,
-            api_key=api_key,
-            temperature=0.9,
-            max_output_tokens=2048,
-            timeout=25,
-            retries=1,
-            validator=lambda p: isinstance(p, dict) and bool(p.get("headline")) and bool(p.get("message")),
-        )
-        if parsed:
-            return {
-                "_llm_model": str(parsed.get("_llm_model") or _normalize_gemini_model(model) or DEFAULT_LLM_MODEL),
-                "subject_spark": str(parsed.get("subject_spark") or "").strip(),
-                "headline": str(parsed["headline"]).strip(),
-                "message": str(parsed["message"]).strip(),
-                "connection_ps": str(parsed.get("connection_ps") or "").strip(),
-                "micro_challenge": str(parsed.get("micro_challenge") or "").strip(),
-            }
-    except Exception:
-        pass
+def call_gemini_daily_motivation(prompt_text, model=DEFAULT_LLM_MODEL, api_key=None, first_name="", recent_headlines=None):
+    """Ask Gemini for today's 9-part 'Us vs. Their Machine' partner briefing.
+
+    Every draft passes `_briefing_pack_quality` (length, forbidden dishonest vocabulary, unfilled
+    placeholders, near-duplicate headlines). A rejected draft triggers exactly ONE revision round
+    with the rejection reason appended, so the final text is always AI-written and on-brand or we
+    fall back to the deterministic vault."""
+    rejection = None
+    for attempt in range(2):
+        prompt = prompt_text
+        if rejection:
+            prompt += (
+                f"\n\nREVISION NOTE: your previous draft was rejected because {rejection}. "
+                "Rewrite the whole briefing from scratch, fixing this, keeping every rule above."
+            )
+        try:
+            parsed = _invoke_gemini_json(
+                prompt,
+                system_text=DAILY_MOTIVATION_SYSTEM_PROMPT,
+                model=model,
+                api_key=api_key,
+                temperature=0.95,
+                max_output_tokens=2048,
+                timeout=30,
+                retries=1,
+                validator=lambda p: isinstance(p, dict) and bool(p.get("headline")) and bool(p.get("message")),
+            )
+        except Exception:
+            return None
+        if not parsed:
+            return None
+        ok, reason = _briefing_pack_quality(parsed, first_name=first_name, recent_headlines=recent_headlines)
+        if ok:
+            out = {k: _clean_briefing_text(parsed.get(k) or "") for k in BRIEFING_TEXT_KEYS}
+            out["_llm_model"] = str(parsed.get("_llm_model") or _normalize_gemini_model(model) or DEFAULT_LLM_MODEL)
+            out["_revised"] = attempt > 0
+            return out
+        rejection = reason
     return None
 
 
@@ -2651,7 +2929,13 @@ def generate_daily_briefing_pack(
     sub_cfg, top_job, upgrade_count, hot_count, total_count, today,
     rel_ctx=None, cvs_today_count=0, is_quiet_spotlight=False, root=ROOT
 ):
-    """Generate a guaranteed-unique daily dopamine & personal connection pack for the subscriber."""
+    """Generate today's unique 'Us vs. Their Machine' partner briefing for the subscriber.
+
+    AI-first: Gemini writes all nine parts (subject spark, chapter title, headline, message,
+    their-AI-vs-our-AI intel, Lucy's connection note, micro-challenge, sign-off and a memory
+    beat) from a fully grounded prompt (real overnight facts, the candidate's real craft, the
+    spotlight employer's ATS, the story so far). The deterministic vault is used only when
+    Gemini is unavailable or every draft fails the quality gate."""
     sub_name = (sub_cfg or {}).get("name") or "Candidate"
     sub_id = (sub_cfg or {}).get("id") or sub_name.lower()
     first_name = sub_name.split()[0]
@@ -2660,8 +2944,8 @@ def generate_daily_briefing_pack(
     hi_cnt = upgrade_count if upgrade_count > 0 else max(1, total_count)
 
     if rel_ctx is None:
-        sub_offset = sum(ord(ch) for ch in sub_id) % len(DAILY_MOTIVATION_THEMES)
-        angle_id = (today.toordinal() + sub_offset) % len(DAILY_MOTIVATION_THEMES)
+        sub_offset = sum(ord(ch) for ch in sub_id) % len(PARTNER_STORY_BEATS)
+        angle_id = (today.toordinal() + sub_offset) % len(PARTNER_STORY_BEATS)
         rel_ctx = {
             "edition": 1,
             "streak_days": 1,
@@ -2669,6 +2953,7 @@ def generate_daily_briefing_pack(
             "total_cvs_tailored": cvs_today_count,
             "recent_angle_ids": [],
             "recent_headlines": [],
+            "recent_story_beats": [],
             "angle_id": angle_id,
             "board_count": 109,
             "milestone_badge": "",
@@ -2678,9 +2963,11 @@ def generate_daily_briefing_pack(
     angle_id = rel_ctx["angle_id"]
     edition = rel_ctx["edition"]
     cadence_title, cadence_subline = WEEKDAY_CADENCE[today.weekday()]
-    theme = DAILY_MOTIVATION_THEMES[angle_id % len(DAILY_MOTIVATION_THEMES)].format(board_count=b_cnt)
+    beat_title, beat_insight_tmpl = PARTNER_STORY_BEATS[angle_id % len(PARTNER_STORY_BEATS)]
+    beat_insight = beat_insight_tmpl.format(board_count=b_cnt)
+    ats_name, ats_intel = ats_intel_for(top_job)
 
-    # Deterministic non-repeating defaults for connection_ps, micro_challenge, and vault fallback
+    # Deterministic, non-repeating vault defaults (used only when Gemini is unavailable)
     conn_tmpl = LUCY_CONNECTION_NOTES[(angle_id + edition) % len(LUCY_CONNECTION_NOTES)]
     default_conn = conn_tmpl.format(
         board_count=b_cnt,
@@ -2692,90 +2979,98 @@ def generate_daily_briefing_pack(
     )
     chal_tmpl = DAILY_MICRO_CHALLENGES[(angle_id + edition) % len(DAILY_MICRO_CHALLENGES)]
     default_challenge = chal_tmpl.format(top_company=top_co, first_name=first_name)
+    default_signoff = LUCY_SIGNOFFS[(angle_id + edition) % len(LUCY_SIGNOFFS)]
+    intel_sentence = ats_intel if norm(ats_intel).startswith(norm(ats_name)) else f"{ats_name[0].upper() + ats_name[1:]}: {ats_intel}"
+    default_intel = (
+        f"{intel_sentence}. Your attached CV for {top_co} was built to pass exactly that gate, truthfully."
+        if top_job and cvs_today_count
+        else f"{intel_sentence}. We mirror that logic truthfully in every CV we forge together."
+    )
 
     h_tmpl, m_tmpl = DAILY_INSIDER_VAULT[angle_id % len(DAILY_INSIDER_VAULT)]
     vault_headline = h_tmpl.format(first_name=first_name, top_company=top_co, highlight_count=hi_cnt, board_count=b_cnt)
     vault_message = m_tmpl.format(first_name=first_name, top_company=top_co, highlight_count=hi_cnt, board_count=b_cnt)
     default_spark = vault_headline.rstrip(".!")
+    default_beat = f"Lucy framed '{beat_title}' around {top_co} ({top_title}) and asked {first_name} for one 60-second application."
+
+    base = {
+        "cadence_title": cadence_title,
+        "cadence_subline": cadence_subline,
+        "angle_number": angle_id + 1,
+        "chapter_title": beat_title,
+        "spotlight_company": top_co if top_job else "",
+    }
+
+    def _fix(text):
+        return _fix_ats_employer_confusion(str(text or "").strip(), top_co, top_title) if top_job else str(text or "").strip()
 
     api_key = (os.environ.get("GEMINI_API_KEY") or "").strip()
     if api_key:
         cv_snapshot = extract_cv_identity_snapshot(sub_cfg, root=root)
-        career_goal = ((sub_cfg or {}).get("career_goal") or "").strip()
-        goal_line = f"Candidate Career Goal & North Star: {career_goal}\n" if career_goal else ""
-        avoid_list = rel_ctx.get("recent_headlines") or []
-        avoid_txt = "; ".join(f'"{h}"' for h in avoid_list[-12:]) if avoid_list else "None yet (Edition #1 — make a memorable first impression!)"
-        mode_note = (
-            "Quiet-market momentum spotlight (zero brand-new overnight postings, so you hand-picked their top unclaimed Career Upgrade Moves on the board so they keep daily momentum)."
-            if is_quiet_spotlight
-            else "Fresh market drop with newly discovered openings."
-        )
+        language = str((sub_cfg or {}).get("briefing_language") or "English").strip() or "English"
         model = (os.environ.get("GEMINI_MODEL") or "").strip() or (sub_cfg or {}).get("llm_model", DEFAULT_LLM_MODEL)
-        prompt = (
-            f"Date: {today.isoformat()} ({cadence_title} — {cadence_subline})\n"
-            f"Briefing Edition Together: #{edition} | Active Streak: {rel_ctx.get('streak_days', 1)} day(s) | "
-            f"Cumulative Wins Together: {rel_ctx.get('total_roles_surfaced', total_count)} matched roles surfaced across {b_cnt} boards, "
-            f"{rel_ctx.get('total_cvs_tailored', cvs_today_count)} custom CVs built.\n"
-            f"Candidate First Name: {first_name}\n"
-            f"{goal_line}"
-            f"Candidate Career Identity Snapshot: {cv_snapshot or 'Ambitious leader targeting high-impact step-up roles in Jalisco & Remote Mexico'}\n"
-            f"Today's Psychological Dopamine Angle (#{angle_id + 1}): {theme}\n"
-            f"Run Context: {mode_note}\n"
-            f"Today's Radar Stats: {upgrade_count} Career Upgrade Moves, {hot_count} Hot (0-2d) openings, "
-            f"{total_count} roles in today's briefing, {cvs_today_count} tailored Word CVs attached. "
-            f"Spotlight Hiring Employer: '{top_co}' | Spotlight Role: '{top_title}' (use exact employer '{top_co}', never confuse with an ATS platform like Workday).\n"
-            f"RECENT_HEADLINES_TO_AVOID (DO NOT repeat these words, metaphors, or hooks): {avoid_txt}\n"
-            "Generate today's 100% unique 5-part briefing JSON."
+        prompt = compose_partner_briefing_prompt(
+            sub_cfg, top_job, rel_ctx, today, (beat_title, beat_insight), (cadence_title, cadence_subline),
+            cv_snapshot, upgrade_count, hot_count, total_count, cvs_today_count, is_quiet_spotlight, language=language,
         )
         try:
-            res = call_gemini_daily_motivation(prompt, model=model, api_key=api_key)
+            res = call_gemini_daily_motivation(
+                prompt, model=model, api_key=api_key,
+                first_name=first_name, recent_headlines=rel_ctx.get("recent_headlines") or [],
+            )
             if isinstance(res, tuple) and len(res) == 2:
                 # Backward-compatible support if mocked as (headline, message)
-                headline = _fix_ats_employer_confusion(str(res[0]).strip(), top_co, top_title) if top_job else str(res[0]).strip()
-                message = _fix_ats_employer_confusion(str(res[1]).strip(), top_co, top_title) if top_job else str(res[1]).strip()
+                headline = _fix(res[0])
+                message = _fix(res[1])
                 return {
+                    **base,
                     "briefing_source": "gemini",
                     "briefing_model": _normalize_gemini_model(model) or DEFAULT_LLM_MODEL,
                     "subject_spark": headline.rstrip(".!")[:42],
                     "headline": headline,
                     "message": message,
+                    "their_ai_vs_our_ai": default_intel,
                     "connection_ps": default_conn,
                     "micro_challenge": default_challenge,
-                    "cadence_title": cadence_title,
-                    "cadence_subline": cadence_subline,
-                    "angle_number": angle_id + 1,
+                    "partner_signoff": default_signoff,
+                    "story_beat": default_beat,
                 }
             if isinstance(res, dict) and res.get("headline") and res.get("message"):
-                hl = _fix_ats_employer_confusion(res["headline"], top_co, top_title) if top_job else res["headline"]
-                msg_txt = _fix_ats_employer_confusion(res["message"], top_co, top_title) if top_job else res["message"]
-                spark = _fix_ats_employer_confusion(res.get("subject_spark") or hl.rstrip(".!"), top_co, top_title) if top_job else (res.get("subject_spark") or hl.rstrip(".!"))
-                chal = _fix_ats_employer_confusion(res.get("micro_challenge") or default_challenge, top_co, top_title) if top_job else (res.get("micro_challenge") or default_challenge)
+                hl = _fix(res["headline"])
+                msg_txt = _fix(res["message"])
+                if norm(first_name) not in norm(msg_txt):
+                    msg_txt = f"{first_name}, {msg_txt}"
+                spark = _fix(res.get("subject_spark") or hl.rstrip(".!"))
                 return {
+                    **base,
                     "briefing_source": "gemini",
                     "briefing_model": str(res.get("_llm_model") or _normalize_gemini_model(model) or DEFAULT_LLM_MODEL),
+                    "briefing_revised": bool(res.get("_revised")),
                     "subject_spark": spark[:46],
+                    "chapter_title": _fix(res.get("chapter_title") or beat_title)[:60],
                     "headline": hl,
                     "message": msg_txt,
-                    "connection_ps": res.get("connection_ps") or default_conn,
-                    "micro_challenge": chal,
-                    "cadence_title": cadence_title,
-                    "cadence_subline": cadence_subline,
-                    "angle_number": angle_id + 1,
+                    "their_ai_vs_our_ai": _fix(res.get("their_ai_vs_our_ai") or default_intel),
+                    "connection_ps": _fix(res.get("connection_ps") or default_conn),
+                    "micro_challenge": _fix(res.get("micro_challenge") or default_challenge),
+                    "partner_signoff": _fix(res.get("partner_signoff") or default_signoff)[:80],
+                    "story_beat": _fix(res.get("story_beat") or default_beat)[:240],
                 }
         except Exception:
             pass
 
     return {
+        **base,
         "briefing_source": "vault",
         "briefing_model": "deterministic-vault",
         "subject_spark": default_spark[:46],
         "headline": vault_headline,
         "message": vault_message,
+        "their_ai_vs_our_ai": default_intel,
         "connection_ps": default_conn,
         "micro_challenge": default_challenge,
-        "cadence_title": cadence_title,
-        "cadence_subline": cadence_subline,
-        "angle_number": angle_id + 1,
+        "partner_signoff": default_signoff,
+        "story_beat": default_beat,
     }
 
 
@@ -2965,6 +3260,9 @@ def build_email_message(
     connection_ps = pack["connection_ps"]
     micro_challenge = pack["micro_challenge"]
     subject_spark = pack["subject_spark"]
+    chapter_title = pack.get("chapter_title") or ""
+    ai_intel = pack.get("their_ai_vs_our_ai") or ""
+    partner_signoff = pack.get("partner_signoff") or ""
     edition = rel_ctx["edition"]
     streak_days = rel_ctx["streak_days"]
     milestone_badge = rel_ctx.get("milestone_badge") or ""
@@ -2985,13 +3283,20 @@ def build_email_message(
         f"{sub_name} — Lucy Private Talent Briefing #{edition} · Day {streak_days} Streak ({date_str})",
         f"{pack['cadence_subline']} — Lucy, your personal headhunter & your daily reminder to check where to apply today.",
         "",
+        f"Us vs. Their Machine · Chapter {edition}: {chapter_title}" if chapter_title else f"Us vs. Their Machine · Chapter {edition}",
         f"⚡ {insider_headline}",
         insider_message,
-        f"🤝 Lucy's Corner: {connection_ps}",
+    ]
+    if ai_intel:
+        txt_lines.append(f"🛰 Their AI vs. Our AI: {ai_intel}")
+    txt_lines.append(f"🤝 Lucy's Corner: {connection_ps}")
+    if partner_signoff:
+        txt_lines.append(f"— {partner_signoff}")
+    txt_lines.extend([
         "",
         f"{len(upgrade_jobs)} Career Upgrade Move(s) · {len(hot_jobs)} Hot (0-2d) · {len(jobs_to_send)} shown ({all_jobs_count} active matches)",
         "",
-    ]
+    ])
     for _, _, _, j, is_hot, age_label, is_up in enriched:
         loc_tag = LOC_LABELS.get(j.get("loc_class"), j.get("loc_class", ""))
         tags = []
@@ -3063,9 +3368,29 @@ def build_email_message(
     message_esc = html.escape(insider_message)
     conn_esc = html.escape(connection_ps)
     challenge_esc = html.escape(micro_challenge)
+    chapter_esc = html.escape(chapter_title)
+    intel_esc = html.escape(ai_intel)
+    signoff_esc = html.escape(partner_signoff)
     cadence_title_esc = html.escape(pack["cadence_title"])
     cadence_sub_esc = html.escape(pack["cadence_subline"])
     preheader_esc = html.escape(f"⚡ Briefing #{edition}: {insider_headline} — {insider_message}")
+    chapter_label = (
+        f"&#9889; Us vs. The System &middot; Chapter {edition}: {chapter_esc} &middot; {cadence_title_esc}"
+        if chapter_title
+        else f"&#9889; Today&rsquo;s Edge &middot; Us vs. The System &middot; {cadence_title_esc}"
+    )
+    intel_html = (
+        f"<div style='margin-top:11px;padding:9px 12px;background-color:#18181b;border:1px solid #27272a;"
+        f"border-left:3px solid #34d399;border-radius:7px;font-size:12px;color:#d4d4d8;line-height:1.5;'>"
+        f"<span style='color:#34d399;font-weight:700;'>&#128737; Their AI vs. Our AI:</span> {intel_esc}</div>"
+        if ai_intel
+        else ""
+    )
+    signoff_html = (
+        f"<div style='margin-top:6px;font-size:11.5px;color:#71717a;font-style:italic;'>&mdash; {signoff_esc}</div>"
+        if partner_signoff
+        else ""
+    )
 
     streak_label = f"&#128293; {streak_days}d Streak" if streak_days >= 2 else "Day 1 Live"
     milestone_html = (
@@ -3111,11 +3436,11 @@ def build_email_message(
       <strong style="color:#18181b;">{cadence_sub_esc}</strong> &mdash; your daily reminder to check where to apply today.
     </div>
 
-    <!-- Dark Obsidian 'Us Against the System' Daily Manifesto + Lucy Partnership Corner -->
+    <!-- Dark Obsidian 'Us vs. Their Machine' Daily Manifesto + Their-AI-vs-Our-AI Intel + Lucy Partnership Corner -->
     <div style="background-color:#09090b;color:#fafafa;border-radius:11px;padding:18px 20px;margin-bottom:16px;">
       {milestone_html}
       <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1.4px;color:#34d399;margin-bottom:6px;">
-        &#9889; Today&rsquo;s Edge &middot; Us vs. The System &middot; {cadence_title_esc}
+        {chapter_label}
       </div>
       <div style="font-size:16.5px;font-weight:800;color:#ffffff;letter-spacing:-0.2px;margin-bottom:7px;line-height:1.3;">
         {headline_esc}
@@ -3123,8 +3448,10 @@ def build_email_message(
       <div style="font-size:13px;color:#e4e4e7;line-height:1.58;">
         {message_esc}
       </div>
+      {intel_html}
       <div style="margin-top:12px;padding-top:10px;border-top:1px solid #27272a;font-size:12px;color:#a1a1aa;line-height:1.5;">
         <span style="color:#34d399;font-weight:700;">&#129309; Lucy&rsquo;s Corner:</span> {conn_esc}
+        {signoff_html}
       </div>
     </div>
 

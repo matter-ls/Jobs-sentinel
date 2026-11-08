@@ -36,8 +36,20 @@ Notes:
 - Manual runs default to `email_all = true` (useful for testing). Scheduled runs only email newly discovered roles.
 - To publish `docs/index.html`, enable **Settings > Pages > Deploy from a branch > `/docs`**. The page carries `noindex` + `robots.txt`, but anyone with the URL can read it.
 
-## 3. Run Offline Unit Tests
+## 3. Lucy's AI Partner Briefing ("Us vs. Their Machine")
+
+Every digest opens with a daily briefing written by Gemini (never a canned template while `GEMINI_API_KEY` is set). The prompt in `fetch_jobs.py` (`DAILY_MOTIVATION_SYSTEM_PROMPT` + `compose_partner_briefing_prompt`) is grounded only in real facts from the run:
+
+- **The story**: employers point AI (Workday, Greenhouse, Oracle, Eightfold, ...) at candidates to filter them out; the subscriber now has an AI of their own that decodes those filters and rebuilds their *truthful* CV in the dialect each system scores highest. Lucy is a partner ("we / us"), not a tool.
+- **Grounding**: boards swept, roles surfaced, CVs forged, the spotlight employer, its ATS and how that ATS reads a CV (`ATS_INTEL`), the candidate's real craft parsed from `cvs/<id>.md`, the day-of-week cadence, the narrative arc by edition (`PARTNERSHIP_ARC`) and a rotating chapter theme (`PARTNER_STORY_BEATS`, 32 beats, never repeated within 30 days).
+- **Continuity memory** in `state/seen.json`: recent headlines, story beats, yesterday's micro-challenge and spotlight employer, so Lucy remembers yesterday.
+- **Quality gate** (`_briefing_pack_quality`): forbidden dishonest vocabulary (hack / cheat / fake / fabricate ...), unfilled placeholders, length limits and near-duplicate headlines are rejected; the model gets exactly one revision round with the reason, otherwise the deterministic vault is used.
+- **Per-subscriber language**: add `"briefing_language": "Spanish"` (or `"Portuguese"`) to a subscriber in `config.json`; default is English.
+
+Each briefing renders nine AI-written parts: subject spark, chapter title, headline, message, *Their AI vs. Our AI* intel, Lucy's Corner, the 60-second play, Lucy's sign-off and a memory beat for tomorrow.
+
+## 4. Run Offline Unit Tests
 
 ```bash
-python3 -m unittest discover -s tests -v
+python3 -m unittest discover -s tests -b -v
 ```
