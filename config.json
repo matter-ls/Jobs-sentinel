@@ -1,0 +1,41 @@
+{
+  "_note": "title_include / title_exclude are regexes written WITHOUT accents. To widen the net add patterns such as \"\\\\bsenior manager\\\\b\" or \"\\\\bsubdirector(a)?\\\\b\".",
+  "page_title": "Openings",
+  "title_include": [
+    "\\bdirector(a)?\\b",
+    "\\bhead of\\b",
+    "\\bvp\\b",
+    "\\bsvp\\b",
+    "\\bevp\\b",
+    "\\bvice[- ]?president(e|a)?\\b",
+    "\\bgeneral manager\\b",
+    "\\bgerente general\\b",
+    "\\bcountry (manager|lead|head)\\b",
+    "\\bmanaging director\\b",
+    "\\bchief\\b.*\\bofficer\\b"
+  ],
+  "title_exclude": [
+    "\\bassistant to\\b",
+    "\\bexecutive assistant\\b",
+    "\\bdirector'?s? assistant\\b",
+    "\\bintern(ship)?\\b",
+    "\\bpracticante\\b"
+  ],
+  "jalisco_locations": [
+    "guadalajara",
+    "zapopan",
+    "tlaquepaque",
+    "tonala",
+    "tlajomulco",
+    "el salto",
+    "puerto vallarta",
+    "jalisco",
+    "gdl",
+    "jal"
+  ],
+  "include_remote_mexico": true,
+  "include_country_only": true,
+  "new_days": 7,
+  "max_workers": 8,
+  "state_retention_days": 120
+}

@@ -1,0 +1,18 @@
+{
+  "_note": "Employers with a Guadalajara/Zapopan footprint. \"confirmed\": true means the board name was seen on a live career page or posting URL during research (it does not promise open director roles). Entries without it use board names written from memory and may be wrong: run `python3 fetch_jobs.py --check` and fix or delete any that FAIL. Employers with custom career sites (Oracle, IBM, Cisco, Citi, Bosch...) cannot be tracked here: see employers.md. Formats: greenhouse/lever/ashby/workable/smartrecruiters need {name, ats, board}; workday needs {name, ats, tenant, wd, site}. Lever EU accounts add \"region\": \"eu\".",
+  "companies": [
+    {"name": "Flex", "ats": "workday", "tenant": "flextronics", "wd": "wd1", "site": "Careers", "confirmed": true},
+    {"name": "Backbase", "ats": "greenhouse", "board": "workatbackbase", "confirmed": true},
+    {"name": "Rapido Solutions Group", "ats": "greenhouse", "board": "rapidosolutionsgroup", "confirmed": true},
+    {"name": "Clara", "ats": "greenhouse", "board": "clara", "confirmed": true},
+    {"name": "Arrive Logistics", "ats": "lever", "board": "arrivelogistics", "confirmed": true},
+
+    {"name": "Intel", "ats": "workday", "tenant": "intel", "wd": "wd1", "site": "External"},
+    {"name": "HP Inc.", "ats": "workday", "tenant": "hp", "wd": "wd5", "site": "ExternalCareerSite"},
+    {"name": "Kyndryl", "ats": "workday", "tenant": "kyndryl", "wd": "wd5", "site": "KyndrylProfessionalCareers"},
+    {"name": "AstraZeneca", "ats": "workday", "tenant": "astrazeneca", "wd": "wd3", "site": "Careers"},
+    {"name": "Micron", "ats": "workday", "tenant": "micron", "wd": "wd1", "site": "External"},
+    {"name": "Jabil", "ats": "workday", "tenant": "jabil", "wd": "wd5", "site": "Jabil_Careers"},
+    {"name": "Wizeline", "ats": "greenhouse", "board": "wizeline"}
+  ]
+}
