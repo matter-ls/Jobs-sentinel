@@ -2,34 +2,40 @@ name: Refresh job board & send daily email
 
 on:
   schedule:
-    # Runs daily at 13:00 UTC (7:00 AM CST in Guadalajara/Zapopan)
+    # Runs daily at 13:00 UTC (7:00 AM CST in Guadalajara/Zapopan; Mexico has no DST).
+    # NOTE: scheduled runs only fire on the repository's default branch.
     - cron: "0 13 * * *"
   workflow_dispatch:
     inputs:
       email_all:
         description: "Send all matching roles in email (not just newly discovered)"
         required: false
-        default: "true"
+        default: true
         type: boolean
       subscriber:
-        description: "Optional subscriber ID (e.g. lucas or luis). Leave blank for all."
+        description: "Optional subscriber ID (lucas, luis, or ewerson). Leave blank for all."
         required: false
         default: ""
         type: string
+      check_only:
+        description: "Only run `--check` (board health report). No emails, no commit."
+        required: false
+        default: false
+        type: boolean
 
+# Do NOT cancel an in-flight run: emails are sent before state/seen.json is committed,
+# so killing a run mid-flight would cause duplicate emails on the next run.
 concurrency:
-  group: jobs-sentinel-main
-  cancel-in-progress: true
+  group: jobs-sentinel-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
-  issues: write
-  pages: write
-  id-token: write
 
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -42,38 +48,77 @@ jobs:
       - name: Run offline unit tests
         run: python3 -m unittest discover -s tests -v
 
-      - name: Fetch jobs, update board, and email digest
+      - name: Check every company board (check_only mode)
+        if: ${{ inputs.check_only == true }}
+        run: python3 fetch_jobs.py --check
+
+      - name: Fetch jobs, tailor CVs with Gemini, and send emails
+        id: refresh
+        if: ${{ inputs.check_only != true }}
         env:
           PYTHONUNBUFFERED: "1"
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          INPUT_EMAIL_ALL: ${{ github.event.inputs.email_all }}
-          INPUT_SUBSCRIBER: ${{ github.event.inputs.subscriber }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+          INPUT_EMAIL_ALL: ${{ inputs.email_all }}
+          INPUT_SUBSCRIBER: ${{ inputs.subscriber }}
         run: |
-          ARGS=""
+          args=()
           if [ "$INPUT_EMAIL_ALL" = "true" ]; then
-            ARGS="$ARGS --email-all"
+            args+=(--email-all)
           fi
-          if [ -n "$INPUT_SUBSCRIBER" ]; then
-            ARGS="$ARGS --subscriber $INPUT_SUBSCRIBER"
+          if [ -n "$INPUT_SUBSCRIBER" ] && [ "$INPUT_SUBSCRIBER" != "all" ]; then
+            args+=(--subscriber "$INPUT_SUBSCRIBER")
           fi
-          python3 fetch_jobs.py $ARGS
+          set +e
+          python3 fetch_jobs.py "${args[@]}"
+          rc=$?
+          set -e
+          echo "exit_code=$rc" >> "$GITHUB_OUTPUT"
+          # 0 = all good; 2 = board & state written, but >=1 subscriber email failed
+          # (that subscriber's state was rolled back so they'll be retried next run).
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ]; then
+            exit "$rc"
+          fi
 
-      - name: Upload static site artifact
+      - name: Upload static site & tailored CVs artifact
+        if: ${{ inputs.check_only != true }}
         uses: actions/upload-artifact@v4
         with:
-          name: job-board-html
-          path: docs/
+          name: job-board-and-tailored-cvs
+          path: |
+            docs/
+            out/cvs/
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Commit updated state and static page
+        if: ${{ inputs.check_only != true }}
+        env:
+          BRANCH: ${{ github.ref_name }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add state/ docs/
+          mkdir -p state docs
+          git add -A -- state docs
           if git diff --staged --quiet; then
             echo "No state changes to commit."
-          else
-            git commit -m "chore: update job radar state [skip ci]"
-            git pull --rebase -X theirs origin main
-            git push
+            exit 0
           fi
+          git commit -m "chore: update job radar state $(date -u +%F) [skip ci]"
+          for attempt in 1 2 3; do
+            if git pull --rebase -X theirs origin "$BRANCH" && git push origin "HEAD:$BRANCH"; then
+              exit 0
+            fi
+            echo "Push attempt $attempt failed, retrying in 10s..."
+            sleep 10
+          done
+          echo "::error::Could not push state after 3 attempts."
+          exit 1
+
+      - name: Fail workflow if any subscriber email failed
+        if: ${{ steps.refresh.outputs.exit_code == '2' }}
+        run: |
+          echo "::error::One or more subscriber email digests failed to send (their state was rolled back for retry). Check the 'Fetch jobs' step log."
+          exit 1
