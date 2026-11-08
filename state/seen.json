@@ -178,7 +178,7 @@
    },
    "initialized": true,
    "relationship": {
-    "edition": 8,
+    "edition": 9,
     "streak_days": 1,
     "last_briefing_date": "2026-11-08",
     "total_roles_surfaced": 138,
@@ -191,7 +191,8 @@
      30,
      31,
      0,
-     1
+     1,
+     2
     ],
     "recent_headlines": [
      "Turn Ambition Into Pipeline Today.",
@@ -201,15 +202,114 @@
      "Build Escape Velocity From Routine.",
      "Write Your Own Promotion Slip.",
      "Stop Paying the 3% Comfort Tax.",
-     "Don't Wait in Somebody Else's Queue."
+     "Don't Wait in Somebody Else's Queue.",
+     "Zero New Roles, One Honest Partner."
     ],
     "recent_spotlight_keys": [],
     "recent_story_beats": [
-     "Ed. #8 (2026-11-08): Lucy framed 'Their Robot, Our Translator' around Avnet (Mexico Country Manager, Shared Services) and asked Lucas for one 60-second application."
+     "Ed. #8 (2026-11-08): Lucy framed 'Their Robot, Our Translator' around Avnet (Mexico Country Manager, Shared Services) and asked Lucas for one 60-second application.",
+     "Ed. #9 (2026-11-08): Quiet day: Lucy sent no roles, kept the streak honest and asked Lucas for one pipeline-hygiene move."
     ],
-    "last_micro_challenge": "Set a 60-second timer right now: open Avnet's portal link, drop in your pre-built CV_*.docx, and log 1 fearless rep before 10 AM.",
+    "last_micro_challenge": "Reply to this email with one role title you would love to see on your radar; I will tune the filters around it.",
     "last_spotlight_company": "Avnet",
     "last_briefing_source": "vault"
+   },
+   "emailed": {
+    "workday:Flex:WD228976": {
+     "date": "2026-11-08",
+     "sig": "",
+     "legacy": true
+    },
+    "workday:Flex:WD230884": {
+     "date": "2026-11-08",
+     "sig": "",
+     "legacy": true
+    },
+    "workday:Flex:WD231552": {
+     "date": "2026-11-08",
+     "sig": "",
+     "legacy": true
+    },
+    "workday:Flex:WD229135": {
+     "date": "2026-11-08",
+     "sig": "",
+     "legacy": true
+    },
+    "workday:HP Inc.:3165460": {
+     "date": "2026-11-08",
+     "sig": "",
+     "legacy": true
+    },
+    "workday:AstraZeneca:R-262125": {
+     "date": "2026-11-08",
+     "sig": "",
+     "legacy": true
+    },
+    "workday:Jabil:J2470435": {
+     "date": "2026-11-08",
+     "sig": "",
+     "legacy": true
+    },
+    "workday:HP Inc.:3167635": {
+     "date": "2026-11-08",
+     "sig": "",
+     "legacy": true
+    },
+    "workday:AstraZeneca:R-256344": {
+     "date": "2026-11-08",
+     "sig": "",
+     "legacy": true
+    },
+    "workday:Micron:JR114201": {
+     "date": "2026-11-08",
+     "sig": "",
+     "legacy": true
+    },
+    "workday:Eli Lilly:R-110993": {
+     "date": "2026-11-08",
+     "sig": "",
+     "legacy": true
+    },
+    "ashby:Kueski:e1261953-7bcc-45db-a54e-fc2e0bdfbc89": {
+     "date": "2026-11-08",
+     "sig": "",
+     "legacy": true
+    },
+    "workday:Citi:26996393": {
+     "date": "2026-11-08",
+     "sig": "",
+     "legacy": true
+    },
+    "oracle_hcm:JPMorgan Chase:210802450": {
+     "date": "2026-11-08",
+     "sig": "",
+     "legacy": true
+    },
+    "greenhouse:Flexport:7651413": {
+     "date": "2026-11-08",
+     "sig": "",
+     "legacy": true
+    },
+    "workday:Workday:JR-0109770": {
+     "date": "2026-11-08",
+     "sig": "",
+     "legacy": true
+    },
+    "workday:Workday:JR-0110306": {
+     "date": "2026-11-08",
+     "sig": "",
+     "legacy": true
+    },
+    "workday:Workday:JR-0110856": {
+     "date": "2026-11-08",
+     "sig": "",
+     "legacy": true
+    },
+    "workday:Avnet:JR-023909": {
+     "date": "2026-11-08",
+     "sig": "",
+     "legacy": true
+    }
    }
   },
   "luis": {
