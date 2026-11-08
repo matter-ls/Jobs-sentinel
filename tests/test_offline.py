@@ -168,6 +168,46 @@ class TitleAndLocation(unittest.TestCase):
         for t in no:
             self.assertFalse(fj.is_director(t, rules), t)
 
+    def test_monica_cv_rules(self):
+        subs = {s["id"]: s for s in fj.get_subscribers(CFG)}
+        self.assertIn("monica", subs)
+        cfg = subs["monica"]
+        self.assertEqual(cfg["recipient_email"], "monica.munoz.san@gmail.com")
+        cv_txt = fj.load_subscriber_cv(cfg)
+        self.assertIn("Hewlett Packard Enterprise", cv_txt)
+        self.assertIn("President's Quality Award", cv_txt)
+        rules = fj.build_rules(cfg)
+        yes = [
+            "Organizational Change Management Lead",
+            "Senior Manager, Change Enablement & Digital Adoption",
+            "Customer Experience (CX) Program Manager",
+            "Business Process Improvement Specialist",
+            "Digital Transformation Manager",
+            "Global Partner Onboarding & Experience Lead",
+            "Sales Enablement Manager",
+            "CPQ Operations Team Lead",
+            "Continuous Improvement Lead",
+            "Gerente de Gestion del Cambio",
+        ]
+        no = [
+            "Software Engineer",
+            "Senior Backend Developer",
+            "QA Automation Tester",
+            "Change Management Intern",
+            "Junior CX Analyst",
+            "Executive Assistant to VP",
+            "Call Center Agent",
+            "Tax Accountant",
+        ]
+        for t in yes:
+            self.assertTrue(fj.is_director(t, rules), t)
+        for t in no:
+            self.assertFalse(fj.is_director(t, rules), t)
+        is_up, _ = fj.is_career_upgrade_heuristic(
+            {"title": "Senior Manager, Organizational Change Management", "company": "Acme"}, cfg
+        )
+        self.assertTrue(is_up)
+
     def test_locations(self):
         lc = lambda s: fj.location_class(s, RULES, CFG)
         self.assertEqual(lc("Guadalajara, Mexico"), "jalisco")
@@ -493,6 +533,32 @@ class EndToEnd(unittest.TestCase):
         self.assertEqual(fj.workday_posted("Posted Yesterday", t), "2026-11-04")
         self.assertEqual(fj.workday_posted("Posted 3 Days Ago", t), "2026-11-02")
         self.assertIsNone(fj.workday_posted("Posted 30+ Days Ago", t))
+
+    @patch("fetch_jobs.call_gemini_daily_motivation")
+    def test_daily_insider_motivation_genai_and_vault(self, mock_daily_mot):
+        """Daily 'Us vs. The System' motivation renders via Gemini when available and falls back cleanly."""
+        sub = {"name": "Luis Gallegos", "recipient_email": "luisgallegosp@gmail.com"}
+        sample_jobs = [
+            {"key": "k1", "title": "Senior Manager, Process Automation", "company": "Acme", "location": "Zapopan", "loc_class": "jalisco", "url": "https://example.com/2", "posted_at": "2026-11-05"},
+        ]
+        mock_daily_mot.return_value = (
+            "Refuse the 3% Loyalty Tax.",
+            "Luis, staying comfortable keeps your comp flat while moving seats reprices your career—let's beat the ATS at Acme today.",
+        )
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "fake-key"}):
+            msg = fj.build_email_message(sample_jobs, 1, sub, date(2026, 11, 5), "sender@gmail.com")
+        self.assertTrue(mock_daily_mot.called)
+        html_part = msg.get_body(preferencelist=("html",)).get_content()
+        self.assertIn("Us vs. The System", html_part)
+        self.assertIn("Refuse the 3% Loyalty Tax.", html_part)
+        self.assertIn("Good morning, Luis.", html_part)
+
+        # Fallback vault when GEMINI_API_KEY is unset
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("GEMINI_API_KEY", None)
+            headline, body = fj.generate_daily_insider_note(sub, sample_jobs[0], 1, 1, 1, date(2026, 11, 5))
+            self.assertTrue(headline)
+            self.assertIn("Luis", body)
 
     @patch("smtplib.SMTP_SSL")
     def test_email_failure_rolls_back_subscriber_state(self, mock_smtp_ssl):
