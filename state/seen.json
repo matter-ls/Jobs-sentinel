@@ -178,18 +178,19 @@
    },
    "initialized": true,
    "relationship": {
-    "edition": 6,
+    "edition": 7,
     "streak_days": 1,
     "last_briefing_date": "2026-11-08",
-    "total_roles_surfaced": 108,
-    "total_cvs_tailored": 18,
+    "total_roles_surfaced": 123,
+    "total_cvs_tailored": 21,
     "recent_angle_ids": [
      26,
      27,
      28,
      29,
      30,
-     31
+     31,
+     0
     ],
     "recent_headlines": [
      "Turn Ambition Into Pipeline Today.",
@@ -197,7 +198,8 @@
      "Every Shot Sharpens Your Executive Story.",
      "Play Asymmetric Offense.",
      "Build Escape Velocity From Routine.",
-     "Write Your Own Promotion Slip."
+     "Write Your Own Promotion Slip.",
+     "Stop Paying the 3% Comfort Tax."
     ],
     "recent_spotlight_keys": []
    }
