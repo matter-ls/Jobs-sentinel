@@ -576,8 +576,37 @@ def fetch_eightfold(c):
         raise
 
 
+def fetch_bamboohr(c):
+    board = c["board"]
+    d = http_json(f"https://{board}.bamboohr.com/careers/list")
+    if not isinstance(d, dict) or not isinstance(d.get("result"), list):
+        raise ValueError(f"BambooHR board '{board}' did not return JSON job list")
+    out = []
+    for j in d.get("result") or []:
+        jid = str(j.get("id") or "").strip()
+        if not jid:
+            continue
+        loc_obj = j.get("location") if isinstance(j.get("location"), dict) else {}
+        ats_loc = j.get("atsLocation") if isinstance(j.get("atsLocation"), dict) else {}
+        city = loc_obj.get("city") or ats_loc.get("city")
+        state = loc_obj.get("state") or ats_loc.get("state") or ats_loc.get("province")
+        country = ats_loc.get("country") or loc_obj.get("country") or c.get("default_country", "")
+        loc = ", ".join(dict.fromkeys(str(x).strip() for x in (city, state, country) if x and str(x).strip()))
+        is_remote = bool(j.get("isRemote")) or str(j.get("locationType") or "") == "1"
+        if is_remote and "remote" not in loc.lower():
+            loc = f"{loc} (Remote)".strip() if loc else f"Remote - {c.get('default_country', 'Mexico')}"
+        out.append(job(
+            c, jid, j.get("jobOpeningName") or j.get("title"), loc,
+            f"https://{board}.bamboohr.com/careers/{jid}",
+            j.get("datePosted"),
+            team=j.get("departmentLabel") or "",
+            detail_api=f"https://{board}.bamboohr.com/careers/{jid}/detail",
+        ))
+    return out
+
+
 def enrich_job_description(j):
-    """Fetch full job description on-demand for Workday / SmartRecruiters / Oracle HCM / Eightfold."""
+    """Fetch full job description on-demand for Workday / SmartRecruiters / Oracle HCM / Eightfold / BambooHR."""
     if j.get("description") and len(j["description"]) > 300:
         return j["description"]
     detail_api = j.get("detail_api")
@@ -600,6 +629,8 @@ def enrich_job_description(j):
             )
         elif isinstance(d.get("data"), dict) and "jobDescription" in d["data"]:
             desc = d["data"].get("jobDescription") or ""
+        elif isinstance(d.get("result"), dict) and isinstance(d["result"].get("jobOpening"), dict):
+            desc = d["result"]["jobOpening"].get("description") or ""
         else:
             desc = d.get("description") or d.get("content") or ""
         cleaned = strip_html(desc)[:12000]
@@ -619,6 +650,7 @@ FETCHERS = {
     "workday": fetch_workday,
     "oracle_hcm": fetch_oracle_hcm,
     "eightfold": fetch_eightfold,
+    "bamboohr": fetch_bamboohr,
 }
 
 
@@ -847,11 +879,14 @@ def classify_career_upgrades(jobs, sub_cfg, root=ROOT):
         f"- key: {j['key']} | title: {j.get('title', '')} | company: {j.get('company', '')} | team: {j.get('team', '')}"
         for j in batch
     )
+    career_goal = (sub_cfg.get("career_goal") or "").strip()
+    goal_line = f"CANDIDATE CAREER GOAL & DIRECTION: {career_goal}\n" if career_goal else ""
     prompt = (
-        "Evaluate the following job openings against the candidate's MASTER CV.\n"
+        "Evaluate the following job openings against the candidate's MASTER CV and career goal.\n"
         "Identify which roles represent a 'Career Upgrade Move' (an upward step in seniority, "
-        "leadership scope, architectural ownership, or high-growth strategic challenge compared "
-        "to the candidate's current/most recent role, rather than a lateral or junior move).\n\n"
+        "closing/revenue ownership, leadership scope, architectural ownership, or high-growth strategic "
+        "challenge aligned with the candidate's career direction, rather than a lateral or junior move).\n\n"
+        f"{goal_line}"
         'Return ONLY valid JSON matching: {"upgrades": [{"key": "<job key>", "is_career_upgrade": true, "upgrade_reason": "1 concise sentence why this is a career upgrade move"}]}\n\n'
         f"JOBS:\n{items_txt}\n\n---\nCANDIDATE MASTER CV:\n{master_cv[:4000]}"
     )
@@ -892,20 +927,37 @@ def infer_target_direction(job_item, sub_cfg=None, core_skills=None):
     being applied to without mechanically copying internal requisition codes."""
     title = (job_item or {}).get("title", "")
     team = (job_item or {}).get("team", "")
-    blob = norm(f"{title} {team} {' '.join(core_skills or [])}")
+    goal = (sub_cfg or {}).get("career_goal", "")
+    title_team_blob = norm(f"{title} {team}")
+    blob = norm(f"{title} {team} {goal} {' '.join(core_skills or [])}")
 
-    if re.search(r"\b(vp|vice[- ]?president(e|a)?|svp|evp|chief|general manager|gerente general|managing director|country (manager|lead|head))\b", blob):
+    sales_goal = "sales" in norm(goal)
+    is_sales_role = bool(re.search(
+        r"\b(sales|account executive|account manager|\bkam\b|ejecutivo de ventas|ejecutivo comercial|"
+        r"ejecutivo de cuentas|gerente comercial|gerente de ventas|gerente de cuentas|"
+        r"business development|\bbdr\b|\bsdr\b|demand generation|territory|"
+        r"channel sales|partner sales|channel account|partner account|renewals?|ventas|comercial)\b",
+        title_team_blob,
+    )) or (sales_goal and bool(re.search(r"\b(channel|partner|alliances?|customer success|client success)\b", title_team_blob)))
+
+    if re.search(r"\b(vp|vice[- ]?president(e|a)?|svp|evp|chief|general manager|gerente general|managing director|country (manager|lead|head))\b", title_team_blob):
         level = "Executive Leadership (VP / GM / Head of Function)"
-    elif re.search(r"\b(director(a)?|head of)\b", blob):
+    elif re.search(r"\b(director(a)?|head of)\b", title_team_blob):
         level = "Director / Head of Function"
-    elif re.search(r"\b(senior manager|sr\.? manager|gerente senior|principal|architect|arquitecto|coe lead|practice lead|global lead)\b", blob):
+    elif is_sales_role and re.search(r"\b(sales manager|gerente de ventas|gerente comercial|bdr manager|inside sales manager|team lead|lider comercial|lider de ventas|regional sales manager)\b", title_team_blob):
+        level = "Sales Management & Commercial Team Leadership"
+    elif is_sales_role:
+        level = "Enterprise & Digital Sales (Account Executive / KAM / Territory Growth)"
+    elif re.search(r"\b(senior manager|sr\.? manager|gerente senior|principal|architect|arquitecto|coe lead|practice lead|global lead)\b", title_team_blob):
         level = "Senior Manager / Principal & Functional Lead"
-    elif re.search(r"\b(manager|gerente|lead|leader|lider)\b", blob):
+    elif re.search(r"\b(manager|gerente|lead|leader|lider)\b", title_team_blob):
         level = "Manager & Cross-Functional Delivery Lead"
     else:
         level = "Senior Operations & Domain Specialist"
 
-    if re.search(r"\b(organizational change|change management|change enablement|digital adoption|customer experience|partner experience|\bcx\b)\b", blob):
+    if is_sales_role:
+        domain = "B2B Enterprise Sales, Account Acquisition, Pipeline Conversion & LATAM Territory Growth"
+    elif re.search(r"\b(organizational change|change management|change enablement|digital adoption|customer experience|partner experience|\bcx\b)\b", blob):
         domain = "Organizational Change Management, Customer/Partner Experience (CX) & Digital Transformation"
     elif re.search(r"\b(process mining|celonis|process intelligence|process excellence|operational excellence|continuous improvement|lean|six sigma|bpi)\b", blob):
         domain = "Process Intelligence, Operational Excellence & Continuous Improvement"
@@ -919,8 +971,6 @@ def infer_target_direction(job_item, sub_cfg=None, core_skills=None):
         domain = "Data & Analytics Strategy, Business Intelligence & Decision Systems"
     elif re.search(r"\b(supply chain|logistics|manufacturing|fab\b|quality|procurement|operations|operaciones)\b", blob):
         domain = "Global Operations, Supply Chain & End-to-End Process Optimization"
-    elif re.search(r"\b(sales|revenue|revops|bdr|sdr|business development|account|commercial|customer success|ventas)\b", blob):
-        domain = "Revenue Operations, Enterprise Business Development & Commercial Analytics"
     elif re.search(r"\b(program|project|pmo|agile|scrum|delivery|portfolio|proyectos)\b", blob):
         domain = "Strategic Program Management (PMO), Agile Delivery & Portfolio Execution"
     else:
@@ -1075,6 +1125,12 @@ def tailor_cv_with_llm(job_item, master_cv_text, sub_cfg):
             "(Full description text not exposed in feed; tailor CV to role title, company industry, and level.)"
         )
 
+    career_goal = (sub_cfg.get("career_goal") or "").strip()
+    goal_section = (
+        f"CANDIDATE CAREER GOAL & DIRECTION (align `target_direction`, `summary`, `core_skills`, and bullet emphasis truthfully toward this trajectory):\n{career_goal}\n\n---\n"
+        if career_goal
+        else ""
+    )
     prompt = (
         f"TARGET JOB POSTING:\n"
         f"Title: {job_item.get('title', '')}\n"
@@ -1083,6 +1139,7 @@ def tailor_cv_with_llm(job_item, master_cv_text, sub_cfg):
         f"Team: {job_item.get('team', '')}\n"
         f"Job Description:\n{jd_text}\n\n"
         f"---\n"
+        f"{goal_section}"
         f"CANDIDATE MASTER CV:\n{master_cv_text}"
     )
     model = os.environ.get("GEMINI_MODEL") or sub_cfg.get("llm_model", "gemini-2.5-flash")
@@ -2123,6 +2180,8 @@ def generate_daily_briefing_pack(
     api_key = (os.environ.get("GEMINI_API_KEY") or "").strip()
     if api_key:
         cv_snapshot = extract_cv_identity_snapshot(sub_cfg, root=root)
+        career_goal = ((sub_cfg or {}).get("career_goal") or "").strip()
+        goal_line = f"Candidate Career Goal & North Star: {career_goal}\n" if career_goal else ""
         avoid_list = rel_ctx.get("recent_headlines") or []
         avoid_txt = "; ".join(f'"{h}"' for h in avoid_list[-12:]) if avoid_list else "None yet (Edition #1 — make a memorable first impression!)"
         mode_note = (
@@ -2137,6 +2196,7 @@ def generate_daily_briefing_pack(
             f"Cumulative Wins Together: {rel_ctx.get('total_roles_surfaced', total_count)} matched roles surfaced across {rel_ctx.get('board_count', 106)} boards, "
             f"{rel_ctx.get('total_cvs_tailored', cvs_today_count)} custom CVs built.\n"
             f"Candidate First Name: {first_name}\n"
+            f"{goal_line}"
             f"Candidate Career Identity Snapshot: {cv_snapshot or 'Ambitious leader targeting high-impact step-up roles in Jalisco & Remote Mexico'}\n"
             f"Today's Psychological Dopamine Angle (#{angle_id + 1}): {theme}\n"
             f"Run Context: {mode_note}\n"

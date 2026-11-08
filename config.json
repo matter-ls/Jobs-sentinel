@@ -151,25 +151,25 @@
       "email_mode": "new_or_discovered",
       "cv_file": "cvs/ewerson.md",
       "max_tailored_cvs": 3,
+      "career_goal": "Advancing decisively into full-cycle B2B Tech & Enterprise Sales — targeting Account Executive (AE), Key Account Manager (KAM), Territory/Regional Sales, Inside/Digital Sales, Channel & Partner Sales, Renewals/Expansion, and Sales/BDR Leadership roles across Jalisco, Mexico, Brazil, and LATAM.",
       "upgrade_title_include": [
-        "\\b(manager|gerente|senior manager|sr\\.? manager|lead|leader|lider|head of|principal)\\b",
-        "\\b(account executive|ae|enterprise|strategic|regional|latam)\\b.*\\b(sales|account|business development|operations|manager|lead)\\b",
-        "\\b(senior|sr\\.?)\\b.*\\b(analyst|analista|specialist|especialista|business development|sales operations|revenue operations|data|bi)\\b"
+        "\\b(account executive|sales executive|commercial executive|client executive|enterprise ae|mid[- ]market ae|commercial ae)\\b",
+        "\\b(ejecutivo|ejecutiva) (de ventas|comercial|de cuentas|empresarial)\\b",
+        "\\b(key account|strategic account|enterprise account|commercial account|national account|global account|territory|regional|channel|partner|alliances?) (manager|executive|lead|leader|sales)\\b",
+        "\\b(\\bkam\\b|account manager|gerente de cuentas|gerente comercial|gerente de ventas|lider comercial|lider de ventas)\\b",
+        "\\b(sales|inside sales|digital sales|business development|bdr|sdr|commercial|revenue|renewals?|customer success) (manager|senior manager|sr\\.? manager|lead|leader|team lead|supervisor|head)\\b",
+        "\\b(senior|sr\\.?)\\b.*\\b(sales|account|business development|commercial|renewals?|customer success)\\b"
       ],
       "title_include": [
-        "\\b(business development|bdr|sdr|sales development|inside sales|digital sales|demand generation)\\b",
-        "\\b(sales|revenue|commercial|deal|bid|order|go[- ]to[- ]market|gtm)\\b.*\\b(operations|ops|analyst|specialist|coordinator|manager|lead|enablement|support|strategy|planning)\\b",
-        "\\b(business|sales|commercial) (operations|analyst|analytics|intelligence|insights|planning|support)\\b",
-        "\\b(data|bi|business intelligence|reporting|analytics|insights)\\b.*\\b(analyst|specialist|visualization|coordinator|lead|manager)\\b",
-        "\\b(power bi|tableau|looker|watson analytics)\\b",
-        "\\b(forecast|forecasting|pipeline|crm|salesforce|quota|territory)\\b.*\\b(analyst|specialist|manager|administrator|admin|coordinator)\\b",
-        "\\b(account|territory|channel|partner|alliances?|customer success|client success|renewals?)\\b.*\\b(manager|executive|representative|specialist|lead|coordinator)\\b",
-        "\\b(software asset|asset|license|licensing)\\b.*\\b(management|analyst|specialist|coordinator)\\b",
-        "\\b(customer|technical|client) (support|service|care|experience)\\b.*\\b(lead|leader|manager|supervisor|team lead|coordinator)\\b",
-        "\\b(project|program) (coordinator|analyst|manager|specialist)\\b",
-        "\\banalista\\b.*\\b(datos|ventas|negocio|negocios|operaciones|comercial|inteligencia de negocios)\\b",
-        "\\b(ejecutivo|representante|gerente|coordinador|lider|especialista)\\b.*\\b(ventas|comercial|cuentas|desarrollo de negocios|operaciones)\\b",
-        "\\b(international business|comercio (internacional|exterior)|export|import|trade compliance)\\b"
+        "\\b(account executive|sales executive|commercial executive|client executive)\\b",
+        "\\b(ejecutivo|ejecutiva|representante|especialista|consultor|asesor|gerente|coordinador|lider)\\b.*\\b(ventas|comercial|cuentas|desarrollo de negocios|nuevos negocios)\\b",
+        "\\b(\\bkam\\b|key account|strategic account|enterprise account|commercial account|territory|channel|partner|alliances?)\\b.*\\b(manager|executive|representative|specialist|lead|sales|coordinator)\\b",
+        "\\baccount (manager|executive|representative|specialist|director|lead)\\b",
+        "\\b(inside|digital|enterprise|corporate|mid[- ]market|smb|b2b|field|regional|territory|latam|brazil|brasil|technical|solutions?|cloud|saas|software) sales\\b",
+        "\\bsales (representative|specialist|consultant|executive|associate|advisor|manager|lead|leader|supervisor|coordinator|engineer)\\b",
+        "\\b(business development|bdr|sdr|sales development|demand generation|desarrollo de negocios|generacion de demanda)\\b",
+        "\\b(renewal|renewals|upsell|expansion|customer success|client success)\\b.*\\b(manager|executive|specialist|representative|lead)\\b",
+        "\\b(sales|revenue|commercial|deal desk|partner) (enablement|operations|ops|strategy|planning)\\b"
       ],
       "title_exclude": [
         "\\bassistant to\\b",
@@ -179,11 +179,11 @@
         "\\bbecari[oa]\\b",
         "\\b(vp|svp|evp|vice[- ]?president(e|a)?)\\b",
         "\\bchief\\b.*\\bofficer\\b",
-        "\\b(software|backend|frontend|front-end|back-end|full[- ]stack|devops|cloud|platform|machine learning|ml|ai)\\b.*\\b(engineer|developer|architect)\\b",
+        "\\b(software|backend|frontend|front-end|back-end|full[- ]stack|devops|cloud|platform|machine learning|ml|ai|hardware|firmware|mechanical|electrical)\\b.*\\b(engineer|developer|architect)\\b",
         "\\b(data|analytics) (engineer|scientist|architect)\\b",
         "\\b(qa|quality assurance|test|testing|sdet)\\b",
-        "\\b(field|retail|store|door[- ]to[- ]door|telemarketing|call center agent)\\b",
-        "\\b(accountant|accounting|payroll|tax|legal|nurse|physician)\\b"
+        "\\b(retail|store|cashier|mostrador|piso de venta|promotor|cambaceo|door[- ]to[- ]door|telemarketing|call center agent)\\b",
+        "\\b(accountant|accounting|comptroller|audit|payroll|tax|legal|counsel|nurse|physician|hr |human resources|talent acquisition|recruiter)\\b"
       ],
       "include_remote_mexico": true,
       "include_country_only": true
