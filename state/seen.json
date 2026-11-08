@@ -36,5 +36,402 @@
    "last_seen": "2026-11-08"
   }
  },
- "initialized": true
+ "initialized": true,
+ "subscribers": {
+  "lucas": {
+   "jobs": {
+    "workday:Flex:WD228976": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD230884": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD231552": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD229135": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3165460": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:AstraZeneca:R-262125": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Jabil:J2470435": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    }
+   },
+   "initialized": true
+  },
+  "luis": {
+   "jobs": {
+    "workday:Flex:WD229240": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD229193": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD231077": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD230517": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD232022": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD227626": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD228769": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD233350": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD231845": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD232315": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD232378": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD232381": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD232617": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD230757": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD231134": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD230750": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD230751": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD230250": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD230251": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD230252": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD228572": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD227055": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD232232": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD231537": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD231538": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD231224": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD228021": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD230318": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD229836": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD229837": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD229814": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Flex:WD224772": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "greenhouse:Backbase:8225999": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3170287": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3164137": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3168031": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3169771": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3169719": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3170316": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3170076": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3170314": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3169367": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3165014": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3168886": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3165250": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3169264": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3168493": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3168723": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:HP Inc.:3167363": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Kyndryl:R-69264": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Micron:JR114201": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Micron:JR110477": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Micron:JR104802": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Jabil:J2467745": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Jabil:J2470798": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Jabil:J2464258": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Jabil:J2469140": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Jabil:J2467574": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Jabil:J2466768": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Jabil:J2467589": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Jabil:J2467030": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Jabil:J2467028": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Jabil:J2467026": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Jabil:J2465463": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Jabil:J2465480": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Jabil:J2463976": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Jabil:J2463973": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "workday:Jabil:J2461594": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "greenhouse:Wizeline:7614922": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    },
+    "greenhouse:Wizeline:7905176": {
+     "first_seen": "2026-11-08",
+     "baseline": true,
+     "last_seen": "2026-11-08"
+    }
+   },
+   "initialized": true
+  }
+ }
 }
