@@ -33,7 +33,10 @@ Exit codes: `0` ok · `1` nothing written (every board failed) · `2` outputs wr
 Notes:
 
 - Scheduled workflows only run on the **default branch**, and GitHub pauses them after **60 days without repository activity** – re-enable from the Actions tab if that happens.
-- Manual runs default to `email_all = true` (useful for testing). Scheduled runs only email newly discovered roles.
+- **Only roles never sent before are emailed.** Each subscriber has an `emailed` ledger in `state/seen.json` (job key + company/title signature), so a role is delivered once, even if it reappears under a new requisition id or as a city clone. The ledger is seeded automatically for existing subscribers on the first run after upgrading.
+- `quiet_day_mode` (global or per subscriber): `note` (default) sends a short role-free Lucy briefing when nothing new matched, `spotlight` re-lists up to `quiet_spotlight_count` unclaimed roles (legacy), `skip` sends nothing on quiet days.
+- `max_email_jobs` (default 12) caps each briefing; the rest carry over to the next day and are available in the attached personal board (`Lucy_Board_<id>_<date>.html`).
+- Manual runs now default to `email_all = false` (same behaviour as the daily run). Tick it only for testing: it re-sends every current match.
 - To publish `docs/index.html`, enable **Settings > Pages > Deploy from a branch > `/docs`**. The page carries `noindex` + `robots.txt`, but anyone with the URL can read it.
 
 ## 3. Lucy's AI Partner Briefing ("Us vs. Their Machine")

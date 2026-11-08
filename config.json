@@ -4,8 +4,9 @@
   "recipient_email": "lucasschollmatter@gmail.com",
   "email_on_baseline": true,
   "email_mode": "new_or_discovered",
-  "daily_top_when_quiet": true,
+  "quiet_day_mode": "note",
   "quiet_spotlight_count": 3,
+  "max_email_jobs": 12,
   "llm_model": "gemini-3.8-flash",
   "max_tailored_cvs": 3,
   "title_include": [

@@ -54,7 +54,9 @@ CFG_DEFAULTS = {
     "email_on_baseline": True,
     "email_mode": "new_or_discovered",
     "daily_top_when_quiet": False,
+    "quiet_day_mode": "note",
     "quiet_spotlight_count": 3,
+    "max_email_jobs": 12,
     "llm_model": DEFAULT_LLM_MODEL,
     "max_tailored_cvs": 3,
     "cv_attachment_format": "docx",
@@ -2338,24 +2340,110 @@ def alert_markdown(new_jobs, today):
     return "\n".join(lines) + "\n"
 
 
+def job_signature(j):
+    """Stable (company, normalized title, team) signature so the same role is recognized when it
+    reappears under a different requisition id or as a city clone, and is never emailed twice."""
+    co_k = norm((j or {}).get("company", "")).strip()
+    title_k = re.sub(r"[^a-z0-9]+", " ", norm((j or {}).get("title", ""))).strip()
+    team_k = norm((j or {}).get("team", "")).strip()
+    return f"{co_k}|{title_k}|{team_k}"
+
+
+def resolve_quiet_day_mode(cfg):
+    """What to send when zero never-seen roles exist today:
+    'note' (default): a short Lucy briefing with NO job list (nothing is ever re-sent),
+    'spotlight': legacy behaviour re-listing up to `quiet_spotlight_count` unclaimed roles,
+    'skip': no email at all on quiet days."""
+    mode = str((cfg or {}).get("quiet_day_mode") or "").strip().lower()
+    if mode in ("note", "spotlight", "skip"):
+        return mode
+    if (cfg or {}).get("daily_top_when_quiet"):
+        return "spotlight"
+    return "note"
+
+
+def ensure_emailed_state(sub_state):
+    """Return the subscriber's `emailed` ledger (key -> {date, sig}). On first run after upgrading
+    from a version without the ledger, seed it with every already-known key so long-time
+    subscribers are never re-sent roles they received before the ledger existed."""
+    if not isinstance(sub_state, dict):
+        return {}
+    emailed = sub_state.get("emailed")
+    if not isinstance(emailed, dict):
+        emailed = {}
+        if sub_state.get("initialized"):
+            for k, rec in (sub_state.get("jobs") or {}).items():
+                if isinstance(rec, dict):
+                    emailed[k] = {"date": rec.get("first_seen") or "", "sig": "", "legacy": True}
+        sub_state["emailed"] = emailed
+    return emailed
+
+
+def record_emailed_jobs(sub_state, jobs_sent, today, retention_days=120):
+    """Mark delivered roles (key + signature) so they are never emailed to this subscriber again;
+    prune ledger entries for roles that disappeared from the radar longer than `retention_days` ago."""
+    if not isinstance(sub_state, dict):
+        return
+    emailed = ensure_emailed_state(sub_state)
+    for j in jobs_sent or []:
+        if j.get("key"):
+            emailed[j["key"]] = {"date": today.isoformat(), "sig": job_signature(j)}
+    known = sub_state.get("jobs") if isinstance(sub_state.get("jobs"), dict) else {}
+    for k in list(emailed):
+        rec = emailed.get(k)
+        if not isinstance(rec, dict):
+            del emailed[k]
+            continue
+        if k in known:
+            continue
+        sent_on = _safe_iso_date(rec.get("date"), today)
+        if (today - sent_on).days > retention_days:
+            del emailed[k]
+
+
 def select_jobs_for_email(jobs, baseline, cfg, sub_state=None):
-    """Choose which jobs to include in a subscriber's daily email digest.
-
-    When `daily_top_when_quiet` is enabled and zero brand-new roles were discovered
-    overnight, rotates through up to `quiet_spotlight_count` active non-stale matches
-    (prioritizing Career Upgrade Moves not spotlighted in recent quiet runs) so every
-    morning delivers a fresh dopamine & career-momentum briefing."""
+    """Choose which roles go into a subscriber's email: ONLY active roles that have never been
+    emailed to them (by key or by company+title signature). Newly discovered roles come first;
+    roles that were discovered earlier but never shown (e.g. beyond `max_email_jobs`) carry over
+    until delivered. `email_mode: all` (manual --email-all runs) re-sends every active match."""
     mode = cfg.get("email_mode", "new_or_discovered")
+    active = [j for j in jobs if not j.get("stale")]
     if mode == "all":
-        return [j for j in jobs if not j.get("stale")]
-    if baseline:
-        if cfg.get("email_on_baseline", True):
-            return [j for j in jobs if not j.get("stale")]
+        return active
+    if baseline and not cfg.get("email_on_baseline", True):
         return []
-    fresh = [j for j in jobs if j.get("discovered_now")]
-    if fresh or mode == "discovered_only" or not cfg.get("daily_top_when_quiet", False):
-        return fresh
+    emailed = (sub_state or {}).get("emailed")
+    emailed = emailed if isinstance(emailed, dict) else {}
+    sent_sigs = {v.get("sig") for v in emailed.values() if isinstance(v, dict) and v.get("sig")}
+    never_sent = [j for j in active if j.get("key") not in emailed and job_signature(j) not in sent_sigs]
+    if mode == "discovered_only" and not baseline:
+        never_sent = [j for j in never_sent if j.get("discovered_now")]
+    return never_sent
 
+
+def cap_email_jobs(jobs, cfg, today):
+    """Keep the email digestible: at most `max_email_jobs` roles (brand-new first, then Career
+    Upgrade Moves, hot postings, recency). Returns (shown, overflow_count); overflow roles carry
+    over to the next briefing automatically because they are not recorded as emailed."""
+    limit = int(cfg.get("max_email_jobs", 12) or 0)
+    if limit <= 0 or len(jobs) <= limit:
+        return list(jobs), 0
+    ranked = sorted(
+        jobs,
+        key=lambda j: (
+            not bool(j.get("discovered_now")),
+            not is_career_upgrade_heuristic(j, cfg)[0],
+            not job_age_info(j, today)[1],
+            job_age_info(j, today)[0],
+            j.get("company", "").lower(),
+        ),
+    )
+    return ranked[:limit], len(jobs) - limit
+
+
+def select_quiet_spotlight(jobs, cfg, sub_state=None):
+    """Legacy quiet-day behaviour (`quiet_day_mode: spotlight`): rotate through up to
+    `quiet_spotlight_count` active matches not spotlighted in recent quiet runs."""
     active = [j for j in jobs if not j.get("stale")]
     if not active:
         return []
@@ -2376,6 +2464,13 @@ def select_jobs_for_email(jobs, baseline, cfg, sub_state=None):
         item["quiet_spotlight"] = True
         chosen.append(item)
     return chosen
+
+
+def render_subscriber_board(jobs, sub_cfg, stamp):
+    """Self-contained personal board (HTML) with every active match for one subscriber."""
+    clean = strip_transient_fields([j for j in jobs if not j.get("stale")])
+    title = f"{sub_cfg.get('name') or sub_cfg.get('id') or 'Your'} · Lucy Personal Board"
+    return render_page(clean, {"page_title": title}, stamp)
 
 
 def job_age_info(j, today):
@@ -2545,7 +2640,8 @@ def ats_intel_for(job_item):
 
 def compose_partner_briefing_prompt(
     sub_cfg, top_job, rel_ctx, today, beat, cadence, cv_snapshot,
-    upgrade_count, hot_count, total_count, cvs_today_count, is_quiet_spotlight, language="English"
+    upgrade_count, hot_count, total_count, cvs_today_count, is_quiet_spotlight, language="English",
+    quiet_day=False, active_count=None,
 ):
     """Assemble the fully grounded 'Us vs. Their Machine' briefing prompt for Gemini."""
     first_name = ((sub_cfg or {}).get("name") or "Candidate").split()[0]
@@ -2567,15 +2663,37 @@ def compose_partner_briefing_prompt(
     avoid_txt = "; ".join(f"'{h}'" for h in avoid_list) if avoid_list else "(none yet)"
     last_chal = rel_ctx.get("last_micro_challenge") or ""
     last_co = rel_ctx.get("last_spotlight_company") or ""
-    mode_note = (
-        "Quiet-market momentum spotlight: zero brand-new postings dropped overnight, so you hand-picked their top unclaimed Career Upgrade Moves still live on the board to keep daily momentum unbroken."
-        if is_quiet_spotlight
-        else "Fresh market drop: newly discovered openings matched overnight."
-    )
+    if quiet_day:
+        mode_note = (
+            "QUIET DAY: zero never-seen postings matched overnight, so today's email lists NO roles and re-sends nothing "
+            "(we never repeat a role). Keep the connection alive briefly and honestly: acknowledge the quiet market without drama, "
+            "reinforce that the radar kept sweeping and will keep sweeping, and make the micro-challenge a pipeline-hygiene move "
+            "(follow up on a pending application, sharpen the LinkedIn headline, message one contact) instead of applying."
+        )
+    elif is_quiet_spotlight:
+        mode_note = "Quiet-market momentum spotlight: zero brand-new postings dropped overnight, so you hand-picked their top unclaimed Career Upgrade Moves still live on the board to keep daily momentum unbroken."
+    else:
+        mode_note = "Fresh market drop: never-seen openings matched overnight (every role listed today is new to the candidate; we never repeat a role)."
     cv_line = (
         f"{cvs_today_count} tailored Word CV(s) attached, each rebuilt by our Gemini AI from the real master CV plus the specific posting"
         if cvs_today_count
-        else "no tailored CV attached today (the roles are linked for a direct application)"
+        else "no tailored CV attached today"
+    )
+    if quiet_day or not top_job:
+        spotlight_block = (
+            "Spotlight role: none today (quiet day). Do NOT invent an employer or a role.\n"
+            f"Their screening tools in general: {GENERIC_ATS_INTEL}.\n"
+        )
+    else:
+        spotlight_block = (
+            f"Spotlight hiring employer: '{top_co}' | Spotlight role: '{top_title}' | Location: {top_loc}\n"
+            f"Their screening tool for this role: {ats_name}. How it reads a CV: {ats_intel}.\n"
+            + (f"Attached CV built for the spotlight role: {cv_file}\n" if cv_file else "")
+        )
+    active_line = (
+        f"Roles already delivered in earlier briefings that remain open on the board: {active_count}\n"
+        if isinstance(active_count, int) and active_count >= 0
+        else ""
     )
     return (
         "=== TODAY ===\n"
@@ -2594,10 +2712,9 @@ def compose_partner_briefing_prompt(
         + "\n=== LAST NIGHT'S OPERATION (REAL FACTS: use these, never invent others) ===\n"
         f"Employer career portals swept: {b_cnt} across 9 ATS platforms (Workday, Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Oracle Recruiting Cloud, Eightfold, BambooHR)\n"
         f"Run context: {mode_note}\n"
-        f"Today's briefing: {total_count} role(s), {upgrade_count} Career Upgrade Move(s), {hot_count} hot opening(s) posted within 48 hours, {cv_line}\n"
-        f"Spotlight hiring employer: '{top_co}' | Spotlight role: '{top_title}' | Location: {top_loc}\n"
-        f"Their screening tool for this role: {ats_name}. How it reads a CV: {ats_intel}.\n"
-        + (f"Attached CV built for the spotlight role: {cv_file}\n" if cv_file else "")
+        f"Today's briefing: {total_count} role(s) new to the candidate, {upgrade_count} Career Upgrade Move(s), {hot_count} hot opening(s) posted within 48 hours, {cv_line}\n"
+        f"{active_line}"
+        f"{spotlight_block}"
         + "\n=== STORY SO FAR (continuity memory: reference lightly, never scold) ===\n"
         f"{story_lines}\n"
         + (f"Yesterday's micro-challenge: '{last_chal}'\n" if last_chal else "")
@@ -2606,6 +2723,25 @@ def compose_partner_briefing_prompt(
         "=== TASK ===\n"
         f"Write Briefing #{edition} for {first_name} now, fully grounded in the facts above, in Lucy's partner voice. Return ONLY the JSON object."
     )
+
+
+QUIET_DAY_VAULT = [
+    ("A Quiet Board Is Still a Swept Board.", "{first_name}, {board_count} employer portals were swept overnight and nothing new matched your radar, so I am not going to pad your inbox with roles you have already seen. Quiet mornings are when the groundwork for the next move gets done."),
+    ("No New Doors Today. The Radar Never Blinked.", "Zero never-seen postings matched overnight, {first_name}, and that is honest news, not bad news. Every role I have already sent you stays tracked, and the moment a new one drops you will be the first calibrated applicant in the queue."),
+    ("Silence From Their Machine Is Not a Verdict.", "{first_name}, the filters were quiet overnight: no new openings cleared your bar across {board_count} portals. We keep the streak alive anyway, because the candidates who win are the ones still warm when the next posting lands."),
+    ("Quiet Market, Sharp Partner.", "Nothing new to send you this morning, {first_name}, and I refuse to recycle old roles as if they were news. Use the breathing room to tighten one thing in your pipeline; I will keep sweeping every portal tonight."),
+    ("Nothing New Dropped. Your Edge Did Not Drop Either.", "{first_name}, overnight I checked {board_count} career portals and found zero roles you have not already seen. Momentum on a quiet day looks like one small follow-up, not a frantic search, and your radar stays on watch."),
+    ("Zero New Roles, One Honest Partner.", "I would rather tell you the truth than invent urgency, {first_name}: no never-seen postings matched this morning. The roles already in your hands remain live, and tomorrow's sweep starts the second this email leaves."),
+]
+
+QUIET_DAY_CHALLENGES = [
+    "Open the last application you submitted and send the hiring manager or recruiter a two-line follow-up note today.",
+    "Spend 60 seconds sharpening your LinkedIn headline so it mirrors the Target Role Direction on your latest tailored CV.",
+    "Message one former colleague at a company on your radar and ask how their team is hiring this quarter.",
+    "Re-open yesterday's attached CV, read the summary out loud once, and note one win you want to lead with in interviews.",
+    "Pick one company from your earlier briefings and set a 10-minute calendar block this week to research its leadership team.",
+    "Reply to this email with one role title you would love to see on your radar; I will tune the filters around it.",
+]
 
 WEEKDAY_CADENCE = [
     ("Monday Launchpad", "New week, clean slate, asymmetric leverage"),
@@ -2927,7 +3063,8 @@ def call_gemini_daily_motivation(prompt_text, model=DEFAULT_LLM_MODEL, api_key=N
 
 def generate_daily_briefing_pack(
     sub_cfg, top_job, upgrade_count, hot_count, total_count, today,
-    rel_ctx=None, cvs_today_count=0, is_quiet_spotlight=False, root=ROOT
+    rel_ctx=None, cvs_today_count=0, is_quiet_spotlight=False, root=ROOT,
+    quiet_day=False, active_count=None,
 ):
     """Generate today's unique 'Us vs. Their Machine' partner briefing for the subscriber.
 
@@ -2935,10 +3072,13 @@ def generate_daily_briefing_pack(
     their-AI-vs-our-AI intel, Lucy's connection note, micro-challenge, sign-off and a memory
     beat) from a fully grounded prompt (real overnight facts, the candidate's real craft, the
     spotlight employer's ATS, the story so far). The deterministic vault is used only when
-    Gemini is unavailable or every draft fails the quality gate."""
+    Gemini is unavailable or every draft fails the quality gate. On a `quiet_day` (zero
+    never-seen roles) the note lists no roles and the challenge is pipeline hygiene."""
     sub_name = (sub_cfg or {}).get("name") or "Candidate"
     sub_id = (sub_cfg or {}).get("id") or sub_name.lower()
     first_name = sub_name.split()[0]
+    if quiet_day:
+        top_job = None
     top_co = (top_job or {}).get("company") or "a top employer"
     top_title = (top_job or {}).get("title") or "a step-up leadership role"
     hi_cnt = upgrade_count if upgrade_count > 0 else max(1, total_count)
@@ -2977,21 +3117,31 @@ def generate_daily_briefing_pack(
         total_cvs=rel_ctx.get("total_cvs_tailored", cvs_today_count),
         cv_today=max(1, cvs_today_count),
     )
-    chal_tmpl = DAILY_MICRO_CHALLENGES[(angle_id + edition) % len(DAILY_MICRO_CHALLENGES)]
-    default_challenge = chal_tmpl.format(top_company=top_co, first_name=first_name)
+    if quiet_day:
+        default_challenge = QUIET_DAY_CHALLENGES[(angle_id + edition) % len(QUIET_DAY_CHALLENGES)]
+    else:
+        chal_tmpl = DAILY_MICRO_CHALLENGES[(angle_id + edition) % len(DAILY_MICRO_CHALLENGES)]
+        default_challenge = chal_tmpl.format(top_company=top_co, first_name=first_name)
     default_signoff = LUCY_SIGNOFFS[(angle_id + edition) % len(LUCY_SIGNOFFS)]
-    intel_sentence = ats_intel if norm(ats_intel).startswith(norm(ats_name)) else f"{ats_name[0].upper() + ats_name[1:]}: {ats_intel}"
+    if ats_name == "their applicant tracking system" or norm(ats_intel).startswith(norm(ats_name)):
+        intel_sentence = ats_intel
+    else:
+        intel_sentence = f"{ats_name[0].upper() + ats_name[1:]}: {ats_intel}"
     default_intel = (
         f"{intel_sentence}. Your attached CV for {top_co} was built to pass exactly that gate, truthfully."
         if top_job and cvs_today_count
         else f"{intel_sentence}. We mirror that logic truthfully in every CV we forge together."
     )
 
-    h_tmpl, m_tmpl = DAILY_INSIDER_VAULT[angle_id % len(DAILY_INSIDER_VAULT)]
+    if quiet_day:
+        h_tmpl, m_tmpl = QUIET_DAY_VAULT[(angle_id + edition) % len(QUIET_DAY_VAULT)]
+        default_beat = f"Quiet day: Lucy sent no roles, kept the streak honest and asked {first_name} for one pipeline-hygiene move."
+    else:
+        h_tmpl, m_tmpl = DAILY_INSIDER_VAULT[angle_id % len(DAILY_INSIDER_VAULT)]
+        default_beat = f"Lucy framed '{beat_title}' around {top_co} ({top_title}) and asked {first_name} for one 60-second application."
     vault_headline = h_tmpl.format(first_name=first_name, top_company=top_co, highlight_count=hi_cnt, board_count=b_cnt)
     vault_message = m_tmpl.format(first_name=first_name, top_company=top_co, highlight_count=hi_cnt, board_count=b_cnt)
     default_spark = vault_headline.rstrip(".!")
-    default_beat = f"Lucy framed '{beat_title}' around {top_co} ({top_title}) and asked {first_name} for one 60-second application."
 
     base = {
         "cadence_title": cadence_title,
@@ -2999,6 +3149,7 @@ def generate_daily_briefing_pack(
         "angle_number": angle_id + 1,
         "chapter_title": beat_title,
         "spotlight_company": top_co if top_job else "",
+        "quiet_day": bool(quiet_day),
     }
 
     def _fix(text):
@@ -3012,6 +3163,7 @@ def generate_daily_briefing_pack(
         prompt = compose_partner_briefing_prompt(
             sub_cfg, top_job, rel_ctx, today, (beat_title, beat_insight), (cadence_title, cadence_subline),
             cv_snapshot, upgrade_count, hot_count, total_count, cvs_today_count, is_quiet_spotlight, language=language,
+            quiet_day=quiet_day, active_count=active_count,
         )
         try:
             res = call_gemini_daily_motivation(
@@ -3217,16 +3369,21 @@ def _render_job_card_html(j, today):
 
 def build_email_message(
     jobs_to_send, all_jobs_count, sub_cfg, today, sender_email,
-    attachments=None, sub_state=None, root=ROOT, board_count=109, return_meta=False
+    attachments=None, sub_state=None, root=ROOT, board_count=109, return_meta=False,
+    quiet_day=False, overflow_count=0, board_html=None,
 ):
     """Construct an editorial-grade, minimalist executive daily briefing with a guaranteed-unique
-    daily GenAI 'Us Against the System' dopamine manifesto, personal relationship streak with Lucy,
-    and 60-second completion challenge."""
+    daily GenAI 'Us vs. Their Machine' partner manifesto, personal relationship streak with Lucy,
+    and 60-second completion challenge. Only roles never sent before are listed; on a quiet day
+    (`quiet_day=True`) no roles are listed and nothing is re-sent."""
     recipient = sub_cfg.get("recipient_email", "lucasschollmatter@gmail.com")
     sub_name = sub_cfg.get("name") or recipient
+    sub_id = sub_cfg.get("id") or (sub_name or "subscriber").lower()
     first_name = (sub_name or "there").split()[0]
     date_str = today.isoformat()
     attachments = attachments or []
+    quiet_day = bool(quiet_day) or (not jobs_to_send)
+    resend_all = sub_cfg.get("email_mode") == "all"
 
     # Ensure every job has career-upgrade classification
     classify_career_upgrades(jobs_to_send, sub_cfg, root=root)
@@ -3254,6 +3411,7 @@ def build_email_message(
         sub_cfg, top_job, len(upgrade_jobs), len(hot_jobs), len(jobs_to_send), today,
         rel_ctx=rel_ctx, cvs_today_count=len(attachments),
         is_quiet_spotlight=is_quiet_spotlight, root=root,
+        quiet_day=quiet_day, active_count=int(all_jobs_count or 0),
     )
     insider_headline = pack["headline"]
     insider_message = pack["message"]
@@ -3267,16 +3425,56 @@ def build_email_message(
     streak_days = rel_ctx["streak_days"]
     milestone_badge = rel_ctx.get("milestone_badge") or ""
 
+    def _plural(n, word):
+        return f"{n} {word}" if n == 1 else f"{n} {word}s"
+
+    n_roles = len(jobs_to_send)
+    companies = []
+    for item in enriched:
+        co = item[3].get("company") or ""
+        if co and co not in companies:
+            companies.append(co)
+    co_part = ", ".join(companies[:2]) + (f" +{len(companies) - 2}" if len(companies) > 2 else "")
+
     msg = EmailMessage()
-    hot_prefix = f"🔥 {len(hot_jobs)} HOT · " if hot_jobs else "⚡ "
-    up_part = f"{len(upgrade_jobs)} Career Upgrade Move(s) · " if upgrade_jobs else ""
-    cv_suffix = f" + {len(attachments)} Tailored CV(s)" if attachments else ""
-    spark_part = f'"{subject_spark}" — ' if subject_spark else ""
-    msg["Subject"] = (
-        f"{hot_prefix}Lucy #{edition}: {spark_part}{up_part}{len(jobs_to_send)} Relevant Opening(s){cv_suffix} ({date_str})"
-    )
+    if quiet_day:
+        spark_part = f' · "{subject_spark}"' if subject_spark else ""
+        msg["Subject"] = f"⚡ Lucy #{edition}: Quiet day · 0 new roles · {streak_days}d streak{spark_part} ({date_str})"
+    else:
+        hot_prefix = f"🔥 {len(hot_jobs)} HOT · " if hot_jobs else "⚡ "
+        what = "matching role" if resend_all else "new role"
+        count_part = _plural(n_roles, what) + ("" if resend_all else " for you")
+        up_part = f" · {_plural(len(upgrade_jobs), 'Career Upgrade Move')}" if upgrade_jobs else ""
+        cv_part = f" · {_plural(len(attachments), 'Tailored CV')} ready" if attachments else ""
+        co_txt = f" · {co_part}" if co_part else ""
+        msg["Subject"] = f"{hot_prefix}Lucy #{edition}: {count_part}{co_txt}{up_part}{cv_part} ({date_str})"
     msg["From"] = f"Lucy · Personal Headhunter <{sender_email}>"
     msg["To"] = recipient
+    msg["Reply-To"] = sender_email
+
+    scope_bits = ["Jalisco"]
+    if sub_cfg.get("include_remote_mexico", True):
+        scope_bits.append("Remote Mexico")
+    if sub_cfg.get("include_country_only", True):
+        scope_bits.append("Mexico (city not listed)")
+    radar_scope = " + ".join(scope_bits)
+    board_name = f"Lucy_Board_{sub_id}_{date_str}.html"
+    overflow_note = (
+        f"+{overflow_count} more never-sent role(s) are waiting on your personal board (attached: {board_name}); "
+        "they also roll into tomorrow's briefing automatically."
+        if overflow_count > 0
+        else ""
+    )
+    quiet_note = (
+        f"Quiet day on the radar: zero never-seen postings matched overnight across {board_count} employer portals, "
+        f"so nothing is re-sent. {_plural(int(all_jobs_count or 0), 'role')} you already received remain open. Streak intact."
+        if quiet_day
+        else ""
+    )
+    radar_footer = (
+        f"Your radar: {board_count} employer portals · {radar_scope} · only roles never sent to you before appear here. "
+        "Reply to this email to pause, change cities or add target roles."
+    )
 
     # Minimalist plain-text version (preserves '- {title} at {company}' format)
     txt_lines = [
@@ -3292,11 +3490,15 @@ def build_email_message(
     txt_lines.append(f"🤝 Lucy's Corner: {connection_ps}")
     if partner_signoff:
         txt_lines.append(f"— {partner_signoff}")
-    txt_lines.extend([
-        "",
-        f"{len(upgrade_jobs)} Career Upgrade Move(s) · {len(hot_jobs)} Hot (0-2d) · {len(jobs_to_send)} shown ({all_jobs_count} active matches)",
-        "",
-    ])
+    txt_lines.append("")
+    if quiet_day:
+        txt_lines.extend([quiet_note, ""])
+    else:
+        txt_lines.extend([
+            f"{_plural(len(upgrade_jobs), 'Career Upgrade Move')} · {len(hot_jobs)} Hot (0-2d) · "
+            f"{n_roles} new for you ({all_jobs_count} active matches)",
+            "",
+        ])
     for _, _, _, j, is_hot, age_label, is_up in enriched:
         loc_tag = LOC_LABELS.get(j.get("loc_class"), j.get("loc_class", ""))
         tags = []
@@ -3320,12 +3522,21 @@ def build_email_message(
             if j.get("cv_filename"):
                 txt_lines.append(f"  Attached CV: {j['cv_filename']}")
         txt_lines.append("")
+    if overflow_note:
+        txt_lines.extend([overflow_note, ""])
     txt_lines.append(f"🎯 Today's 60-Second Play: {micro_challenge}")
+    txt_lines.extend(["", radar_footer])
     msg.set_content("\n".join(txt_lines))
 
     # Minimalist HTML sections
     sections_html = []
-    if is_quiet_spotlight:
+    if quiet_day:
+        sections_html.append(
+            "<div style='background-color:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:8px;"
+            "padding:10px 13px;margin-bottom:16px;font-size:12.5px;line-height:1.5;'>"
+            f"<strong>&#127774; {html.escape(quiet_note)}</strong></div>"
+        )
+    elif is_quiet_spotlight:
         sections_html.append(
             "<div style='background-color:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;border-radius:8px;"
             "padding:9px 12px;margin-bottom:16px;font-size:12px;line-height:1.45;'>"
@@ -3362,6 +3573,12 @@ def build_email_message(
         sections_html.append(
             "<div style='font-size:11px;color:#71717a;margin:0 0 12px;'>Hot Off the Press: includes roles posted in the last 1&ndash;2 days.</div>"
         )
+    if overflow_note:
+        sections_html.append(
+            "<div style='background-color:#fafafa;border:1px dashed #d4d4d8;color:#3f3f46;border-radius:8px;"
+            "padding:9px 12px;margin:4px 0 12px;font-size:12px;line-height:1.5;'>"
+            f"&#128194; {html.escape(overflow_note)}</div>"
+        )
 
     first_name_esc = html.escape(first_name)
     headline_esc = html.escape(insider_headline)
@@ -3371,9 +3588,11 @@ def build_email_message(
     chapter_esc = html.escape(chapter_title)
     intel_esc = html.escape(ai_intel)
     signoff_esc = html.escape(partner_signoff)
+    radar_footer_esc = html.escape(radar_footer)
     cadence_title_esc = html.escape(pack["cadence_title"])
     cadence_sub_esc = html.escape(pack["cadence_subline"])
-    preheader_esc = html.escape(f"⚡ Briefing #{edition}: {insider_headline} — {insider_message}")
+    preheader_core = f"{subject_spark} — " if subject_spark else ""
+    preheader_esc = html.escape(f"{preheader_core}{insider_headline}: {insider_message}")
     chapter_label = (
         f"&#9889; Us vs. The System &middot; Chapter {edition}: {chapter_esc} &middot; {cadence_title_esc}"
         if chapter_title
@@ -3472,7 +3691,7 @@ def build_email_message(
         </td>
         <td width="25%" style="padding:10px 6px;">
           <div style="font-size:17px;font-weight:800;color:#18181b;line-height:1.1;">{len(jobs_to_send)}</div>
-          <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#71717a;margin-top:3px;">Today ({all_jobs_count} Active)</div>
+          <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#71717a;margin-top:3px;">New for you ({all_jobs_count} Active)</div>
         </td>
       </tr>
     </table>
@@ -3483,10 +3702,23 @@ def build_email_message(
     <div style="margin-top:18px;padding:14px 16px;background-color:#fafafa;border:1px solid #e4e4e7;border-left:3px solid #059669;border-radius:9px;font-size:12px;color:#27272a;line-height:1.5;">
       <strong style="color:#09090b;">&#127919; Today&rsquo;s 60-Second Dopamine Play:</strong> {challenge_esc}
     </div>
+
+    <!-- Radar transparency footer -->
+    <div style="margin-top:16px;padding-top:12px;border-top:1px solid #e4e4e7;font-size:11px;color:#a1a1aa;line-height:1.55;text-align:center;">
+      {radar_footer_esc}
+    </div>
   </div>
 </body>
 </html>"""
     msg.add_alternative(html_body, subtype="html")
+
+    if board_html:
+        msg.add_attachment(
+            board_html.encode("utf-8") if isinstance(board_html, str) else bytes(board_html),
+            maintype="text",
+            subtype="html",
+            filename=board_name,
+        )
 
     for filename, file_bytes in attachments:
         lower_fn = filename.lower()
@@ -3672,17 +3904,19 @@ def prepare_tailored_cvs(jobs_to_send, sub_cfg, today, root=ROOT):
 
 def send_email_digest(
     jobs_to_send, all_jobs_count, sub_cfg, today, root=ROOT,
-    attachments=None, sub_state=None, board_count=109, ai_stats=None
+    attachments=None, sub_state=None, board_count=109, ai_stats=None,
+    quiet_day=False, overflow_count=0, board_html=None,
 ):
-    """Send a single subscriber's daily digest via Gmail/SMTP if credentials are configured."""
+    """Send a single subscriber's daily digest via Gmail/SMTP if credentials are configured.
+    With `quiet_day=True` a role-free briefing is sent (nothing is ever re-sent)."""
     sub_name = sub_cfg.get("name") or sub_cfg.get("recipient_email", "subscriber")
     sub_id = sub_cfg.get("id") or sub_name
-    if not jobs_to_send:
+    if not jobs_to_send and not quiet_day:
         print(f"  [{sub_name}] No new roles to email today.")
         return False
 
     if attachments is None:
-        attachments = prepare_tailored_cvs(jobs_to_send, sub_cfg, today, root=root)
+        attachments = prepare_tailored_cvs(jobs_to_send, sub_cfg, today, root=root) if jobs_to_send else []
 
     smtp_user = (os.environ.get("GMAIL_USER") or os.environ.get("SMTP_USER") or "").strip()
     smtp_password = (os.environ.get("GMAIL_APP_PASSWORD") or os.environ.get("SMTP_PASSWORD") or "").strip()
@@ -3702,6 +3936,7 @@ def send_email_digest(
         jobs_to_send, all_jobs_count, sub_cfg, today, smtp_user,
         attachments=attachments, sub_state=sub_state, root=root,
         board_count=board_count, return_meta=True,
+        quiet_day=quiet_day, overflow_count=overflow_count, board_html=board_html,
     )
     in_test = "unittest" in sys.modules
     last_smtp_err = None
@@ -3752,8 +3987,10 @@ def send_email_digest(
         else "0 tailored CVs"
     )
     b_tag = f"AI:{b_mod}" if b_src == "gemini" else "vault"
+    kind = "Quiet-Day Briefing" if quiet_day else "Briefing"
+    extra = f", +{overflow_count} carried over" if overflow_count else ""
     print(
-        f"  [{sub_name}] Sent Briefing #{rel_ctx['edition']} ({len(jobs_to_send)} roles, "
+        f"  [{sub_name}] Sent {kind} #{rel_ctx['edition']} ({len(jobs_to_send)} new roles{extra}, "
         f"{cv_detail}, briefing={b_tag}, angle #{pack['angle_number']}) -> subscriber '{sub_id}'."
     )
     return True
@@ -3793,6 +4030,9 @@ def process_subscribers(
             sub_state = sub_states.setdefault(sub_id, {})
             if not isinstance(sub_state, dict):
                 sub_state = sub_states[sub_id] = {}
+            # Seed the 'emailed' ledger BEFORE today's keys are stamped so legacy subscribers are
+            # never re-sent old roles, while brand-new subscribers start with an empty ledger.
+            ensure_emailed_state(sub_state)
             sub_baseline = update_state(sub_matched, sub_state, today, retention)
             sub_matched = dedupe_subscriber_jobs(sub_matched)
             new_days = int(sub_cfg.get("new_days", cfg["new_days"]))
@@ -3804,12 +4044,31 @@ def process_subscribers(
 
             if send_email:
                 to_email = select_jobs_for_email(sub_matched, sub_baseline, sub_cfg, sub_state=sub_state)
-                attachments = prepare_tailored_cvs(to_email, sub_cfg, today, root=root) if to_email else []
-                send_email_digest(
-                    to_email, len(sub_matched), sub_cfg, today, root=root,
-                    attachments=attachments, sub_state=sub_state, board_count=board_count,
-                    ai_stats=ai_stats,
-                )
+                to_email, overflow = cap_email_jobs(to_email, sub_cfg, today)
+                quiet_day = False
+                skip_today = False
+                if not to_email and not sub_baseline:
+                    q_mode = resolve_quiet_day_mode(sub_cfg)
+                    if q_mode == "skip":
+                        skip_today = True
+                    elif q_mode == "spotlight":
+                        to_email = select_quiet_spotlight(sub_matched, sub_cfg, sub_state=sub_state)
+                        quiet_day = not to_email
+                    else:
+                        quiet_day = True
+                if skip_today:
+                    print(f"  [{sub_cfg.get('name') or sub_id}] Quiet day: no never-sent roles and quiet_day_mode=skip, no email.")
+                else:
+                    stamp_txt = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+                    board_html = render_subscriber_board(sub_matched, sub_cfg, stamp_txt) if overflow > 0 else None
+                    attachments = prepare_tailored_cvs(to_email, sub_cfg, today, root=root) if to_email else []
+                    sent = send_email_digest(
+                        to_email, len(sub_matched), sub_cfg, today, root=root,
+                        attachments=attachments, sub_state=sub_state, board_count=board_count,
+                        ai_stats=ai_stats, quiet_day=quiet_day, overflow_count=overflow, board_html=board_html,
+                    )
+                    if sent and to_email:
+                        record_emailed_jobs(sub_state, to_email, today, retention)
         except Exception as e:
             gha_annotate("error", f"email delivery failed for {sub_id}: {type(e).__name__}: {e}")
             failed_ids.append(sub_id)
