@@ -1,12 +1,14 @@
-"""Offline tests: fake every ATS response, so no network is needed.
+"""Offline tests: fake every ATS response and SMTP server, so no network is needed.
 Run from the project folder:  python3 -m unittest discover -s tests -v
 """
 import json
+import os
 import sys
 import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 from urllib import error
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -128,9 +130,9 @@ class EndToEnd(unittest.TestCase):
         fj.http_json = self.real
         self.tmp.cleanup()
 
-    def run_refresh(self, today, overrides=None):
+    def run_refresh(self, today, overrides=None, send_email=False):
         fj.http_json = fake_http(overrides)
-        code = fj.refresh(CFG, COMPANIES, root=self.root, today=today)
+        code = fj.refresh(CFG, COMPANIES, root=self.root, today=today, send_email=send_email)
         jobs = fj.load_json(self.root / "docs" / "jobs.json", [])
         return code, {j["key"].split(":", 2)[2]: j for j in jobs}
 
@@ -148,7 +150,7 @@ class EndToEnd(unittest.TestCase):
         self.assertEqual(jobs["JR2"]["loc_class"], "jalisco")  # multi-location, matched search term
         self.assertIsNone(jobs["JR2"]["posted_at"])
         self.assertEqual(jobs["JR1"]["posted_at"], "2026-11-02")
-        self.assertFalse((self.root / "out" / "new_jobs.md").exists())   # baseline sends no alert
+        self.assertFalse((self.root / "out" / "new_jobs.md").exists())   # baseline sends no markdown issue alert
 
         page = (self.root / "docs" / "index.html").read_text(encoding="utf-8")
         self.assertNotIn("</script><b>", page)        # titles can't break out of the script tag
@@ -180,6 +182,20 @@ class EndToEnd(unittest.TestCase):
                                                         "smartrecruiters.com", "myworkdayjobs.com"]})
         self.assertEqual(code, 1)
         self.assertEqual(before, (self.root / "docs" / "index.html").read_text(encoding="utf-8"))
+
+    @patch("smtplib.SMTP_SSL")
+    def test_email_digest_delivery(self, mock_smtp_ssl):
+        mock_server = MagicMock()
+        mock_smtp_ssl.return_value.__enter__.return_value = mock_server
+
+        with patch.dict(os.environ, {"GMAIL_USER": "sender@gmail.com", "GMAIL_APP_PASSWORD": "app-secret-password"}):
+            # Baseline run emails initial new roles when email_on_baseline=True
+            code, _ = self.run_refresh(date(2026, 11, 5), send_email=True)
+            self.assertEqual(code, 0)
+            self.assertTrue(mock_server.send_message.called)
+            sent_msg = mock_server.send_message.call_args[0][0]
+            self.assertEqual(sent_msg["To"], "lucasschollmatter@gmail.com")
+            self.assertIn("Relevant Director Opening(s)", sent_msg["Subject"])
 
     def test_workday_dates(self):
         t = date(2026, 11, 5)
