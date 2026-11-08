@@ -549,9 +549,19 @@ def call_gemini_json(prompt_text, model="gemini-2.5-flash", api_key=None):
         },
     }
     body = http_json(url, payload, retries=2, headers={"x-goog-api-key": api_key}, timeout=60)
-    raw_text = body["candidates"][0]["content"]["parts"][0]["text"]
-    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_text.strip())
-    return json.loads(cleaned)
+    parts = ((body.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
+    text_parts = [p.get("text", "") for p in parts if isinstance(p, dict) and p.get("text") and not p.get("thought")]
+    if not text_parts:
+        text_parts = [p.get("text", "") for p in parts if isinstance(p, dict) and p.get("text")]
+    raw_text = (text_parts[-1] if text_parts else "").strip()
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_text)
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        m = re.search(r"\{.*\}", cleaned, re.S)
+        if m:
+            return json.loads(m.group(0))
+        raise
 
 
 def tailor_cv_with_llm(job_item, master_cv_text, sub_cfg):
@@ -1153,15 +1163,48 @@ def build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, sender_ema
     return msg
 
 
+def _format_cv_markdown_preview(cv_data):
+    """Render a clean Markdown preview of a tailored CV for the GitHub Actions Step Summary."""
+    lines = [
+        f"#### {cv_data.get('full_name', 'Candidate')}",
+        f"**{cv_data.get('target_headline', '')}**  ",
+        f"*{cv_data.get('contact_line', '')}*",
+        "",
+        f"**Executive Profile:** {cv_data.get('summary', '')}",
+        "",
+    ]
+    skills = [s for s in (cv_data.get("core_skills") or []) if s]
+    if skills:
+        lines.append("**Core Competencies:** " + " · ".join(f"`{s}`" for s in skills))
+        lines.append("")
+    for exp in cv_data.get("experience") or []:
+        lines.append(f"**{exp.get('role', '')}** — *{exp.get('company', '')}* ({exp.get('dates', '')})")
+        for b in exp.get("bullets") or []:
+            if b:
+                lines.append(f"- {b}")
+        lines.append("")
+    return "\n".join(lines).strip()
+
+
 def prepare_tailored_cvs(jobs_to_send, sub_cfg, today, root=ROOT):
-    """Run LLM analysis + minimalist CV generation for up to `max_tailored_cvs` top jobs."""
-    api_key = os.environ.get("GEMINI_API_KEY")
+    """Run LLM analysis + minimalist CV generation for up to `max_tailored_cvs` top jobs.
+
+    Saves each generated CV to both `out/cvs/<filename>` (workflow artifact) and
+    `docs/cvs/<sub_id>/<filename>` (committed to the repository), and appends a
+    preview to the GitHub Actions job summary when running in CI."""
+    sub_name = sub_cfg.get("name") or sub_cfg.get("id", "Candidate")
+    sub_id = sub_cfg.get("id", "default")
+    api_key = (os.environ.get("GEMINI_API_KEY") or "").strip()
     max_cvs = int(sub_cfg.get("max_tailored_cvs", 3))
-    if not api_key or max_cvs <= 0 or not jobs_to_send:
+    if max_cvs <= 0 or not jobs_to_send:
+        return []
+    if not api_key:
+        print(f"  [{sub_name}] Tailored CV skipped: GEMINI_API_KEY environment variable not set.")
         return []
 
     master_cv = load_subscriber_cv(sub_cfg, root=root)
     if not master_cv:
+        print(f"  [{sub_name}] Tailored CV skipped: no master CV found (check cv_file in config.json).")
         return []
 
     # Prioritize HOT (0-2d) roles first
@@ -1171,10 +1214,12 @@ def prepare_tailored_cvs(jobs_to_send, sub_cfg, today, root=ROOT):
     )
 
     attachments = []
-    sub_name = sub_cfg.get("name") or sub_cfg.get("id", "Candidate")
     cv_out_dir = Path(root) / "out" / "cvs"
+    cv_docs_dir = Path(root) / "docs" / "cvs" / sub_id
     cv_out_dir.mkdir(parents=True, exist_ok=True)
+    cv_docs_dir.mkdir(parents=True, exist_ok=True)
 
+    summary_blocks = []
     for j in ranked[:max_cvs]:
         try:
             analysis = tailor_cv_with_llm(j, master_cv, sub_cfg)
@@ -1184,22 +1229,40 @@ def prepare_tailored_cvs(jobs_to_send, sub_cfg, today, root=ROOT):
             cv_html = render_minimalist_cv_html(analysis["cv"], job_item=j)
             cv_bytes = cv_html.encode("utf-8")
             (cv_out_dir / filename).write_bytes(cv_bytes)
+            (cv_docs_dir / filename).write_bytes(cv_bytes)
             j["llm_analysis"] = analysis
             j["cv_filename"] = filename
             attachments.append((filename, cv_bytes))
-            print(f"  [{sub_name}] Tailored CV generated for {j['title']} at {j['company']} ({analysis.get('match_score', '?')}% match)")
+            score = analysis.get("match_score", "?")
+            print(f"  [{sub_name}] Tailored CV generated for {j['title']} at {j['company']} ({score}% match) -> docs/cvs/{sub_id}/{filename}")
+            kws = ", ".join(analysis.get("matched_keywords") or [])
+            summary_blocks.append(
+                f"- **{j.get('title')}** at **{j.get('company')}** ({j.get('location', '')}) — "
+                f"**{score}% CV Match** · saved to `docs/cvs/{sub_id}/{filename}`\n"
+                f"  - *Lucy's take:* {analysis.get('lucy_why_it_fits', '')}\n"
+                + (f"  - *Matched keywords:* {kws}\n" if kws else "")
+                + f"  <details><summary>Preview tailored CV for {j.get('company')}</summary>\n\n"
+                + _format_cv_markdown_preview(analysis["cv"])
+                + "\n\n  </details>"
+            )
         except Exception as e:
-            print(f"  warning: LLM CV tailoring skipped for {j.get('title')}: {type(e).__name__}: {e}", file=sys.stderr)
+            gha_annotate("warning", f"LLM CV tailoring failed for {sub_name} ({j.get('title')}): {type(e).__name__}: {e}")
+
+    if summary_blocks:
+        gha_summary(f"#### Tailored CVs for {sub_name} (`{sub_id}`)\n" + "\n".join(summary_blocks))
 
     return attachments
 
 
-def send_email_digest(jobs_to_send, all_jobs_count, sub_cfg, today, root=ROOT):
+def send_email_digest(jobs_to_send, all_jobs_count, sub_cfg, today, root=ROOT, attachments=None):
     """Send a single subscriber's daily digest via Gmail/SMTP if credentials are configured."""
     sub_name = sub_cfg.get("name") or sub_cfg.get("recipient_email", "subscriber")
     if not jobs_to_send:
         print(f"  [{sub_name}] No new roles to email today.")
         return False
+
+    if attachments is None:
+        attachments = prepare_tailored_cvs(jobs_to_send, sub_cfg, today, root=root)
 
     smtp_user = os.environ.get("GMAIL_USER") or os.environ.get("SMTP_USER")
     smtp_password = os.environ.get("GMAIL_APP_PASSWORD") or os.environ.get("SMTP_PASSWORD")
@@ -1210,7 +1273,6 @@ def send_email_digest(jobs_to_send, all_jobs_count, sub_cfg, today, root=ROOT):
         print(f"  [{sub_name}] Email skipped: GMAIL_USER / GMAIL_APP_PASSWORD environment variables not set.")
         return False
 
-    attachments = prepare_tailored_cvs(jobs_to_send, sub_cfg, today, root=root)
     msg = build_email_message(jobs_to_send, all_jobs_count, sub_cfg, today, smtp_user, attachments=attachments)
     with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=25) as server:
         server.login(smtp_user, smtp_password)
@@ -1233,6 +1295,13 @@ def process_subscribers(fetched, state, cfg, today, send_email=True, only_id=Non
     retention = int(cfg["state_retention_days"])
     failed_ids = []
 
+    if send_email and not (os.environ.get("GEMINI_API_KEY") or "").strip():
+        gha_annotate(
+            "warning",
+            "GEMINI_API_KEY is not set in environment/secrets — LLM tailored CVs were skipped. "
+            "Add GEMINI_API_KEY in GitHub Settings > Secrets and variables > Actions.",
+        )
+
     for sub_cfg in subscribers:
         sub_id = sub_cfg["id"]
         sub_rules = build_rules(sub_cfg)
@@ -1250,8 +1319,12 @@ def process_subscribers(fetched, state, cfg, today, send_email=True, only_id=Non
 
         if send_email:
             to_email = select_jobs_for_email(sub_matched, sub_baseline, sub_cfg)
+            # Generate tailored CVs for roles being emailed today (or top active matches
+            # if no new roles were discovered today, so docs/cvs/<sub_id>/ stays populated).
+            cv_targets = to_email if to_email else [j for j in sub_matched if not j.get("stale")]
+            attachments = prepare_tailored_cvs(cv_targets, sub_cfg, today, root=root)
             try:
-                send_email_digest(to_email, len(sub_matched), sub_cfg, today, root=root)
+                send_email_digest(to_email, len(sub_matched), sub_cfg, today, root=root, attachments=attachments)
             except Exception as e:
                 gha_annotate("error", f"email delivery failed for {sub_id}: {type(e).__name__}: {e}")
                 failed_ids.append(sub_id)
