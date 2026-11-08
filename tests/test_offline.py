@@ -226,6 +226,12 @@ class EndToEnd(unittest.TestCase):
             sent_msg = mock_server.send_message.call_args_list[0][0][0]
             self.assertEqual(sent_msg["To"], "lucasschollmatter@gmail.com")
             self.assertIn("Relevant Opening(s)", sent_msg["Subject"])
+            self.assertIn("HOT", sent_msg["Subject"])
+            html_part = sent_msg.get_body(preferencelist=("html",)).get_content()
+            self.assertIn("daily reminder to check where to apply today", html_part)
+            self.assertIn("Hot Off the Press", html_part)
+            self.assertIn("Lucy", sent_msg["Subject"])
+            self.assertIn("personal headhunter", html_part.lower())
 
 
     @patch("smtplib.SMTP_SSL")
