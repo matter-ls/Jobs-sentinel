@@ -1,5 +1,21 @@
 [
  {
+  "key": "workday:Flex:WD228976",
+  "company": "Flex",
+  "ats": "workday",
+  "title": "Director, Operations (NPI Background)",
+  "location": "Mexico, Guadalajara",
+  "team": "",
+  "url": "https://flextronics.wd1.myworkdayjobs.com/en-US/Careers/job/Mexico-Guadalajara/Director--Operations--NPI-Background--_WD228976",
+  "posted_at": "2026-11-09",
+  "loc_class": "jalisco",
+  "discovered_now": false,
+  "first_seen": "2026-11-08",
+  "baseline": true,
+  "is_new": true,
+  "eff_date": "2026-11-09"
+ },
+ {
   "key": "workday:Avnet:JR-023909",
   "company": "Avnet",
   "ats": "workday",
@@ -62,22 +78,6 @@
   "baseline": true,
   "is_new": false,
   "eff_date": "2026-11-08"
- },
- {
-  "key": "workday:Flex:WD228976",
-  "company": "Flex",
-  "ats": "workday",
-  "title": "Director, Operations (NPI Background)",
-  "location": "Mexico, Guadalajara",
-  "team": "",
-  "url": "https://flextronics.wd1.myworkdayjobs.com/en-US/Careers/job/Mexico-Guadalajara/Director--Operations--NPI-Background--_WD228976",
-  "posted_at": "2026-11-06",
-  "loc_class": "jalisco",
-  "discovered_now": false,
-  "first_seen": "2026-11-08",
-  "baseline": true,
-  "is_new": true,
-  "eff_date": "2026-11-06"
  },
  {
   "key": "workday:Jabil:J2470435",
