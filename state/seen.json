@@ -205,24 +205,27 @@
    },
    "initialized": true,
    "relationship": {
-    "edition": 2,
+    "edition": 3,
     "streak_days": 2,
     "last_briefing_date": "2026-11-09",
     "total_roles_surfaced": 15,
     "total_cvs_tailored": 6,
     "recent_angle_ids": [
      26,
-     28
+     28,
+     29
     ],
     "recent_headlines": [
      "Turn Ambition Into Pipeline Today.",
-     "Every Shot Sharpens Your Executive Story."
+     "Every Shot Sharpens Your Executive Story.",
+     "Silence From Their Machine Is Not a Verdict."
     ],
     "recent_story_beats": [
      "Ed. #1 (2026-11-08): Lucy framed 'Proof Is Scarce' around Avnet (Mexico Country Manager, Shared Services) and asked Lucas for one 60-second application.",
-     "Ed. #2 (2026-11-09): Lucy framed 'The Compounding Narrative' around HP Inc. (Senior Manager, New Product Introduction Operations) and asked Lucas for one 60-second application."
+     "Ed. #2 (2026-11-09): Lucy framed 'The Compounding Narrative' around HP Inc. (Senior Manager, New Product Introduction Operations) and asked Lucas for one 60-second application.",
+     "Ed. #3 (2026-11-09): Quiet day: Lucy sent no roles, kept the streak honest and asked Lucas for one pipeline-hygiene move."
     ],
-    "last_micro_challenge": "Run the 1-Role Rule right now: choose your favorite opening led by HP Inc., attach its tailored .docx, and earn today's momentum win.",
+    "last_micro_challenge": "Message one former colleague at a company on your radar and ask how their team is hiring this quarter.",
     "last_spotlight_company": "HP Inc.",
     "last_briefing_source": "vault",
     "recent_spotlight_keys": []
@@ -325,6 +328,38 @@
     "workday:HP Inc.:3165014": {
      "date": "2026-11-09",
      "sig": "hp inc.|supply chain mado program manager|"
+    },
+    "workday:HP Inc.:3168723": {
+     "date": "2026-11-09",
+     "sig": "hp inc.|marketing capabilities program lead learning engagement|"
+    },
+    "workday:HP Inc.:3164137": {
+     "date": "2026-11-09",
+     "sig": "hp inc.|cyber engagement program lead|"
+    },
+    "workday:HP Inc.:3169771": {
+     "date": "2026-11-09",
+     "sig": "hp inc.|compensation program lead base pay and job architecture|"
+    },
+    "workday:Avnet:JR-024815": {
+     "date": "2026-11-09",
+     "sig": "avnet|pricing specialist|"
+    },
+    "greenhouse:Backbase:8225999": {
+     "date": "2026-11-09",
+     "sig": "backbase|senior project manager|"
+    },
+    "lever:Arrive Logistics:89f8c295-f687-4b32-9970-d6f9e3107303": {
+     "date": "2026-11-09",
+     "sig": "arrive logistics|pricing analyst|client solutions"
+    },
+    "greenhouse:Wizeline:7905176": {
+     "date": "2026-11-09",
+     "sig": "wizeline|senior marketing project manager|"
+    },
+    "greenhouse:Wizeline:7614922": {
+     "date": "2026-11-09",
+     "sig": "wizeline|marketing project manager|"
     }
    },
    "jobs": {
@@ -531,25 +566,28 @@
    },
    "initialized": true,
    "relationship": {
-    "edition": 2,
+    "edition": 3,
     "streak_days": 2,
     "last_briefing_date": "2026-11-09",
-    "total_roles_surfaced": 24,
-    "total_cvs_tailored": 6,
+    "total_roles_surfaced": 32,
+    "total_cvs_tailored": 9,
     "recent_angle_ids": [
      6,
-     8
+     8,
+     9
     ],
     "recent_headlines": [
      "One Surgical Shot Beats A Year of 'Someday'.",
-     "First-Mover Physics Are In Your Favor."
+     "First-Mover Physics Are In Your Favor.",
+     "Outgrow the Room Before It Shrinks You."
     ],
     "recent_story_beats": [
      "Ed. #1 (2026-11-08): Lucy framed 'Job Descriptions Are Wish Lists' around Avnet (Customer Operations Manager) and asked Mónica for one 60-second application.",
-     "Ed. #2 (2026-11-09): Lucy framed 'Machines Reward Clarity' around Plexus (Program Manager Associate I) and asked Mónica for one 60-second application."
+     "Ed. #2 (2026-11-09): Lucy framed 'Machines Reward Clarity' around Plexus (Program Manager Associate I) and asked Mónica for one 60-second application.",
+     "Ed. #3 (2026-11-09): Lucy framed 'We Did The Boring 90 Percent' around Backbase (Senior Project Manager) and asked Mónica for one 60-second application."
     ],
-    "last_micro_challenge": "Don't bookmark—execute: pick the single role below that stretches you most, attach your tailored Word CV, and hit send while your coffee is warm.",
-    "last_spotlight_company": "Plexus",
+    "last_micro_challenge": "Give yourself 1 minute of pure offense: click 'Apply' on Backbase, upload the matching .docx I built for you, and close the tab victorious.",
+    "last_spotlight_company": "Backbase",
     "last_briefing_source": "vault",
     "recent_spotlight_keys": []
    }
@@ -931,24 +969,27 @@
    },
    "initialized": true,
    "relationship": {
-    "edition": 2,
+    "edition": 3,
     "streak_days": 2,
     "last_briefing_date": "2026-11-09",
     "total_roles_surfaced": 20,
     "total_cvs_tailored": 6,
     "recent_angle_ids": [
      29,
-     31
+     31,
+     0
     ],
     "recent_headlines": [
      "Play Asymmetric Offense.",
-     "Write Your Own Promotion Slip."
+     "Write Your Own Promotion Slip.",
+     "Quiet Market, Sharp Partner."
     ],
     "recent_story_beats": [
      "Ed. #1 (2026-11-08): Lucy framed 'Their Filter, Our Front Door' around Clara (Customer Success Manager - Guadalajara (Hybrid/Remote)) and asked Ewerson for one 60-second application.",
-     "Ed. #2 (2026-11-09): Lucy framed 'Write Your Own Promotion Slip' around Flex (Business Development Program Manager) and asked Ewerson for one 60-second application."
+     "Ed. #2 (2026-11-09): Lucy framed 'Write Your Own Promotion Slip' around Flex (Business Development Program Manager) and asked Ewerson for one 60-second application.",
+     "Ed. #3 (2026-11-09): Quiet day: Lucy sent no roles, kept the streak honest and asked Ewerson for one pipeline-hygiene move."
     ],
-    "last_micro_challenge": "Set a 60-second timer right now: open Flex's portal link, drop in your pre-built CV_*.docx, and log 1 fearless rep before 10 AM.",
+    "last_micro_challenge": "Re-open yesterday's attached CV, read the summary out loud once, and note one win you want to lead with in interviews.",
     "last_spotlight_company": "Flex",
     "last_briefing_source": "vault",
     "recent_spotlight_keys": []
@@ -1003,6 +1044,54 @@
     "workday:Plexus:R043187": {
      "date": "2026-11-09",
      "sig": "plexus|r d project manager sr|"
+    },
+    "greenhouse:Toshiba Global Commerce Solutions:5285456007": {
+     "date": "2026-11-09",
+     "sig": "toshiba global commerce solutions|operations program manager manufacturing service center|"
+    },
+    "workday:Micron:JR114201": {
+     "date": "2026-11-09",
+     "sig": "micron|senior principal design automation engineer simulation|"
+    },
+    "workday:Plexus:R043314": {
+     "date": "2026-11-09",
+     "sig": "plexus|it project manager i|"
+    },
+    "workday:HP Inc.:3170316": {
+     "date": "2026-11-09",
+     "sig": "hp inc.|responsible sourcing program manager|"
+    },
+    "workday:Jabil:J2464258": {
+     "date": "2026-11-09",
+     "sig": "jabil|business unit program manager|"
+    },
+    "workday:Plexus:R043298": {
+     "date": "2026-11-09",
+     "sig": "plexus|program manager ii|"
+    },
+    "workday:Plexus:R043297": {
+     "date": "2026-11-09",
+     "sig": "plexus|program manager sr|"
+    },
+    "workday:Hewlett Packard Enterprise:1215663": {
+     "date": "2026-11-09",
+     "sig": "hewlett packard enterprise|senior delivery readiness enablement manager|"
+    },
+    "greenhouse:Toshiba Global Commerce Solutions:5277588007": {
+     "date": "2026-11-09",
+     "sig": "toshiba global commerce solutions|software technical program manager|"
+    },
+    "workday:HP Inc.:3169367": {
+     "date": "2026-11-09",
+     "sig": "hp inc.|sap integrated business planning techno functional architect|"
+    },
+    "workday:Hewlett Packard Enterprise:1216400": {
+     "date": "2026-11-09",
+     "sig": "hewlett packard enterprise|career development program manager talent center of excellence coe|"
+    },
+    "workday:HP Inc.:3165014": {
+     "date": "2026-11-09",
+     "sig": "hp inc.|supply chain mado program manager|"
     }
    },
    "jobs": {
@@ -1409,22 +1498,25 @@
    },
    "initialized": true,
    "relationship": {
-    "edition": 1,
+    "edition": 2,
     "streak_days": 1,
     "last_briefing_date": "2026-11-09",
-    "total_roles_surfaced": 12,
-    "total_cvs_tailored": 3,
+    "total_roles_surfaced": 24,
+    "total_cvs_tailored": 6,
     "recent_angle_ids": [
-     22
+     22,
+     23
     ],
     "recent_headlines": [
-     "Beat the Crowd While They Procrastinate."
+     "Beat the Crowd While They Procrastinate.",
+     "Upgrade the Problems You Get Paid to Solve."
     ],
     "recent_story_beats": [
-     "Ed. #1 (2026-11-09): Lucy framed 'Reverse-Engineered, Not Guessed' around Flex (Business Development Program Manager) and asked Luis for one 60-second application."
+     "Ed. #1 (2026-11-09): Lucy framed 'Reverse-Engineered, Not Guessed' around Flex (Business Development Program Manager) and asked Luis for one 60-second application.",
+     "Ed. #2 (2026-11-09): Lucy framed 'The Reorg Will Not Wait' around Toshiba Global Commerce Solutions (Operations Program Manager - Manufacturing & Service Center) and asked Luis for one 60-second application."
     ],
-    "last_micro_challenge": "Zero overthinking allowed today: open the top card for Flex, verify your General Role Direction headline on the .docx, and hit submit.",
-    "last_spotlight_company": "Flex",
+    "last_micro_challenge": "Set a 60-second timer right now: open Toshiba Global Commerce Solutions's portal link, drop in your pre-built CV_*.docx, and log 1 fearless rep before 10 AM.",
+    "last_spotlight_company": "Toshiba Global Commerce Solutions",
     "last_briefing_source": "vault",
     "recent_spotlight_keys": []
    }
