@@ -1,5 +1,21 @@
 [
  {
+  "key": "workday:Flex:WD234211",
+  "company": "Flex",
+  "ats": "workday",
+  "title": "Director, Design, Molding & Engineering",
+  "location": "Mexico, Guadalajara",
+  "team": "",
+  "url": "https://flextronics.wd1.myworkdayjobs.com/en-US/Careers/job/Mexico-Guadalajara/Director--Design--Molding---Engineering_WD234211",
+  "posted_at": "2026-11-13",
+  "loc_class": "jalisco",
+  "discovered_now": true,
+  "first_seen": "2026-11-14",
+  "baseline": false,
+  "is_new": true,
+  "eff_date": "2026-11-13"
+ },
+ {
   "key": "workday:Flex:WD228976",
   "company": "Flex",
   "ats": "workday",
@@ -55,6 +71,22 @@
   "location": "Mexico, Guadalajara",
   "team": "",
   "url": "https://flextronics.wd1.myworkdayjobs.com/en-US/Careers/job/Mexico-Guadalajara/Director--Facilities_WD229135",
+  "posted_at": null,
+  "loc_class": "jalisco",
+  "discovered_now": false,
+  "first_seen": "2026-11-08",
+  "baseline": true,
+  "is_new": false,
+  "eff_date": "2026-11-08"
+ },
+ {
+  "key": "workday:Flex:WD231552",
+  "company": "Flex",
+  "ats": "workday",
+  "title": "Sr. Quality Director",
+  "location": "Mexico, Guadalajara",
+  "team": "",
+  "url": "https://flextronics.wd1.myworkdayjobs.com/en-US/Careers/job/Mexico-Guadalajara/Sr-Quality-Director_WD231552-1",
   "posted_at": null,
   "loc_class": "jalisco",
   "discovered_now": false,
@@ -126,22 +158,6 @@
   "baseline": true,
   "is_new": false,
   "eff_date": "2026-10-21"
- },
- {
-  "key": "workday:Flex:WD231552",
-  "company": "Flex",
-  "ats": "workday",
-  "title": "Sr. Quality Director",
-  "location": "Mexico, Guadalajara",
-  "team": "",
-  "url": "https://flextronics.wd1.myworkdayjobs.com/en-US/Careers/job/Mexico-Guadalajara/Sr-Quality-Director_WD231552-1",
-  "posted_at": "2026-10-14",
-  "loc_class": "jalisco",
-  "discovered_now": false,
-  "first_seen": "2026-11-08",
-  "baseline": true,
-  "is_new": false,
-  "eff_date": "2026-10-14"
  },
  {
   "key": "ashby:Kueski:e1261953-7bcc-45db-a54e-fc2e0bdfbc89",
