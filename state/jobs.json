@@ -128,22 +128,6 @@
   "eff_date": "2026-10-29"
  },
  {
-  "key": "workday:AstraZeneca:R-262125",
-  "company": "AstraZeneca",
-  "ats": "workday",
-  "title": "Director, Cyber Security Access Management",
-  "location": "Mexico - Guadalajara",
-  "team": "",
-  "url": "https://astrazeneca.wd3.myworkdayjobs.com/en-US/Careers/job/Mexico---Guadalajara/Director--Cyber-Security-Access-Management_R-262125",
-  "posted_at": "2026-10-26",
-  "loc_class": "jalisco",
-  "discovered_now": false,
-  "first_seen": "2026-11-08",
-  "baseline": true,
-  "is_new": false,
-  "eff_date": "2026-10-26"
- },
- {
   "key": "oracle_hcm:JPMorgan Chase:210802450",
   "company": "JPMorgan Chase",
   "ats": "oracle_hcm",
