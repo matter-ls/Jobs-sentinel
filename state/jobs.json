@@ -28,7 +28,7 @@
   "discovered_now": false,
   "first_seen": "2026-11-08",
   "baseline": true,
-  "is_new": true,
+  "is_new": false,
   "eff_date": "2026-11-09"
  },
  {
@@ -142,6 +142,22 @@
   "baseline": true,
   "is_new": false,
   "eff_date": "2026-10-21"
+ },
+ {
+  "key": "greenhouse:Paystand:7830346003",
+  "company": "Paystand",
+  "ats": "greenhouse",
+  "title": "Vice President of Product",
+  "location": "Ciudad de México; Guadalajara, Jalisco, Mexico; Mexico, Mexico",
+  "team": "",
+  "url": "https://paystand.com/job-listing/?gh_jid=7830346003",
+  "posted_at": "2026-08-17",
+  "loc_class": "jalisco",
+  "discovered_now": true,
+  "first_seen": "2026-11-17",
+  "baseline": false,
+  "is_new": false,
+  "eff_date": "2026-08-17"
  },
  {
   "key": "ashby:Kueski:e1261953-7bcc-45db-a54e-fc2e0bdfbc89",
