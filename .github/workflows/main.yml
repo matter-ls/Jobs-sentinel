@@ -4,7 +4,7 @@ on:
   schedule:
     # Runs daily at 13:00 UTC (7:00 AM CST in Guadalajara/Zapopan; Mexico has no DST).
     # NOTE: scheduled runs only fire on the repository's default branch.
-    - cron: "0 13 * * *"
+    - cron: "0 7 * * *"
   workflow_dispatch:
     inputs:
       email_all:
