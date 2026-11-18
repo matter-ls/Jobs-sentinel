@@ -153,7 +153,7 @@
   "url": "https://paystand.com/job-listing/?gh_jid=7830346003",
   "posted_at": "2026-08-17",
   "loc_class": "jalisco",
-  "discovered_now": true,
+  "discovered_now": false,
   "first_seen": "2026-11-17",
   "baseline": false,
   "is_new": false,
