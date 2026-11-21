@@ -1968,6 +1968,67 @@ class EndToEnd(unittest.TestCase):
         self.assertNotIn("Director, Engineering at Acme", sofia_plain)
         self.assertTrue((self.root / "docs" / "onboard.html").exists())
 
+    def test_minimalist_email_and_onboarding_ui(self):
+        """The daily email and the onboarding page stay minimalist: no pictographs, boxes or colour
+        fills in the HTML email, each employer profile described once per email, job links limited
+        to http(s), and pill toggles plus a collapsed invite code on the onboarding page."""
+        import re
+        import onboard_subscriber as ob
+
+        pictograph = re.compile(r"[\U0001F000-\U0001FAFF\u2600-\u27BF]|&#(?:9\d{3}|1\d{4,5});")
+        sub = next(s for s in fj.get_subscribers(CFG) if s["id"] == "lucas")
+        jobs = [
+            {"key": "k1", "title": "Director, Platform <Ops>", "company": "Flex", "location": "Zapopan, Jalisco",
+             "loc_class": "jalisco", "team": "Operations", "url": "https://example.com/1", "posted_at": "2026-11-07"},
+            {"key": "k2", "title": "Director, Supply Chain", "company": "Flex", "location": "Guadalajara, Jalisco",
+             "loc_class": "jalisco", "url": "javascript:alert(1)", "posted_at": "2026-10-20"},
+        ]
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("GEMINI_API_KEY", None)
+            msg = fj.build_email_message(jobs, 5, sub, date(2026, 11, 8), "sender@gmail.com")
+        body = msg.get_body(preferencelist=("html",)).get_content()
+        plain = msg.get_body(preferencelist=("plain",)).get_content()
+
+        # 1. Type-only hierarchy: no pictographs, rounded boxes, shadows or colour fills; one small palette
+        self.assertIsNone(pictograph.search(body))
+        self.assertIsNone(pictograph.search(plain))
+        for chrome in ("border-radius", "box-shadow"):
+            self.assertNotIn(chrome, body)
+        self.assertEqual(set(re.findall(r"background-color:(#[0-9a-fA-F]{6})", body)), {"#ffffff"})
+        self.assertLessEqual(len(set(re.findall(r"#[0-9a-fA-F]{6}\b", body))), 6)
+
+        # 2. One summary line replaces the scoreboard tiles
+        self.assertIn("2 new for you", body)
+        self.assertIn("5 active matches", body)
+        self.assertNotIn("Ready CVs", body)
+
+        # 3. Two roles at the same employer: its profile is described once, each role keeps its own Apply link
+        flex_profile = fj.html.escape(next(c for c in fj.load_companies() if c["name"] == "Flex")["description"])
+        self.assertEqual(body.count(flex_profile), 1)
+        self.assertEqual(body.count("Apply &rarr;"), 2)
+
+        # 4. Feed values are escaped and links are http(s)-only
+        self.assertIn("Director, Platform &lt;Ops&gt;", body)
+        self.assertNotIn("<Ops>", body)
+        self.assertIn('href="https://example.com/1"', body)
+        self.assertNotIn("javascript:", body)
+        self.assertEqual(fj._safe_http_url("javascript:alert(1)"), "#")
+        self.assertEqual(fj._safe_http_url(" HTTPS://jobs.example.com/x "), "HTTPS://jobs.example.com/x")
+
+        # 5. Onboarding page: pill toggles with short labels, no hero / cards / dropzone, invite code collapsed
+        page = ob.render_onboard_page({})
+        self.assertIsNone(pictograph.search(page))
+        self.assertIn('class="pills" id="levelChecks"', page)
+        self.assertIn('"short": "Specialist"', page)
+        self.assertIn('"short": "Mexico, city not listed"', page)
+        self.assertIn('id="inviteToggle"', page)
+        self.assertIn('"require_invite_code": false', page)
+        for old_chrome in ("dropzone", 'class="hero"', 'class="card'):
+            self.assertNotIn(old_chrome, page)
+        self.assertIn('"require_invite_code": true', ob.render_onboard_page({"onboard_require_invite_code": True}))
+        for opt in ob.SENIORITY_OPTIONS + ob.DOMAIN_OPTIONS + ob.LOCATION_OPTIONS:
+            self.assertIn(opt["id"], ob.OPTION_SHORT_LABELS, f"Missing short pill label for {opt['id']}")
+
 
 if __name__ == "__main__":
     unittest.main()
