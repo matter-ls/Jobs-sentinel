@@ -1,123 +1,1015 @@
 {
-  "_note": "Jalisco (Guadalajara, Zapopan, El Salto, Tlaquepaque, Tlajomulco, Tonalá, Tequila/Altos) + Remote-Mexico employer directory (109 verified live boards across 8 active public JSON ATS engines, 9 supported in fetch_jobs.py). Run `python3 fetch_jobs.py --check` (or trigger GitHub Actions with check_only=true) to health-check live boards; any single board that fails is skipped gracefully without breaking the daily digest. Supported schemas: greenhouse/lever/ashby/workable/smartrecruiters/bamboohr -> {name, ats, board}; workday -> {name, ats, tenant, wd, site, fallback_sites?}; oracle_hcm -> {name, ats, host, site, fallback_sites?}; eightfold -> {name, ats, host, domain}.",
+  "_note": "Jalisco (Guadalajara, Zapopan, El Salto, Tlaquepaque, Tlajomulco, Tonalá, Tequila/Altos) + Remote-Mexico employer directory (109 verified live boards across 8 active public JSON ATS engines, 9 supported in fetch_jobs.py). Every company includes `industry` and `description` metadata used by Lucy's GenAI candidate-job match engine, CV tailor, daily email report, and searchable web board. Run `python3 fetch_jobs.py --check` (or trigger GitHub Actions with check_only=true) to health-check live boards; any single board that fails is skipped gracefully without breaking the daily digest. Supported schemas: greenhouse/lever/ashby/workable/smartrecruiters/bamboohr -> {name, ats, board, industry, description}; workday -> {name, ats, tenant, wd, site, fallback_sites?, industry, description}; oracle_hcm -> {name, ats, host, site, fallback_sites?, industry, description}; eightfold -> {name, ats, host, domain, industry, description}.",
   "companies": [
-    {"name": "Flex", "ats": "workday", "tenant": "flextronics", "wd": "wd1", "site": "Careers", "confirmed": true},
-    {"name": "Jabil", "ats": "workday", "tenant": "jabil", "wd": "wd5", "site": "Jabil_Careers", "confirmed": true},
-    {"name": "Sanmina", "ats": "oracle_hcm", "host": "egup.fa.us2.oraclecloud.com", "site": "CX_1", "confirmed": true},
-    {"name": "Plexus", "ats": "workday", "tenant": "plexus", "wd": "wd504", "site": "Plexus_Careers", "confirmed": true},
-    {"name": "Avnet", "ats": "workday", "tenant": "avnet", "wd": "wd1", "site": "External", "confirmed": true},
-    {"name": "Bright Machines", "ats": "lever", "board": "brightmachines", "confirmed": true},
-    {"name": "Mill", "ats": "greenhouse", "board": "mill", "confirmed": true},
-
-    {"name": "Intel", "ats": "workday", "tenant": "intel", "wd": "wd1", "site": "External", "confirmed": true},
-    {"name": "Infineon Technologies", "ats": "eightfold", "host": "infineon.eightfold.ai", "domain": "infineon.com", "confirmed": true},
-    {"name": "Renesas Electronics", "ats": "smartrecruiters", "board": "RenesasElectronics", "confirmed": true},
-    {"name": "Micron", "ats": "workday", "tenant": "micron", "wd": "wd1", "site": "External", "confirmed": true},
-    {"name": "Solidigm", "ats": "smartrecruiters", "board": "Solidigm", "confirmed": true},
-    {"name": "Western Digital", "ats": "smartrecruiters", "board": "WesternDigital", "confirmed": true},
-    {"name": "Qualcomm", "ats": "eightfold", "host": "qualcomm.eightfold.ai", "domain": "qualcomm.com", "confirmed": true},
-    {"name": "Nvidia", "ats": "workday", "tenant": "nvidia", "wd": "wd5", "site": "NVIDIAExternalCareerSite", "confirmed": true},
-    {"name": "Broadcom", "ats": "workday", "tenant": "broadcom", "wd": "wd1", "site": "External_Career", "confirmed": true},
-    {"name": "Marvell", "ats": "workday", "tenant": "marvell", "wd": "wd1", "site": "MarvellCareers", "confirmed": true},
-    {"name": "Analog Devices", "ats": "workday", "tenant": "analogdevices", "wd": "wd1", "site": "external", "confirmed": true},
-    {"name": "Microchip Technology", "ats": "workday", "tenant": "microchiphr", "wd": "wd5", "site": "External", "confirmed": true},
-
-    {"name": "Oracle", "ats": "oracle_hcm", "host": "eeho.fa.us2.oraclecloud.com", "site": "CX_45001", "fallback_sites": ["CX_1001"], "confirmed": true},
-    {"name": "HP Inc.", "ats": "workday", "tenant": "hp", "wd": "wd5", "site": "ExternalCareerSite", "confirmed": true},
-    {"name": "Hewlett Packard Enterprise", "ats": "workday", "tenant": "hpe", "wd": "wd5", "site": "Jobsathpe", "confirmed": true},
-    {"name": "Dell Technologies", "ats": "oracle_hcm", "host": "enterpriseplatform.dell.com", "site": "careers", "fallback_sites": ["CX_1"], "confirmed": true},
-    {"name": "Toshiba Global Commerce Solutions", "ats": "greenhouse", "board": "toshibaglobalcommercesolutions", "confirmed": true},
-    {"name": "Kyndryl", "ats": "workday", "tenant": "kyndryl", "wd": "wd5", "site": "KyndrylProfessionalCareers", "confirmed": true},
-    {"name": "DXC Technology", "ats": "workday", "tenant": "dxctechnology", "wd": "wd1", "site": "DXCJobs", "confirmed": true},
-    {"name": "F5", "ats": "workday", "tenant": "ffive", "wd": "wd5", "site": "f5jobs", "confirmed": true},
-    {"name": "Ciena", "ats": "workday", "tenant": "ciena", "wd": "wd5", "site": "Careers", "confirmed": true},
-    {"name": "Zebra Technologies", "ats": "workday", "tenant": "zebra", "wd": "wd501", "site": "Zebra_careers", "confirmed": true},
-
-    {"name": "Wizeline", "ats": "greenhouse", "board": "wizeline", "confirmed": true},
-    {"name": "Globant", "ats": "smartrecruiters", "board": "Globant", "confirmed": true},
-    {"name": "EPAM Systems", "ats": "smartrecruiters", "board": "EPAM", "confirmed": true},
-    {"name": "Encora", "ats": "smartrecruiters", "board": "Encora", "confirmed": true},
-    {"name": "Improving", "ats": "smartrecruiters", "board": "ImprovingEnterprises", "confirmed": true},
-    {"name": "Endava", "ats": "smartrecruiters", "board": "Endava", "confirmed": true},
-    {"name": "Nagarro", "ats": "smartrecruiters", "board": "Nagarro", "confirmed": true},
-    {"name": "Accenture", "ats": "workday", "tenant": "accenture", "wd": "wd103", "site": "AccentureCareers", "confirmed": true},
-    {"name": "Bluelight Consulting", "ats": "lever", "board": "bluelightconsulting", "confirmed": true},
-    {"name": "Avertium", "ats": "lever", "board": "avertium", "confirmed": true},
-    {"name": "Publicis Groupe", "ats": "smartrecruiters", "board": "PublicisGroupe", "confirmed": true},
-    {"name": "Teleperformance", "ats": "workday", "tenant": "teleperformance", "wd": "wd1", "site": "teleperformance", "confirmed": true},
-
-    {"name": "Bosch", "ats": "smartrecruiters", "board": "BoschGroup", "confirmed": true},
-    {"name": "Continental", "ats": "smartrecruiters", "board": "Continental", "confirmed": true},
-    {"name": "BorgWarner", "ats": "workday", "tenant": "borgwarner", "wd": "wd5", "site": "BorgWarner_Careers", "confirmed": true},
-    {"name": "Aptiv", "ats": "workday", "tenant": "aptiv", "wd": "wd5", "site": "APTIV_CAREERS", "confirmed": true},
-    {"name": "Ford Motor Company", "ats": "oracle_hcm", "host": "efds.fa.em5.oraclecloud.com", "site": "CX_1", "confirmed": true},
-    {"name": "Honeywell", "ats": "oracle_hcm", "host": "ibqbjb.fa.ocs.oraclecloud.com", "site": "Honeywell", "fallback_sites": ["CX_1"], "confirmed": true},
-    {"name": "Johnson Controls", "ats": "workday", "tenant": "jci", "wd": "wd5", "site": "JCI", "confirmed": true},
-    {"name": "GE Vernova", "ats": "workday", "tenant": "gevernova", "wd": "wd5", "site": "Vernova_ExternalSite", "confirmed": true},
-    {"name": "Eaton", "ats": "eightfold", "host": "eaton.eightfold.ai", "domain": "eaton.com", "confirmed": true},
-    {"name": "3M", "ats": "workday", "tenant": "3m", "wd": "wd1", "site": "Search", "fallback_sites": ["3MCareers"], "confirmed": true},
-    {"name": "O-I (Owens-Illinois)", "ats": "smartrecruiters", "board": "OI", "confirmed": true},
-
-    {"name": "AstraZeneca", "ats": "workday", "tenant": "astrazeneca", "wd": "wd3", "site": "Careers", "confirmed": true},
-    {"name": "Baxter", "ats": "workday", "tenant": "baxter", "wd": "wd1", "site": "Baxter", "confirmed": true},
-    {"name": "Insulet", "ats": "workday", "tenant": "insulet", "wd": "wd5", "site": "insuletcareers", "confirmed": true},
-    {"name": "Medtronic", "ats": "workday", "tenant": "medtronic", "wd": "wd1", "site": "MedtronicCareers", "confirmed": true},
-    {"name": "Abbott", "ats": "workday", "tenant": "abbott", "wd": "wd5", "site": "AbbottCareers", "confirmed": true},
-    {"name": "Roche", "ats": "workday", "tenant": "roche", "wd": "wd3", "site": "roche-ext", "confirmed": true},
-    {"name": "Pfizer", "ats": "workday", "tenant": "pfizer", "wd": "wd1", "site": "PfizerCareers", "confirmed": true},
-    {"name": "Eli Lilly", "ats": "workday", "tenant": "lilly", "wd": "wd115", "site": "LLY", "fallback_sites": ["Lilly"], "confirmed": true},
-    {"name": "Sanofi", "ats": "workday", "tenant": "sanofi", "wd": "wd3", "site": "SanofiCareers", "confirmed": true},
-    {"name": "BD (Becton Dickinson)", "ats": "workday", "tenant": "bdx", "wd": "wd1", "site": "EXTERNAL_CAREER_SITE", "fallback_sites": ["EXTERNAL_CAREER_SITE_MEXICO"], "confirmed": true},
-    {"name": "Thermo Fisher Scientific", "ats": "workday", "tenant": "thermofisher", "wd": "wd5", "site": "ThermoFisherCareers", "confirmed": true},
-    {"name": "Bayer", "ats": "eightfold", "host": "bayer.eightfold.ai", "domain": "bayer.com", "confirmed": true},
-    {"name": "Corteva Agriscience", "ats": "eightfold", "host": "corteva.eightfold.ai", "domain": "corteva.com", "confirmed": true},
-
-    {"name": "Brown-Forman (Casa Herradura)", "ats": "workday", "tenant": "bf", "wd": "wd5", "site": "International", "confirmed": true},
-    {"name": "Diageo", "ats": "workday", "tenant": "diageo", "wd": "wd3", "site": "Diageo_Careers", "confirmed": true},
-    {"name": "Mondelēz International", "ats": "workday", "tenant": "mdlz", "wd": "wd3", "site": "External", "confirmed": true},
-    {"name": "Kimberly-Clark", "ats": "workday", "tenant": "kimberlyclark", "wd": "wd1", "site": "GLOBAL", "confirmed": true},
-    {"name": "Procter & Gamble", "ats": "workday", "tenant": "pg", "wd": "wd5", "site": "PGBPGNGLOBAL", "fallback_sites": ["1000"], "confirmed": true},
-
-    {"name": "Kueski", "ats": "ashby", "board": "kueski", "confirmed": true},
-    {"name": "Clara", "ats": "greenhouse", "board": "clara", "confirmed": true},
-    {"name": "Paystand", "ats": "greenhouse", "board": "paystand", "confirmed": true},
-    {"name": "Backbase", "ats": "greenhouse", "board": "workatbackbase", "confirmed": true},
-    {"name": "Bitso", "ats": "bamboohr", "board": "bitso", "default_country": "Mexico", "confirmed": true},
-    {"name": "Mercado Libre", "ats": "eightfold", "host": "mercadolibre.eightfold.ai", "domain": "mercadolibre.com", "confirmed": true},
-    {"name": "Nubank", "ats": "greenhouse", "board": "nubank", "confirmed": true},
-    {"name": "Stripe", "ats": "greenhouse", "board": "stripe", "confirmed": true},
-    {"name": "Citi", "ats": "workday", "tenant": "citi", "wd": "wd5", "site": "2", "confirmed": true},
-    {"name": "JPMorgan Chase", "ats": "oracle_hcm", "host": "jpmc.fa.oraclecloud.com", "site": "CX_1001", "confirmed": true},
-    {"name": "American Express", "ats": "oracle_hcm", "host": "egug.fa.us2.oraclecloud.com", "site": "CX_1001", "fallback_sites": ["CX_1"], "confirmed": true},
-    {"name": "Visa", "ats": "smartrecruiters", "board": "Visa", "confirmed": true},
-    {"name": "Mastercard", "ats": "workday", "tenant": "mastercard", "wd": "wd1", "site": "CorporateCareers", "confirmed": true},
-    {"name": "PayPal", "ats": "workday", "tenant": "paypal", "wd": "wd1", "site": "jobs", "confirmed": true},
-    {"name": "Coinbase", "ats": "greenhouse", "board": "coinbase", "confirmed": true},
-
-    {"name": "Rapido Solutions Group", "ats": "greenhouse", "board": "rapidosolutionsgroup", "confirmed": true},
-    {"name": "Arrive Logistics", "ats": "lever", "board": "arrivelogistics", "confirmed": true},
-    {"name": "Flexport", "ats": "greenhouse", "board": "flexport", "confirmed": true},
-
-    {"name": "Diligent", "ats": "greenhouse", "board": "diligent", "confirmed": true},
-    {"name": "ServiceNow", "ats": "smartrecruiters", "board": "ServiceNow", "confirmed": true},
-    {"name": "Salesforce", "ats": "workday", "tenant": "salesforce", "wd": "wd12", "site": "External_Career_Site", "confirmed": true},
-    {"name": "Workday, Inc.", "ats": "workday", "tenant": "workday", "wd": "wd5", "site": "Workday", "confirmed": true},
-    {"name": "Adobe", "ats": "workday", "tenant": "adobe", "wd": "wd5", "site": "external_experienced", "confirmed": true},
-    {"name": "Autodesk", "ats": "workday", "tenant": "autodesk", "wd": "wd1", "site": "Ext", "confirmed": true},
-    {"name": "Zendesk", "ats": "workday", "tenant": "zendesk", "wd": "wd1", "site": "zendesk", "confirmed": true},
-    {"name": "CrowdStrike", "ats": "workday", "tenant": "crowdstrike", "wd": "wd5", "site": "crowdstrikecareers", "confirmed": true},
-    {"name": "Datadog", "ats": "greenhouse", "board": "datadog", "confirmed": true},
-    {"name": "Okta", "ats": "greenhouse", "board": "okta", "confirmed": true},
-    {"name": "Zscaler", "ats": "greenhouse", "board": "zscaler", "confirmed": true},
-    {"name": "Cloudflare", "ats": "greenhouse", "board": "cloudflare", "confirmed": true},
-    {"name": "Twilio", "ats": "greenhouse", "board": "twilio", "confirmed": true},
-    {"name": "GitLab", "ats": "greenhouse", "board": "gitlab", "confirmed": true},
-    {"name": "Canonical", "ats": "greenhouse", "board": "canonical", "confirmed": true},
-    {"name": "Pinterest", "ats": "greenhouse", "board": "pinterest", "confirmed": true},
-    {"name": "Lyft", "ats": "greenhouse", "board": "lyft", "confirmed": true},
-    {"name": "HubSpot", "ats": "greenhouse", "board": "hubspotjobs", "confirmed": true},
-    {"name": "Deel", "ats": "ashby", "board": "deel", "confirmed": true},
-    {"name": "Zapier", "ats": "ashby", "board": "zapier", "confirmed": true},
-    {"name": "Notion", "ats": "ashby", "board": "notion", "confirmed": true}
+    {
+      "name": "Flex",
+      "ats": "workday",
+      "tenant": "flextronics",
+      "wd": "wd1",
+      "site": "Careers",
+      "confirmed": true,
+      "industry": "EMS, Hardware & Supply Chain Manufacturing",
+      "description": "Global Tier-1 Electronics Manufacturing Services (EMS) and supply chain leader ($26B+ revenue) building cloud/data center infrastructure, automotive, healthcare, and industrial hardware, with flagship campuses in Zapopan and Tlajomulco hosting regional operations and Global Business Services (GBS)."
+    },
+    {
+      "name": "Jabil",
+      "ats": "workday",
+      "tenant": "jabil",
+      "wd": "wd5",
+      "site": "Jabil_Careers",
+      "confirmed": true,
+      "industry": "EMS, Hardware & Supply Chain Manufacturing",
+      "description": "Fortune 200 global manufacturing services and engineering company ($28B+ revenue) producing cloud hardware, regulated medical devices, automotive electronics, and connected products across major Guadalajara/Zapopan plants and global IT/finance shared services."
+    },
+    {
+      "name": "Sanmina",
+      "ats": "oracle_hcm",
+      "host": "egup.fa.us2.oraclecloud.com",
+      "site": "CX_1",
+      "confirmed": true,
+      "industry": "EMS, Hardware & Supply Chain Manufacturing",
+      "description": "Global integrated optical, electronic, and mechanical manufacturing (EMS) provider serving cloud networking, industrial, medical, defense, and automotive OEMs from large-scale campuses in Guadalajara and El Salto."
+    },
+    {
+      "name": "Plexus",
+      "ats": "workday",
+      "tenant": "plexus",
+      "wd": "wd504",
+      "site": "Plexus_Careers",
+      "confirmed": true,
+      "industry": "EMS, Hardware & Supply Chain Manufacturing",
+      "description": "High-complexity, low-to-medium volume electronics engineering, manufacturing, and aftermarket sustainment partner for healthcare/life sciences, aerospace, and industrial OEMs with a flagship campus in Guadalajara/Tlajomulco."
+    },
+    {
+      "name": "Avnet",
+      "ats": "workday",
+      "tenant": "avnet",
+      "wd": "wd1",
+      "site": "External",
+      "confirmed": true,
+      "industry": "Electronic Components Distribution & Supply Chain",
+      "description": "Fortune 500 global electronic component distributor and embedded design/supply-chain solutions provider connecting semiconductor manufacturers with OEM/EMS customers from a major operations hub in Guadalajara/Tlaquepaque."
+    },
+    {
+      "name": "Bright Machines",
+      "ats": "lever",
+      "board": "brightmachines",
+      "confirmed": true,
+      "industry": "Robotics, Microfactories & Smart Manufacturing Tech",
+      "description": "Software-defined industrial robotics and intelligent microfactory automation company combining computer vision, ML, and modular assembly cells, with core hardware/software R&D and deployment operations in Jalisco."
+    },
+    {
+      "name": "Mill",
+      "ats": "greenhouse",
+      "board": "mill",
+      "confirmed": true,
+      "industry": "ClimateTech, Connected Hardware & Circular Economy",
+      "description": "Consumer and commercial climate-tech company combining smart connected kitchen hardware, subscription logistics, and circular food-system operations, hiring remote and hardware/supply-chain talent in Mexico."
+    },
+    {
+      "name": "Intel",
+      "ats": "workday",
+      "tenant": "intel",
+      "wd": "wd1",
+      "site": "External",
+      "confirmed": true,
+      "industry": "Semiconductors, Silicon Validation & AI Computing",
+      "description": "Global semiconductor and computing leader operating the Guadalajara Design Center (GDC) in Zapopan—one of Latin America's premier R&D, pre/post-silicon validation, firmware, and platform engineering hubs."
+    },
+    {
+      "name": "Infineon Technologies",
+      "ats": "eightfold",
+      "host": "infineon.eightfold.ai",
+      "domain": "infineon.com",
+      "confirmed": true,
+      "industry": "Semiconductors — Automotive, Power & IoT",
+      "description": "Global German semiconductor leader in power systems, automotive microcontrollers, and IoT security, operating engineering, supply-chain, and business operations teams in Guadalajara."
+    },
+    {
+      "name": "Renesas Electronics",
+      "ats": "smartrecruiters",
+      "board": "RenesasElectronics",
+      "confirmed": true,
+      "industry": "Semiconductors — Embedded MCUs, SoCs & Analog",
+      "description": "Leading Japanese supplier of embedded microcontrollers, SoCs, analog, and power semiconductors for automotive, industrial, infrastructure, and IoT markets, expanding engineering and operations in Guadalajara."
+    },
+    {
+      "name": "Micron",
+      "ats": "workday",
+      "tenant": "micron",
+      "wd": "wd1",
+      "site": "External",
+      "confirmed": true,
+      "industry": "Semiconductors — Memory (DRAM, HBM & NAND Storage)",
+      "description": "Fortune 500 global leader in high-bandwidth memory (HBM), DRAM, and NAND flash storage powering AI data centers, mobile, and automotive platforms, with growing engineering and enterprise operations in Guadalajara."
+    },
+    {
+      "name": "Solidigm",
+      "ats": "smartrecruiters",
+      "board": "Solidigm",
+      "confirmed": true,
+      "industry": "Semiconductors — Enterprise AI NAND SSD Storage",
+      "description": "Enterprise solid-state storage innovator (formed from Intel's NAND/SSD business under SK hynix) building high-density data center SSDs for AI and cloud workloads, with firmware and validation teams in Guadalajara."
+    },
+    {
+      "name": "Western Digital",
+      "ats": "smartrecruiters",
+      "board": "WesternDigital",
+      "confirmed": true,
+      "industry": "Data Storage Infrastructure — HDD & Flash Platforms",
+      "description": "Global data infrastructure and enterprise storage manufacturer supplying hyperscale cloud data centers and OEMs, with engineering, quality, and business operations presence in Mexico."
+    },
+    {
+      "name": "Qualcomm",
+      "ats": "eightfold",
+      "host": "qualcomm.eightfold.ai",
+      "domain": "qualcomm.com",
+      "confirmed": true,
+      "industry": "Semiconductors — Wireless, Mobile, Edge AI & Automotive SoCs",
+      "description": "Global wireless connectivity, Snapdragon mobile/PC compute, automotive cockpit/ADAS, and edge-AI semiconductor leader scaling engineering and operations across Mexico."
+    },
+    {
+      "name": "Nvidia",
+      "ats": "workday",
+      "tenant": "nvidia",
+      "wd": "wd5",
+      "site": "NVIDIAExternalCareerSite",
+      "confirmed": true,
+      "industry": "AI Accelerated Computing, GPUs & Data Center Infrastructure",
+      "description": "World leader in AI accelerated computing, data center GPUs, networking (InfiniBand/Spectrum), and enterprise AI software platforms, partnering closely with Jalisco's hyperscale server manufacturing ecosystem."
+    },
+    {
+      "name": "Broadcom",
+      "ats": "workday",
+      "tenant": "broadcom",
+      "wd": "wd1",
+      "site": "External_Career",
+      "confirmed": true,
+      "industry": "Semiconductors & Enterprise Infrastructure Software",
+      "description": "Global technology leader spanning custom AI accelerators, data center networking/switching silicon, broadband/wireless chips, and enterprise infrastructure software (VMware, Symantec, Mainframe)."
+    },
+    {
+      "name": "Marvell",
+      "ats": "workday",
+      "tenant": "marvell",
+      "wd": "wd1",
+      "site": "MarvellCareers",
+      "confirmed": true,
+      "industry": "Semiconductors — Data Infrastructure, Optical & Custom Cloud Silicon",
+      "description": "Data-infrastructure semiconductor company designing custom AI compute ASICs, electro-optics, Ethernet switching, and storage controllers for hyperscale cloud and 5G carriers."
+    },
+    {
+      "name": "Analog Devices",
+      "ats": "workday",
+      "tenant": "analogdevices",
+      "wd": "wd1",
+      "site": "external",
+      "confirmed": true,
+      "industry": "Semiconductors — High-Performance Analog, Mixed-Signal & DSP",
+      "description": "Global leader in precision analog, mixed-signal, power management, and sensor semiconductors bridging physical and digital worlds across industrial, automotive, communications, and healthcare."
+    },
+    {
+      "name": "Microchip Technology",
+      "ats": "workday",
+      "tenant": "microchiphr",
+      "wd": "wd5",
+      "site": "External",
+      "confirmed": true,
+      "industry": "Semiconductors — Embedded Control, MCUs & Mixed-Signal",
+      "description": "Leading provider of smart, connected, and secure embedded control solutions (PIC/AVR microcontrollers, FPGAs, analog, and timing) with long-standing design and technical operations in Guadalajara."
+    },
+    {
+      "name": "Oracle",
+      "ats": "oracle_hcm",
+      "host": "eeho.fa.us2.oraclecloud.com",
+      "site": "CX_45001",
+      "fallback_sites": [
+        "CX_1001"
+      ],
+      "confirmed": true,
+      "industry": "Enterprise Cloud (OCI), Database, ERP & AI Applications",
+      "description": "Global enterprise cloud infrastructure (OCI), autonomous database, and Fusion SaaS ERP/HCM leader operating the flagship Mexico Development Center (MDC) campus in Zapopan across R&D, cloud ops, consulting, and commercial teams."
+    },
+    {
+      "name": "HP Inc.",
+      "ats": "workday",
+      "tenant": "hp",
+      "wd": "wd5",
+      "site": "ExternalCareerSite",
+      "confirmed": true,
+      "industry": "Enterprise & Consumer Computing, Printing & Global Operations",
+      "description": "Fortune 100 global leader in personal computing systems, commercial workstations, 3D printing, and managed print services, running one of Guadalajara/Tlaquepaque's largest global operations, supply-chain, IT, and commercial hubs."
+    },
+    {
+      "name": "Hewlett Packard Enterprise",
+      "ats": "workday",
+      "tenant": "hpe",
+      "wd": "wd5",
+      "site": "Jobsathpe",
+      "confirmed": true,
+      "industry": "Enterprise Hybrid Cloud, AI Servers, Networking & GBS",
+      "description": "Fortune 500 edge-to-cloud enterprise technology company (HPE GreenLake, AI servers, Aruba networking, storage) with a flagship Guadalajara global hub driving partner operations, sales ops, CX/BPI, finance, and engineering."
+    },
+    {
+      "name": "Dell Technologies",
+      "ats": "oracle_hcm",
+      "host": "enterpriseplatform.dell.com",
+      "site": "careers",
+      "fallback_sites": [
+        "CX_1"
+      ],
+      "confirmed": true,
+      "industry": "Enterprise AI Infrastructure, Storage, Servers & Client Computing",
+      "description": "Global enterprise IT infrastructure leader across AI servers, storage, data protection, cloud platforms, and commercial PCs, supporting LATAM commercial sales, supply chain, services, and remote-Mexico operations."
+    },
+    {
+      "name": "Toshiba Global Commerce Solutions",
+      "ats": "greenhouse",
+      "board": "toshibaglobalcommercesolutions",
+      "confirmed": true,
+      "industry": "Retail Enterprise Hardware, POS Platforms & Commerce Software",
+      "description": "Global market-share leader in enterprise retail point-of-sale (POS) systems, self-checkout hardware, and unified retail commerce software, operating a major R&D, software, and operations center in Zapopan/Guadalajara."
+    },
+    {
+      "name": "Kyndryl",
+      "ats": "workday",
+      "tenant": "kyndryl",
+      "wd": "wd5",
+      "site": "KyndrylProfessionalCareers",
+      "confirmed": true,
+      "industry": "Mission-Critical IT Infrastructure Services & Cloud Modernization",
+      "description": "World's largest IT infrastructure services provider (spun off from IBM Global Technology Services), managing hybrid cloud, mainframe modernization, cybersecurity, and network operations from its Guadalajara/El Salto hub."
+    },
+    {
+      "name": "DXC Technology",
+      "ats": "workday",
+      "tenant": "dxctechnology",
+      "wd": "wd1",
+      "site": "DXCJobs",
+      "confirmed": true,
+      "industry": "Global Enterprise IT Services, Cloud, Apps & BPO",
+      "description": "Fortune 500 global IT services and consulting company delivering cloud infrastructure, application modernization, insurance/banking software, and global service delivery from Guadalajara/Zapopan."
+    },
+    {
+      "name": "F5",
+      "ats": "workday",
+      "tenant": "ffive",
+      "wd": "wd5",
+      "site": "f5jobs",
+      "confirmed": true,
+      "industry": "Multi-Cloud Application Security, API Protection & ADC Networking",
+      "description": "Global leader in multi-cloud application security, API protection, load balancing (BIG-IP / NGINX), and Distributed Cloud services, operating a major Guadalajara technology, engineering, and LATAM digital sales hub."
+    },
+    {
+      "name": "Ciena",
+      "ats": "workday",
+      "tenant": "ciena",
+      "wd": "wd5",
+      "site": "Careers",
+      "confirmed": true,
+      "industry": "Optical Networking, Telecom Routing & Network Automation Software",
+      "description": "Global leader in high-speed coherent optical networking systems, metro/edge routing, and Blue Planet network automation software for telecom carriers and hyperscale cloud operators, with a hub in Guadalajara."
+    },
+    {
+      "name": "Zebra Technologies",
+      "ats": "workday",
+      "tenant": "zebra",
+      "wd": "wd501",
+      "site": "Zebra_careers",
+      "confirmed": true,
+      "industry": "Enterprise Asset Intelligence, Barcode, RFID & Warehouse Robotics",
+      "description": "Global leader in enterprise mobile computing, barcode/RFID data capture, supply-chain visibility software, and warehouse automation serving retail, logistics, manufacturing, and healthcare across Mexico."
+    },
+    {
+      "name": "Wizeline",
+      "ats": "greenhouse",
+      "board": "wizeline",
+      "confirmed": true,
+      "industry": "AI-Native Digital Product Engineering & Cloud Consulting",
+      "description": "Global AI-first technology consultancy and product engineering partner founded with its flagship delivery center in Guadalajara, building cloud data platforms, GenAI products, and enterprise software for Fortune 500 clients."
+    },
+    {
+      "name": "Globant",
+      "ats": "smartrecruiters",
+      "board": "Globant",
+      "confirmed": true,
+      "industry": "Digital Transformation, AI Studios & Software Engineering Consulting",
+      "description": "Global pure-play digital transformation and AI engineering consultancy (29,000+ professionals) delivering cloud, data, enterprise platforms (Salesforce/SAP), and CX design from Guadalajara and Remote Mexico."
+    },
+    {
+      "name": "EPAM Systems",
+      "ats": "smartrecruiters",
+      "board": "EPAM",
+      "confirmed": true,
+      "industry": "Global Digital Platform Engineering, Cloud & AI Consulting",
+      "description": "S&P 500 global software engineering and enterprise transformation consultancy with a major nearshore engineering, data, agile delivery, and cloud architecture hub headquartered in Guadalajara."
+    },
+    {
+      "name": "Encora",
+      "ats": "smartrecruiters",
+      "board": "Encora",
+      "confirmed": true,
+      "industry": "Nearshore Digital Engineering, Cloud, Data & AI Services",
+      "description": "Global next-gen product engineering consultancy specializing in cloud, data/AI, automation, and digital platform modernization for fast-growing tech and Fortune 1000 enterprises across Jalisco and LATAM."
+    },
+    {
+      "name": "Improving",
+      "ats": "smartrecruiters",
+      "board": "ImprovingEnterprises",
+      "confirmed": true,
+      "industry": "Agile Software Consulting, Cloud Engineering & Organizational Coaching",
+      "description": "North American modern digital services, agile coaching, and custom software/cloud engineering consultancy operating a key nearshore delivery campus in Guadalajara/Zapopan (formerly Tiempo Development)."
+    },
+    {
+      "name": "Endava",
+      "ats": "smartrecruiters",
+      "board": "Endava",
+      "confirmed": true,
+      "industry": "Digital Transformation, Payments Tech & Agile Engineering Consulting",
+      "description": "UK-headquartered global technology consultancy delivering payment ecosystems, cloud architecture, AI/data, and agile product delivery across financial services, TMT, and mobility in Mexico."
+    },
+    {
+      "name": "Nagarro",
+      "ats": "smartrecruiters",
+      "board": "Nagarro",
+      "confirmed": true,
+      "industry": "Global Digital Product Engineering & Enterprise Solutions Consulting",
+      "description": "German-listed global digital engineering leader (18,000+ experts) delivering fluidic agile software development, ERP/CRM modernization, AI, and process transformation across Mexico."
+    },
+    {
+      "name": "Accenture",
+      "ats": "workday",
+      "tenant": "accenture",
+      "wd": "wd103",
+      "site": "AccentureCareers",
+      "confirmed": true,
+      "industry": "Global Management Consulting, Technology, Data/AI & Operations",
+      "description": "Global Fortune Global 500 professional services powerhouse delivering strategy, enterprise transformation, Celonis/process excellence, SAP/cloud platforms, GenAI, and managed operations across Mexico."
+    },
+    {
+      "name": "Bluelight Consulting",
+      "ats": "lever",
+      "board": "bluelightconsulting",
+      "confirmed": true,
+      "industry": "Nearshore DevOps, Cloud, Data & Staff Augmentation Consulting",
+      "description": "High-growth nearshore software engineering, DevOps, data engineering, QA, and commercial B2B tech consultancy hiring remote talent across Guadalajara and Mexico."
+    },
+    {
+      "name": "Avertium",
+      "ats": "lever",
+      "board": "avertium",
+      "confirmed": true,
+      "industry": "Managed Cybersecurity, MDR, Governance & Security Consulting",
+      "description": "Enterprise cybersecurity, Managed Detection and Response (MDR), zero-trust governance, and compliance consultancy operating nearshore security and commercial operations in Mexico."
+    },
+    {
+      "name": "Publicis Groupe",
+      "ats": "smartrecruiters",
+      "board": "PublicisGroupe",
+      "confirmed": true,
+      "industry": "Global Marketing Transformation, AdTech, Data & Digital Commerce",
+      "description": "One of the world's Big Three communications, digital business transformation (Publicis Sapient), media, and Epsilon data-tech groups scaling delivery and project operations in Mexico."
+    },
+    {
+      "name": "Teleperformance",
+      "ats": "workday",
+      "tenant": "teleperformance",
+      "wd": "wd1",
+      "site": "teleperformance",
+      "confirmed": true,
+      "industry": "Global Digital Business Services, CX Operations & BPO",
+      "description": "World's largest outsourced omnichannel Customer Experience (CX), trust & safety, back-office BPO, and AI-enabled customer operations provider with major campuses in Guadalajara/Tlaquepaque."
+    },
+    {
+      "name": "Bosch",
+      "ats": "smartrecruiters",
+      "board": "BoschGroup",
+      "confirmed": true,
+      "industry": "Automotive Mobility R&D, Embedded Software & Industrial Technology",
+      "description": "Global German engineering and mobility giant ($95B+ revenue) running its flagship Guadalajara Engineering & Software Center (1,000+ engineers/leaders) for ADAS, electrification, IoT, and enterprise IT/processes."
+    },
+    {
+      "name": "Continental",
+      "ats": "smartrecruiters",
+      "board": "Continental",
+      "confirmed": true,
+      "industry": "Automotive Electronics, Autonomous Mobility & Smart Vehicle Systems",
+      "description": "Tier-1 German automotive technology leader operating major R&D Center Guadalajara (Periférico Sur / La Tijera) and manufacturing plants in Jalisco focused on vehicle electronics, safety, and mobility operations."
+    },
+    {
+      "name": "BorgWarner",
+      "ats": "workday",
+      "tenant": "borgwarner",
+      "wd": "wd5",
+      "site": "BorgWarner_Careers",
+      "confirmed": true,
+      "industry": "Automotive Electrification, EV Propulsion & Powertrain Manufacturing",
+      "description": "Global Tier-1 clean and electric vehicle propulsion supplier operating major manufacturing and operational excellence facilities in El Salto, Jalisco."
+    },
+    {
+      "name": "Aptiv",
+      "ats": "workday",
+      "tenant": "aptiv",
+      "wd": "wd5",
+      "site": "APTIV_CAREERS",
+      "confirmed": true,
+      "industry": "Software-Defined Vehicle Architecture, ADAS & Signal/Power Distribution",
+      "description": "Global mobility technology leader designing vehicle software, autonomous driving compute, and high-voltage electrical architecture across one of Mexico's largest engineering and manufacturing footprints."
+    },
+    {
+      "name": "Ford Motor Company",
+      "ats": "oracle_hcm",
+      "host": "efds.fa.em5.oraclecloud.com",
+      "site": "CX_1",
+      "confirmed": true,
+      "industry": "Global Automotive OEM, Connected Vehicles & Global Business Services",
+      "description": "Iconic global automaker running one of its largest global engineering, IT, supply-chain, finance, and Global Business Services (GBS) hubs in Mexico supporting North American and global EV/ICE programs."
+    },
+    {
+      "name": "Honeywell",
+      "ats": "oracle_hcm",
+      "host": "ibqbjb.fa.ocs.oraclecloud.com",
+      "site": "Honeywell",
+      "fallback_sites": [
+        "CX_1"
+      ],
+      "confirmed": true,
+      "industry": "Industrial Automation, Aerospace, Building Tech & Energy Transition",
+      "description": "Fortune 100 diversified industrial-tech leader across aerospace avionics, process/building automation, and warehouse robotics, operating major engineering, supply-chain, and GBS centers in Mexico."
+    },
+    {
+      "name": "Johnson Controls",
+      "ats": "workday",
+      "tenant": "jci",
+      "wd": "wd5",
+      "site": "JCI",
+      "confirmed": true,
+      "industry": "Smart Buildings, HVAC, Fire/Security & Sustainable Infrastructure",
+      "description": "Global leader in smart, healthy, and sustainable building technologies (OpenBlue digital platform, commercial HVAC, fire & security) with large nearshore GBS, engineering, and commercial hubs in Mexico."
+    },
+    {
+      "name": "GE Vernova",
+      "ats": "workday",
+      "tenant": "gevernova",
+      "wd": "wd5",
+      "site": "Vernova_ExternalSite",
+      "confirmed": true,
+      "industry": "Energy Transition, Power Generation, Grid Software & Electrification",
+      "description": "Global energy technology company ($33B+ spun out of General Electric) spanning gas/wind power, grid orchestration software, and electrification systems with engineering and project operations in Mexico."
+    },
+    {
+      "name": "Eaton",
+      "ats": "eightfold",
+      "host": "eaton.eightfold.ai",
+      "domain": "eaton.com",
+      "confirmed": true,
+      "industry": "Intelligent Power Management, Data Center Electrical & Industrial",
+      "description": "Global intelligent power management company ($23B+ revenue) supplying electrical switchgear/UPS for AI data centers, utilities, aerospace, and mobility across Mexico."
+    },
+    {
+      "name": "3M",
+      "ats": "workday",
+      "tenant": "3m",
+      "wd": "wd1",
+      "site": "Search",
+      "fallback_sites": [
+        "3MCareers"
+      ],
+      "confirmed": true,
+      "industry": "Diversified Materials Science, Industrial, Safety & Electronics",
+      "description": "Fortune 100 global science and manufacturing enterprise producing industrial adhesives, abrasives, electronics films, automotive materials, and workplace safety solutions with GBS and commercial ops in Mexico."
+    },
+    {
+      "name": "O-I (Owens-Illinois)",
+      "ats": "smartrecruiters",
+      "board": "OI",
+      "confirmed": true,
+      "industry": "Sustainable Glass Packaging Manufacturing & Beverage Supply Chain",
+      "description": "World's leading manufacturer of glass beverage and food containers (O-I Glass), deeply integrated into Jalisco's tequila/spirits and CPG supply chain with operations in Guadalajara/Tlaquepaque."
+    },
+    {
+      "name": "AstraZeneca",
+      "ats": "workday",
+      "tenant": "astrazeneca",
+      "wd": "wd3",
+      "site": "Careers",
+      "confirmed": true,
+      "industry": "Global Biopharmaceuticals, GITC Tech Center & GBS Hub",
+      "description": "Global biopharmaceutical innovator ($45B+ revenue) in oncology, CVRM, and rare diseases; operates a flagship Global Innovation & Technology Centre (GITC) and Global Business Services (GBS) hub in Zapopan/Guadalajara."
+    },
+    {
+      "name": "Baxter",
+      "ats": "workday",
+      "tenant": "baxter",
+      "wd": "wd1",
+      "site": "Baxter",
+      "confirmed": true,
+      "industry": "MedTech, Hospital Care, Renal/Infusion Systems & Global IT/GBS",
+      "description": "Global healthcare and medical products company (acute hospital care, IV infusion, connected care) operating a major Global IT, Finance, Supply Chain, and Business Services hub in Guadalajara."
+    },
+    {
+      "name": "Insulet",
+      "ats": "workday",
+      "tenant": "insulet",
+      "wd": "wd5",
+      "site": "insuletcareers",
+      "confirmed": true,
+      "industry": "Wearable MedTech & Automated Insulin Delivery (Omnipod)",
+      "description": "Fast-growing global medical device innovator behind the tubeless Omnipod automated insulin delivery system, scaling a Global Capability Center (GCC) in Guadalajara across IT, data, quality, and operations."
+    },
+    {
+      "name": "Medtronic",
+      "ats": "workday",
+      "tenant": "medtronic",
+      "wd": "wd1",
+      "site": "MedtronicCareers",
+      "confirmed": true,
+      "industry": "Global Medical Device & Healthcare Technology Leader",
+      "description": "World's largest medical device company ($32B+ revenue; cardiovascular, neuroscience, medical-surgical, diabetes) with massive manufacturing, supply-chain, engineering, and shared services operations in Mexico."
+    },
+    {
+      "name": "Abbott",
+      "ats": "workday",
+      "tenant": "abbott",
+      "wd": "wd5",
+      "site": "AbbottCareers",
+      "confirmed": true,
+      "industry": "Healthcare, Diagnostics, Medical Devices & Nutrition",
+      "description": "Fortune 100 diversified global healthcare company spanning FreeStyle Libre continuous glucose monitoring, diagnostics, vascular devices, and nutrition (Pedialyte/Ensure) with commercial and operations teams in Guadalajara."
+    },
+    {
+      "name": "Roche",
+      "ats": "workday",
+      "tenant": "roche",
+      "wd": "wd3",
+      "site": "roche-ext",
+      "confirmed": true,
+      "industry": "Global Pharmaceuticals & In-Vitro Diagnostics",
+      "description": "Swiss global pioneer in personalized healthcare, oncology pharmaceuticals, and molecular/clinical diagnostics, hiring commercial, digital transformation, and operational leaders across Mexico."
+    },
+    {
+      "name": "Pfizer",
+      "ats": "workday",
+      "tenant": "pfizer",
+      "wd": "wd1",
+      "site": "PfizerCareers",
+      "confirmed": true,
+      "industry": "Global Biopharmaceuticals, Vaccines & Oncology",
+      "description": "Fortune 100 global biopharmaceutical leader developing breakthrough medicines and vaccines, with commercial, medical, digital, and enterprise operations across Mexico."
+    },
+    {
+      "name": "Eli Lilly",
+      "ats": "workday",
+      "tenant": "lilly",
+      "wd": "wd115",
+      "site": "LLY",
+      "fallback_sites": [
+        "Lilly"
+      ],
+      "confirmed": true,
+      "industry": "Biopharmaceuticals — Cardiometabolic (GLP-1), Oncology & Immunology",
+      "description": "World's highest-valued pharmaceutical innovator leading global metabolic health, oncology, neuroscience, and immunology, expanding commercial, clinical, and digital operations across Mexico."
+    },
+    {
+      "name": "Sanofi",
+      "ats": "workday",
+      "tenant": "sanofi",
+      "wd": "wd3",
+      "site": "SanofiCareers",
+      "confirmed": true,
+      "industry": "Global Biopharmaceuticals, Immunology & Vaccines",
+      "description": "AI-powered global healthcare and biopharma leader in immunology (Dupixent), vaccines, and specialty care with strong commercial, supply-chain, and digital hubs in Mexico."
+    },
+    {
+      "name": "BD (Becton Dickinson)",
+      "ats": "workday",
+      "tenant": "bdx",
+      "wd": "wd1",
+      "site": "EXTERNAL_CAREER_SITE",
+      "fallback_sites": [
+        "EXTERNAL_CAREER_SITE_MEXICO"
+      ],
+      "confirmed": true,
+      "industry": "Medical Technology, Medication Management & Diagnostic Systems",
+      "description": "Global MedTech leader ($20B+ revenue) manufacturing medication delivery, laboratory diagnostics, and interventional devices with major plants and business services across Mexico."
+    },
+    {
+      "name": "Thermo Fisher Scientific",
+      "ats": "workday",
+      "tenant": "thermofisher",
+      "wd": "wd5",
+      "site": "ThermoFisherCareers",
+      "confirmed": true,
+      "industry": "Life Sciences Analytical Instruments, Biopharma Services & Diagnostics",
+      "description": "World leader in serving science ($42B+ revenue), supplying lab instruments, reagents, clinical research (PPD), and CDMO biopharma manufacturing services across Mexico."
+    },
+    {
+      "name": "Bayer",
+      "ats": "eightfold",
+      "host": "bayer.eightfold.ai",
+      "domain": "bayer.com",
+      "confirmed": true,
+      "industry": "Life Sciences — Pharmaceuticals, Consumer Health & Crop Science",
+      "description": "Global German life-science enterprise spanning prescription pharmaceuticals, consumer self-care brands, and agricultural seeds/crop protection with major Jalisco agriscience and commercial operations."
+    },
+    {
+      "name": "Corteva Agriscience",
+      "ats": "eightfold",
+      "host": "corteva.eightfold.ai",
+      "domain": "corteva.com",
+      "confirmed": true,
+      "industry": "Agricultural Science, Pioneer Seeds, Crop Protection & Digital Ag",
+      "description": "Pure-play global agriculture technology leader (spun out of DowDuPont) operating a major seed research, supply-chain, and commercial hub in Tlajomulco/Guadalajara, Jalisco."
+    },
+    {
+      "name": "Brown-Forman (Casa Herradura)",
+      "ats": "workday",
+      "tenant": "bf",
+      "wd": "wd5",
+      "site": "International",
+      "confirmed": true,
+      "industry": "Global Premium Spirits & Tequila Supply Chain (Casa Herradura)",
+      "description": "Global spirits company (Jack Daniel's, Tequila Herradura, el Jimador) operating historic Casa Herradura distillery in Amatitán, Jalisco alongside corporate commercial and supply-chain offices in Guadalajara."
+    },
+    {
+      "name": "Diageo",
+      "ats": "workday",
+      "tenant": "diageo",
+      "wd": "wd3",
+      "site": "Diageo_Careers",
+      "confirmed": true,
+      "industry": "Global Beverage Alcohol, Premium Tequila & Shared Services",
+      "description": "World's premier spirits producer (Don Julio, Casamigos, Johnnie Walker) with flagship agave/distillation operations in Atotonilco el Alto and corporate supply-chain/commercial hubs in Zapopan, Jalisco."
+    },
+    {
+      "name": "Mondelēz International",
+      "ats": "workday",
+      "tenant": "mdlz",
+      "wd": "wd3",
+      "site": "External",
+      "confirmed": true,
+      "industry": "Global Snacking CPG, Supply Chain & Commercial Operations",
+      "description": "Fortune 500 global snacking powerhouse (Oreo, Ritz, Trident, Clorets, Ricolino) running large-scale manufacturing, logistics, commercial sales, and digital operations across Mexico."
+    },
+    {
+      "name": "Kimberly-Clark",
+      "ats": "workday",
+      "tenant": "kimberlyclark",
+      "wd": "wd1",
+      "site": "GLOBAL",
+      "confirmed": true,
+      "industry": "Consumer Packaged Goods (Personal Care & Hygiene) & GBS",
+      "description": "Global CPG leader in personal care, tissue, and K-C Professional hygiene brands (Huggies, Kleenex, Kotex) scaling supply-chain, commercial, and digital transformation functions in Mexico."
+    },
+    {
+      "name": "Procter & Gamble",
+      "ats": "workday",
+      "tenant": "pg",
+      "wd": "wd5",
+      "site": "PGBPGNGLOBAL",
+      "fallback_sites": [
+        "1000"
+      ],
+      "confirmed": true,
+      "industry": "Global Consumer Packaged Goods (CPG), Supply Chain & Analytics",
+      "description": "World's premier consumer goods marketer and supply-chain operator ($84B+ revenue; Tide, Gillette, Pampers, Pantene) running flagship commercial, analytics, IT, and plant operations across Mexico."
+    },
+    {
+      "name": "Kueski",
+      "ats": "ashby",
+      "board": "kueski",
+      "confirmed": true,
+      "industry": "Fintech — Consumer Digital Lending & Buy Now, Pay Later (BNPL)",
+      "description": "Guadalajara-headquartered Mexican fintech unicorn-scale leader pioneering AI-underwritten Buy-Now-Pay-Later (Kueski Pay) and consumer credit across Mexico's e-commerce and retail ecosystem."
+    },
+    {
+      "name": "Clara",
+      "ats": "greenhouse",
+      "board": "clara",
+      "confirmed": true,
+      "industry": "B2B Fintech — Corporate Spend Management, Cards & Accounts Payable",
+      "description": "Leading Latin American B2B corporate spend management, corporate credit cards, and automated bill-pay SaaS platform serving mid-market and enterprise companies in Mexico, Brazil, and Colombia."
+    },
+    {
+      "name": "Paystand",
+      "ats": "greenhouse",
+      "board": "paystand",
+      "confirmed": true,
+      "industry": "B2B Fintech — Blockchain-Enabled AR/AP & Zero-Fee Commercial Payments",
+      "description": "B2B payments network digitizing enterprise accounts receivable and commercial B2B rails, operating a major engineering, customer success, and commercial hub in Guadalajara."
+    },
+    {
+      "name": "Backbase",
+      "ats": "greenhouse",
+      "board": "workatbackbase",
+      "confirmed": true,
+      "industry": "Fintech Enterprise SaaS — Engagement Banking Platform",
+      "description": "Global Dutch engagement-banking software leader powering digital retail, SME, and wealth banking apps for tier-1 banks worldwide, with a nearshore hub in Guadalajara."
+    },
+    {
+      "name": "Bitso",
+      "ats": "bamboohr",
+      "board": "bitso",
+      "default_country": "Mexico",
+      "confirmed": true,
+      "industry": "Crypto Fintech, Cross-Border B2B Stablecoin Rails & Digital Assets",
+      "description": "Latin America's leading regulated cryptocurrency platform and B2B cross-border payment infrastructure provider (Bitso Business) serving millions of retail users and global institutional clients remotely in Mexico."
+    },
+    {
+      "name": "Mercado Libre",
+      "ats": "eightfold",
+      "host": "mercadolibre.eightfold.ai",
+      "domain": "mercadolibre.com",
+      "confirmed": true,
+      "industry": "E-Commerce Marketplace, Logistics (Mercado Envíos) & Fintech (Mercado Pago)",
+      "description": "Latin America's #1 e-commerce, fulfillment logistics, and fintech ecosystem ($18B+ revenue), operating massive fulfillment centers, continuous improvement teams, and tech hubs across Jalisco and Mexico."
+    },
+    {
+      "name": "Nubank",
+      "ats": "greenhouse",
+      "board": "nubank",
+      "confirmed": true,
+      "industry": "Digital Banking & Consumer Fintech Platform (Nu México)",
+      "description": "One of the world's largest digital banking platforms (100M+ customers across Brazil, Mexico, and Colombia), rapidly scaling Nu México across credit, savings, operations, CX, and technology."
+    },
+    {
+      "name": "Stripe",
+      "ats": "greenhouse",
+      "board": "stripe",
+      "confirmed": true,
+      "industry": "Global Programmable Financial Infrastructure & Online Payments",
+      "description": "Global internet payments, billing, revenue automation, and treasury API infrastructure leader expanding engineering, enterprise sales, partner ecosystems, and operations in Mexico."
+    },
+    {
+      "name": "Citi",
+      "ats": "workday",
+      "tenant": "citi",
+      "wd": "wd5",
+      "site": "2",
+      "confirmed": true,
+      "industry": "Global Institutional Banking, Markets, Treasury & Operations Hubs",
+      "description": "Global tier-1 bank serving multinationals and institutions across 90+ markets, operating major technology, risk, operations, and shared-services hubs in Mexico including Guadalajara."
+    },
+    {
+      "name": "JPMorgan Chase",
+      "ats": "oracle_hcm",
+      "host": "jpmc.fa.oraclecloud.com",
+      "site": "CX_1001",
+      "confirmed": true,
+      "industry": "Global Investment Banking, Commercial Banking, Payments & Tech",
+      "description": "World's largest financial institution by market cap, expanding corporate, commercial banking, payments, risk, and operations capabilities in Mexico."
+    },
+    {
+      "name": "American Express",
+      "ats": "oracle_hcm",
+      "host": "egug.fa.us2.oraclecloud.com",
+      "site": "CX_1001",
+      "fallback_sites": [
+        "CX_1"
+      ],
+      "confirmed": true,
+      "industry": "Global Payments Network, Commercial Cards & Premium Customer Servicing",
+      "description": "Fortune 100 integrated payments, commercial corporate expense, and travel/lifestyle leader renowned for world-class customer experience, account management, and operations in Mexico."
+    },
+    {
+      "name": "Visa",
+      "ats": "smartrecruiters",
+      "board": "Visa",
+      "confirmed": true,
+      "industry": "Global Digital Payments Network, Risk Tech & Value-Added Services",
+      "description": "World leader in digital payment network rails, issuer/merchant solutions, fraud AI, and cross-border money movement (Visa Direct) with growing commercial and tech operations in Mexico."
+    },
+    {
+      "name": "Mastercard",
+      "ats": "workday",
+      "tenant": "mastercard",
+      "wd": "wd1",
+      "site": "CorporateCareers",
+      "confirmed": true,
+      "industry": "Global Payments Technology, Open Banking, Cyber & Data Services",
+      "description": "Global payments network and data/cybersecurity intelligence company (Services & Advisors) partnering with banks, fintechs, and merchants across Mexico and Latin America."
+    },
+    {
+      "name": "PayPal",
+      "ats": "workday",
+      "tenant": "paypal",
+      "wd": "wd1",
+      "site": "jobs",
+      "confirmed": true,
+      "industry": "Global Digital Wallets, Braintree Merchant Checkout & Commerce",
+      "description": "Global two-sided digital payments platform connecting 400M+ consumers and merchants via PayPal and Braintree enterprise processing, with commercial, risk, and operations teams in Mexico."
+    },
+    {
+      "name": "Coinbase",
+      "ats": "greenhouse",
+      "board": "coinbase",
+      "confirmed": true,
+      "industry": "Regulated Digital Asset Exchange, Custody & Onchain Infrastructure",
+      "description": "Largest U.S. publicly traded cryptocurrency exchange, institutional prime brokerage, and Base Layer-2 infrastructure company hiring remote-first talent in Mexico."
+    },
+    {
+      "name": "Rapido Solutions Group",
+      "ats": "greenhouse",
+      "board": "rapidosolutionsgroup",
+      "confirmed": true,
+      "industry": "Nearshore Supply Chain, 3PL Freight Brokerage & Logistics Operations",
+      "description": "Zapopan-headquartered nearshore logistics and supply-chain operations partner building dedicated freight brokerage, carrier sales, customer operations, and back-office teams for U.S. logistics leaders."
+    },
+    {
+      "name": "Arrive Logistics",
+      "ats": "lever",
+      "board": "arrivelogistics",
+      "confirmed": true,
+      "industry": "Tech-Enabled Freight Brokerage & Multimodal North American Logistics",
+      "description": "Multi-billion-dollar North American multimodal freight brokerage combining proprietary TMS technology with cross-border carrier/shipper operations from its Guadalajara hub."
+    },
+    {
+      "name": "Flexport",
+      "ats": "greenhouse",
+      "board": "flexport",
+      "confirmed": true,
+      "industry": "Global FreightTech, Customs, Ocean/Air Forwarding & Supply Chain Cloud",
+      "description": "End-to-end global supply chain and logistics technology platform digitizing ocean/air freight forwarding, customs brokerage, and fulfillment with an operations hub in Guadalajara."
+    },
+    {
+      "name": "Diligent",
+      "ats": "greenhouse",
+      "board": "diligent",
+      "confirmed": true,
+      "industry": "Enterprise GRC SaaS — Board Governance, Risk, Audit & ESG",
+      "description": "Global SaaS leader in Governance, Risk, Compliance (GRC), board management, audit, and ESG software serving 1M+ executives and board members, operating an engineering and operations hub in Guadalajara."
+    },
+    {
+      "name": "ServiceNow",
+      "ats": "smartrecruiters",
+      "board": "ServiceNow",
+      "confirmed": true,
+      "industry": "Enterprise AI Workflow SaaS — ITSM, GBS, HR, CSM & Process Mining",
+      "description": "S&P 500 enterprise cloud workflow platform ($10B+ revenue) automating IT, Employee, Customer, Shared Services (GBS), and in-platform Process Mining across global enterprises in Mexico and LATAM."
+    },
+    {
+      "name": "Salesforce",
+      "ats": "workday",
+      "tenant": "salesforce",
+      "wd": "wd12",
+      "site": "External_Career_Site",
+      "confirmed": true,
+      "industry": "Enterprise CRM Cloud, Autonomous AI Agents (Agentforce), Data & Slack",
+      "description": "World's #1 AI CRM and enterprise cloud software company (Sales Cloud, Service Cloud, MuleSoft, Tableau, Slack) scaling commercial sales, customer success, partner ecosystems, and solution engineering in Mexico."
+    },
+    {
+      "name": "Workday, Inc.",
+      "ats": "workday",
+      "tenant": "workday",
+      "wd": "wd5",
+      "site": "Workday",
+      "confirmed": true,
+      "industry": "Enterprise Cloud SaaS for Human Capital Management (HCM) & Finance",
+      "description": "Fortune 500 enterprise cloud applications leader for Finance, HR, planning, and AI talent management used by over half of the Fortune 500, expanding remote and hub teams in Mexico."
+    },
+    {
+      "name": "Adobe",
+      "ats": "workday",
+      "tenant": "adobe",
+      "wd": "wd5",
+      "site": "external_experienced",
+      "confirmed": true,
+      "industry": "Creative Cloud, Document Cloud & Enterprise Digital Experience SaaS",
+      "description": "Global software leader ($21B+ revenue) across Creative Cloud, Acrobat/Sign digital workflows, and Adobe Experience Cloud enterprise marketing/CX analytics across Mexico and LATAM."
+    },
+    {
+      "name": "Autodesk",
+      "ats": "workday",
+      "tenant": "autodesk",
+      "wd": "wd1",
+      "site": "Ext",
+      "confirmed": true,
+      "industry": "Design, Architecture, Engineering, Construction (AEC) & Manufacturing SaaS",
+      "description": "Global 3D CAD/CAM/BIM cloud software leader (AutoCAD, Revit, Fusion) powering architecture, infrastructure construction, automotive/industrial manufacturing, and media."
+    },
+    {
+      "name": "Zendesk",
+      "ats": "workday",
+      "tenant": "zendesk",
+      "wd": "wd1",
+      "site": "zendesk",
+      "confirmed": true,
+      "industry": "AI-Powered Customer Experience (CX), Ticketing & Employee Service SaaS",
+      "description": "Global B2B SaaS pioneer in AI customer service, omnichannel support ticketing, self-service knowledge bases, and CX operations with a strong engineering, sales, and CS footprint in Mexico."
+    },
+    {
+      "name": "CrowdStrike",
+      "ats": "workday",
+      "tenant": "crowdstrike",
+      "wd": "wd5",
+      "site": "crowdstrikecareers",
+      "confirmed": true,
+      "industry": "AI-Native Cloud Cybersecurity — Endpoint, Identity, SIEM & Cloud Security",
+      "description": "S&P 500 cybersecurity leader behind the AI-native CrowdStrike Falcon platform protecting enterprise endpoints, cloud workloads, and identities across LATAM and global markets."
+    },
+    {
+      "name": "Datadog",
+      "ats": "greenhouse",
+      "board": "datadog",
+      "confirmed": true,
+      "industry": "Cloud Observability, APM, Log Management & Cloud Security SaaS",
+      "description": "High-growth B2B cloud monitoring, application performance observability, and DevSecOps SaaS platform serving cloud-scale engineering organizations across Mexico and LATAM."
+    },
+    {
+      "name": "Okta",
+      "ats": "greenhouse",
+      "board": "okta",
+      "confirmed": true,
+      "industry": "Enterprise Workforce & Customer Identity and Access Management (IAM) SaaS",
+      "description": "Global independent identity security leader (Okta Workforce Identity & Auth0 Customer Identity) securing zero-trust access for thousands of enterprises globally, hiring across Mexico."
+    },
+    {
+      "name": "Zscaler",
+      "ats": "greenhouse",
+      "board": "zscaler",
+      "confirmed": true,
+      "industry": "Cloud Zero-Trust Network Security (SSE / SASE) SaaS",
+      "description": "Global pioneer of the Zero Trust Exchange cloud security platform replacing legacy corporate VPNs/firewalls for Fortune 2000 enterprises, expanding commercial and technical teams in Mexico."
+    },
+    {
+      "name": "Cloudflare",
+      "ats": "greenhouse",
+      "board": "cloudflare",
+      "confirmed": true,
+      "industry": "Global Connectivity Cloud, Edge Network, App Security & Developer Platform",
+      "description": "Global edge network, DDoS/WAF cybersecurity, Zero Trust SASE, and serverless AI developer cloud operating in 330+ cities worldwide with growing Mexico/LATAM GTM and engineering teams."
+    },
+    {
+      "name": "Twilio",
+      "ats": "greenhouse",
+      "board": "twilio",
+      "confirmed": true,
+      "industry": "Cloud Customer Engagement, Programmable Communications (CPaaS) & Data",
+      "description": "Global cloud communications APIs (SMS, WhatsApp, Voice, Email) and Segment customer data platform powering digital customer engagement for enterprises across Mexico and LATAM."
+    },
+    {
+      "name": "GitLab",
+      "ats": "greenhouse",
+      "board": "gitlab",
+      "confirmed": true,
+      "industry": "All-Remote AI-Powered DevSecOps Software Delivery Platform",
+      "description": "World's largest all-remote enterprise software company delivering a unified AI-assisted DevSecOps lifecycle platform from source code to production security, hiring remotely across Mexico."
+    },
+    {
+      "name": "Canonical",
+      "ats": "greenhouse",
+      "board": "canonical",
+      "confirmed": true,
+      "industry": "Open-Source Enterprise Cloud, Linux (Ubuntu), Kubernetes & AI Infrastructure",
+      "description": "Globally distributed creator of Ubuntu Linux, OpenStack, Charmed Kubernetes, and enterprise open-source data/AI infrastructure software, hiring 100% remote engineering, PM, and commercial leaders in Mexico."
+    },
+    {
+      "name": "Pinterest",
+      "ats": "greenhouse",
+      "board": "pinterest",
+      "confirmed": true,
+      "industry": "Visual Discovery Social Platform, AI Recommendations & Digital Ads Tech",
+      "description": "Global visual inspiration and shopping discovery platform (500M+ monthly active users) operating a premier Latin American engineering, data, and business hub in Mexico."
+    },
+    {
+      "name": "Lyft",
+      "ats": "greenhouse",
+      "board": "lyft",
+      "confirmed": true,
+      "industry": "North American Mobility Marketplace, Rideshare & Fleet Operations Tech",
+      "description": "Major North American ridesharing and multimodal transportation marketplace running a major engineering, data, operations, and business services hub in Mexico."
+    },
+    {
+      "name": "HubSpot",
+      "ats": "greenhouse",
+      "board": "hubspotjobs",
+      "confirmed": true,
+      "industry": "AI-Powered CRM, Inbound Marketing, Sales & Customer Success SaaS",
+      "description": "Leading B2B Smart CRM platform unifying marketing, sales engagement, customer service, and RevOps for scaling mid-market and SMB companies across Latin America (remote-first in Mexico)."
+    },
+    {
+      "name": "Deel",
+      "ats": "ashby",
+      "board": "deel",
+      "confirmed": true,
+      "industry": "Global HRIS, Cross-Border Payroll, Compliance & Employer-of-Record SaaS",
+      "description": "Hypergrowth all-remote global HR, international payroll, contractor compliance, and immigration SaaS decacorn serving 35,000+ businesses worldwide across Mexico and LATAM."
+    },
+    {
+      "name": "Zapier",
+      "ats": "ashby",
+      "board": "zapier",
+      "confirmed": true,
+      "industry": "No-Code Workflow Automation, AI Orchestration & SaaS Integration Platform",
+      "description": "100% remote workflow automation and AI agent orchestration pioneer connecting 7,000+ business apps so non-technical and operations teams automate end-to-end business processes."
+    },
+    {
+      "name": "Notion",
+      "ats": "ashby",
+      "board": "notion",
+      "confirmed": true,
+      "industry": "Connected AI Workspace, Enterprise Knowledge Base & Project Management SaaS",
+      "description": "Global collaborative workspace, enterprise wiki, project tracking, and Notion AI productivity platform serving startups through Fortune 500 enterprises."
+    }
   ]
 }

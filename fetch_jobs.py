@@ -45,8 +45,14 @@ from urllib import error, parse, request
 ROOT = Path(__file__).resolve().parent
 UA = "job-radar/1.0 (personal job board)"
 
-DEFAULT_LLM_MODEL = "gemini-3.8-flash"
-FALLBACK_LLM_MODELS = ("gemini-3.8-flash", "gemini-3.8-flash-lite", "gemini-flash-latest")
+DEFAULT_LLM_MODEL = "gemini-4-hydrogen"
+FALLBACK_LLM_MODELS = (
+    "gemini-4-hydrogen",
+    "gemini-3.8-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-flash-latest",
+)
 
 CFG_DEFAULTS = {
     "page_title": "Openings",
@@ -58,6 +64,7 @@ CFG_DEFAULTS = {
     "quiet_spotlight_count": 3,
     "max_email_jobs": 12,
     "llm_model": DEFAULT_LLM_MODEL,
+    "min_match_score": 70,
     "max_tailored_cvs": 3,
     "cv_attachment_format": "docx",
     "include_remote_mexico": True,
@@ -73,24 +80,55 @@ LOC_LABELS = {
     "mx_country": "Mexico · city not listed",
 }
 
+LLM_JOB_MATCH_SYSTEM_PROMPT = """You are Lucy, an uncompromising, candidate-first executive career advisor and headhunter.
+Your mission is to evaluate every job opening surfaced by title/location filters and decide whether it is TRULY a strong, high-interest match for THIS specific candidate—so Lucy's daily report ONLY presents openings that genuinely fit what the candidate wants next in their career and what they have proven on their CV.
+
+Evaluate each job across ALL FOUR dimensions:
+1. CAREER GOAL & DIRECTION ALIGNMENT: Does the role's function, domain, and responsibility match what the candidate is actively looking for in their career (`CANDIDATE CAREER GOAL`)?
+2. CV TRACK RECORD & TRANSFERABLE PROOF: Does the candidate's `MASTER CV` demonstrate credible domain skills, leadership scope, methodologies, languages, and seniority for this opening?
+3. COMPANY & INDUSTRY CONTEXT FIT: Compare the hiring company's `company_industry` and `company_description` against the industries, business models, and scale of the companies on the candidate's CV (`Company Profile` entries). Favor strong domain or operating-model parallels (e.g., global GBS, enterprise cloud/SaaS, pharma/MedTech, B2B cybersecurity/fintech commercial, supply-chain/manufacturing scale, nearshore consulting).
+4. STRICT FALSE-POSITIVE REJECTION: Set `is_good_match: false` (and `match_score` below threshold) whenever a posting only matched a broad title keyword (like 'Director', 'Manager', 'Lead', 'Analyst', 'Consultant', or 'Project Manager') in an UNRELATED discipline—such as pure Accounting/Tax/Controller/Audit, Legal/Counsel, Clinical/Medical practice, Silicon/Hardware/Mechanical/Chemical lab engineering, Creative Marketing Agency production, IT Helpdesk, or Factory-Floor operator/technician supervision—or when the role is a clear seniority step-back or requires specialized licenses the candidate lacks.
+
+Formatting & Safety Rules:
+- Always refer to each employer by its exact `hiring_employer` name; NEVER confuse the employer with its ATS portal (Workday, Greenhouse, Lever, SmartRecruiters, Oracle HCM, Eightfold, Ashby, Workable, BambooHR).
+- Write `match_rationale` directly to the candidate ("You...") in 2-3 crisp, concrete sentences explaining WHY this role and company are a compelling match—citing specific past employers/achievements from their CV, how the company's industry/model connects to their background, and how it advances their career goal.
+- Never use < > [ ] " { } \\ inside string values.
+
+Return ONLY valid JSON matching this exact schema:
+{
+  "assessments": [
+    {
+      "id": 0,
+      "is_good_match": true,
+      "match_score": 88,
+      "is_career_upgrade": true,
+      "match_rationale": "2-3 specific sentences to the candidate explaining why this role and company fit their career goal and CV track record.",
+      "industry_synergy": "1 concise phrase linking the hiring company's industry/business model with the candidate's past employers.",
+      "upgrade_reason": "1 concise sentence explaining why this role is a career step-up in scope/seniority, or empty string if lateral.",
+      "matched_keywords": ["Skill 1", "Skill 2", "Skill 3", "Skill 4"]
+    }
+  ]
+}"""
+
 LLM_SYSTEM_PROMPT = """You are Lucy, an elite executive headhunter, ATS optimization architect, and minimalist resume strategist.
-Compare the candidate's MASTER CV against the TARGET JOB POSTING and produce a CV that satisfies BOTH automated ATS/AI triage engines (top-decile keyword & semantic match) AND human hiring managers (immediate 'schedule for a call' conviction in a 6-second scan).
+Compare the candidate's MASTER CV against the TARGET JOB POSTING (including the target company's industry & business description) and produce a CV that satisfies BOTH automated ATS/AI triage engines (top-decile keyword & semantic match) AND human hiring managers (immediate 'schedule for a call' conviction in a 6-second scan).
 
 Strict Rules:
-1. 100% TRUTHFULNESS: NEVER invent companies, job titles, dates, degrees, certifications, or fake metrics. Only select, prioritize, and re-angle real achievements from the MASTER CV so they truthfully mirror the domain terminology and business priorities of the TARGET JOB POSTING.
+1. 100% TRUTHFULNESS: NEVER invent companies, job titles, dates, degrees, certifications, or fake metrics. Only select, prioritize, and re-angle real achievements and real employer profiles from the MASTER CV so they truthfully mirror the domain terminology and business priorities of the TARGET JOB POSTING.
 2. GENERAL ROLE DIRECTION HEADLIGHT (`target_direction`): Craft a clear overarching career direction headline at the top of the CV that informs the reader of the general type of role and functional leadership domain the candidate is pursuing—aligned with the area of the job being applied to (e.g., "Target Role Direction: Director / Head of Process Intelligence, GBS & Enterprise Operations"), rather than awkwardly parroting an internal requisition code.
 3. ATS & AI TRIAGE OPTIMIZATION: Mirror exact domain terminology, methodologies, platforms, and leadership competencies from the job posting that genuinely exist in the candidate's background. Include both full terms and standard acronyms where natural (e.g., "Global Business Services (GBS)", "Object-Centric Process Mining (OCPM)"). Weave these keywords naturally into `summary` and `experience` bullets (where ATS engines assign highest weight) as well as `core_skills` (8–10 high-signal skills).
 4. HUMAN RECRUITER 'CALL CONVICTION': Keep the CV minimalist, executive, and scannable on 1 page. Structure `summary` as a 3-sentence executive pitch (Domain Identity + Signature Quantified Proof + Value for Target Company). Format every `experience` bullet as `Strong Action Verb + Scope/Context + Quantified Business Outcome` (3-4 bullets for the 2 most relevant/recent roles; 1-2 bullets for earlier roles).
-5. CAREER UPGRADE MOVE (`is_career_upgrade`): Set to true if this role represents a step up in seniority, leadership scope, architectural ownership, or strategic challenge compared to the candidate's current/most recent role on their MASTER CV.
-6. ATS PORTAL AUTO-FILL COMPLIANCE (CRITICAL): Enterprise job portals (Workday, Oracle HCM, Taleo, SuccessFactors, iCIMS) reject CVs whose text contains any of these 8 characters: < > [ ] " { } \\. NEVER use < > [ ] " { } \\ anywhere inside `cv` text fields. Write "under 5-minute" instead of "<5-minute", "over 90%" instead of ">90%", standard parentheses ( ) instead of [ ] or { }, "/" instead of "\\", and plain words without double quotes.
-7. Write in the language of the job posting (default to English if the posting is in English or mixed).
+5. EMPLOYER INDUSTRY & SCALE CONTEXT (`company_context`): For each role in `experience`, include a crisp 1-line `company_context` describing what that employer is, its industry, scale, and business model (grounded in the MASTER CV's Company Profile notes and angled truthfully so recruiters and ATS models immediately recognize the industry/operating-model parallel with the target employer).
+6. CAREER UPGRADE MOVE (`is_career_upgrade`): Set to true if this role represents a step up in seniority, leadership scope, architectural ownership, or strategic challenge compared to the candidate's current/most recent role on their MASTER CV.
+7. ATS PORTAL AUTO-FILL COMPLIANCE (CRITICAL): Enterprise job portals (Workday, Oracle HCM, Taleo, SuccessFactors, iCIMS) reject CVs whose text contains any of these 8 characters: < > [ ] " { } \\. NEVER use < > [ ] " { } \\ anywhere inside `cv` text fields. Write "under 5-minute" instead of "<5-minute", "over 90%" instead of ">90%", standard parentheses ( ) instead of [ ] or { }, "/" instead of "\\", and plain words without double quotes.
+8. Write in the language of the job posting (default to English if the posting is in English or mixed).
 
 Return ONLY valid JSON matching this exact schema:
 {
   "match_score": 92,
   "is_career_upgrade": true,
   "upgrade_reason": "1 concise sentence explaining why this role is a career upgrade move or high-impact stretch challenge relative to their current role.",
-  "lucy_why_it_fits": "2-sentence energizing, high-conviction headhunter note directly to the candidate that gives them a genuine confidence boost—citing their real signature wins and why the hiring manager at this company will immediately want them on a call.",
+  "lucy_why_it_fits": "2-3 energizing, high-conviction sentences directly to the candidate explaining the exact rationale of the match—citing their real signature wins, past employer/industry synergy, and why the hiring manager at this company will immediately want them on a call.",
   "matched_keywords": ["Keyword 1", "Keyword 2", "Keyword 3", "Keyword 4", "Keyword 5", "Keyword 6"],
   "gaps_to_address": ["1 brief tip or keyword to highlight in the interview"],
   "cv": {
@@ -103,6 +141,7 @@ Return ONLY valid JSON matching this exact schema:
     "experience": [
       {
         "company": "Company Name",
+        "company_context": "1-line industry, scale, and business-model description of this employer showing domain relevance.",
         "role": "Job Title",
         "location": "Location",
         "dates": "Start - End",
@@ -203,16 +242,87 @@ def load_companies(root=ROOT):
     return json.loads((Path(root) / "companies.json").read_text(encoding="utf-8"))["companies"]
 
 
+_COMPANY_DIR_CACHE = {}
+
+
+def build_company_directory(companies=None, root=ROOT):
+    """Map normalized company name -> {'name', 'industry', 'description'} for radar employers."""
+    if companies is not None:
+        directory = {}
+        for c in companies:
+            if isinstance(c, dict) and c.get("name"):
+                k = norm(c["name"]).strip()
+                directory[k] = {
+                    "name": c["name"],
+                    "industry": str(c.get("industry") or "").strip(),
+                    "description": str(c.get("description") or "").strip(),
+                }
+        return directory
+
+    cache_key = str(Path(root).resolve())
+    if cache_key in _COMPANY_DIR_CACHE:
+        return _COMPANY_DIR_CACHE[cache_key]
+    directory = {}
+    for base in (Path(root), ROOT):
+        comp_path = base / "companies.json"
+        if comp_path.exists():
+            try:
+                for c in json.loads(comp_path.read_text(encoding="utf-8")).get("companies") or []:
+                    if isinstance(c, dict) and c.get("name"):
+                        k = norm(c["name"]).strip()
+                        directory.setdefault(k, {
+                            "name": c["name"],
+                            "industry": str(c.get("industry") or "").strip(),
+                            "description": str(c.get("description") or "").strip(),
+                        })
+            except (OSError, json.JSONDecodeError):
+                pass
+    _COMPANY_DIR_CACHE[cache_key] = directory
+    return directory
+
+
+def get_company_metadata(company_name, companies=None, root=ROOT):
+    """Return {'industry': str, 'description': str} for a radar company if known."""
+    if not company_name:
+        return {"industry": "", "description": ""}
+    k = norm(company_name).strip()
+    meta = build_company_directory(companies=companies, root=root).get(k)
+    if not meta and companies is not None:
+        meta = build_company_directory(companies=None, root=root).get(k)
+    if meta:
+        return {"industry": meta.get("industry", ""), "description": meta.get("description", "")}
+    return {"industry": "", "description": ""}
+
+
+def enrich_company_metadata(jobs, companies=None, root=ROOT):
+    """Populate `company_industry` and `company_description` on job dicts from companies.json."""
+    for j in jobs or []:
+        if not isinstance(j, dict):
+            continue
+        if j.get("company_industry") and j.get("company_description"):
+            continue
+        meta = get_company_metadata(j.get("company", ""), companies=companies, root=root)
+        if meta["industry"] and not j.get("company_industry"):
+            j["company_industry"] = meta["industry"]
+        if meta["description"] and not j.get("company_description"):
+            j["company_description"] = meta["description"]
+    return jobs
+
+
 def load_subscriber_cv(sub_cfg, root=ROOT):
-    """Load a subscriber's master CV text from `cv_text` or `cv_file`."""
+    """Load a subscriber's master CV text from `cv_text` or `cv_file` (with directory boundary check)."""
     if sub_cfg.get("cv_text"):
         return str(sub_cfg["cv_text"]).strip()
     cv_rel = sub_cfg.get("cv_file")
     if not cv_rel:
         return ""
     for base in (Path(root), ROOT):
-        cand = base / cv_rel
-        if cand.exists():
+        base_real = os.path.realpath(str(base))
+        cand_real = os.path.realpath(os.path.join(base_real, str(cv_rel)))
+        if not cand_real.startswith(base_real + os.sep):
+            continue
+        cand = Path(cand_real)
+        if cand.is_file():
             return cand.read_text(encoding="utf-8").strip()
     return ""
 
@@ -371,6 +481,10 @@ def job(c, jid, title, location, url, posted=None, team="", description="", deta
         "url": url or "",
         "posted_at": to_date(posted),
     }
+    if c.get("industry"):
+        out["company_industry"] = str(c["industry"]).strip()
+    if c.get("description"):
+        out["company_description"] = str(c["description"]).strip()
     if description:
         out["description"] = strip_html(description)[:12000]
     if detail_api:
@@ -818,7 +932,10 @@ def _compile_patterns(patterns, label="regex"):
 
 
 def build_rules(cfg):
-    locs = cfg.get("locations") or cfg.get("jalisco_locations") or []
+    if "locations" in cfg and cfg["locations"] is not None:
+        locs = cfg["locations"]
+    else:
+        locs = cfg.get("jalisco_locations") or []
     jal = "|".join(re.escape(norm(x)) for x in locs if x)
     return {
         "inc": _compile_patterns(cfg.get("title_include") or [], "title_include"),
@@ -1076,7 +1193,10 @@ def _discover_gemini_flash_models(api_key):
             timeout=15,
         )
         found = []
-        skip_tokens = ("tts", "image", "audio", "embedding", "live", "vision", "veo", "imagen")
+        skip_tokens = (
+            "tts", "image", "audio", "embedding", "live", "vision",
+            "veo", "imagen", "banana", "transcribe", "robotics",
+        )
         for item in d.get("models") or []:
             if not isinstance(item, dict):
                 continue
@@ -1085,7 +1205,7 @@ def _discover_gemini_flash_models(api_key):
                 continue
             short = _normalize_gemini_model(item.get("name", ""))
             low = short.lower()
-            if not low.startswith("gemini-") or "flash" not in low:
+            if not low.startswith("gemini-") or ("flash" not in low and "hydrogen" not in low):
                 continue
             if any(tok in low for tok in skip_tokens):
                 continue
@@ -1095,9 +1215,10 @@ def _discover_gemini_flash_models(api_key):
             m = re.search(r"gemini-(\d+)(?:\.(\d+))?", name)
             maj = int(m.group(1)) if m else 0
             min_v = int(m.group(2) or 0) if m else 0
+            is_hydrogen = 1 if "hydrogen" in name else 0
             not_lite = 0 if "lite" in name else 1
             not_preview = 0 if ("preview" in name or "exp" in name) else 1
-            return (maj, min_v, not_lite, not_preview)
+            return (maj, min_v, is_hydrogen, not_lite, not_preview)
 
         found.sort(key=_rank, reverse=True)
         _DISCOVERED_GEMINI_MODELS = found[:4]
@@ -1116,8 +1237,9 @@ def _invoke_gemini_json(
     timeout=60,
     retries=2,
     validator=None,
+    thinking_level="low",
 ):
-    """Call Gemini generateContent across primary + fallback + auto-discovered Flash models."""
+    """Call Gemini generateContent across primary + free-tier fallback + auto-discovered models."""
     api_key = (api_key or os.environ.get("GEMINI_API_KEY") or "").strip()
     if not api_key or api_key in _DEAD_GEMINI_API_KEYS:
         return None
@@ -1142,13 +1264,24 @@ def _invoke_gemini_json(
         if m_name in _DEAD_GEMINI_MODELS:
             continue
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{m_name}:generateContent"
+        is_gemini_4 = m_name.startswith("gemini-4")
+        # Gemini 4 shares maxOutputTokens across thinking + response tokens and deprecates temperature.
+        eff_max_tokens = (
+            max(int(max_output_tokens or 4096), 16384)
+            if is_gemini_4
+            else int(max_output_tokens or 4096)
+        )
         gen_cfg = {
-            "temperature": temperature,
-            "maxOutputTokens": max_output_tokens,
+            "maxOutputTokens": eff_max_tokens,
             "responseMimeType": "application/json",
         }
-        if m_name.startswith("gemini-3"):
-            gen_cfg["thinkingConfig"] = {"thinkingLevel": "low"}
+        if not is_gemini_4 and temperature is not None:
+            gen_cfg["temperature"] = temperature
+        if is_gemini_4 or m_name.startswith("gemini-3"):
+            lvl = str(thinking_level or "low").lower()
+            if is_gemini_4 and lvl == "minimal":
+                lvl = "low"
+            gen_cfg["thinkingConfig"] = {"thinkingLevel": lvl}
         elif m_name.startswith("gemini-2.5"):
             gen_cfg["thinkingConfig"] = {"thinkingBudget": 0}
         payload = {
@@ -1209,11 +1342,57 @@ def call_gemini_json(prompt_text, model=DEFAULT_LLM_MODEL, api_key=None):
         model=model,
         api_key=api_key,
         temperature=0.2,
-        max_output_tokens=4096,
+        max_output_tokens=8192,
         timeout=60,
         retries=1,
         validator=lambda p: isinstance(p, dict) and isinstance(p.get("cv"), dict),
+        thinking_level="low",
     )
+
+
+def call_gemini_job_matches(prompt_text, model=DEFAULT_LLM_MODEL, api_key=None):
+    """Call Gemini generateContent endpoint to evaluate candidate-job matches and rationales."""
+    return _invoke_gemini_json(
+        prompt_text,
+        system_text=LLM_JOB_MATCH_SYSTEM_PROMPT,
+        model=model,
+        api_key=api_key,
+        temperature=0.1,
+        max_output_tokens=8192,
+        timeout=55,
+        retries=1,
+        validator=lambda p: isinstance(p, dict) and isinstance(p.get("assessments"), list),
+        thinking_level="low",
+    )
+
+
+def resolve_min_match_score(sub_cfg=None):
+    """Resolve minimum AI match score (0-100) from env `MIN_MATCH_SCORE` or subscriber/global config."""
+    env_val = (os.environ.get("MIN_MATCH_SCORE") or "").strip()
+    raw = env_val if env_val != "" else (sub_cfg or {}).get("min_match_score", 70)
+    try:
+        val = int(round(float(raw)))
+    except (ValueError, TypeError):
+        val = 70
+    return max(0, min(100, val))
+
+
+def extract_cv_company_profiles(master_cv_text):
+    """Parse `*Company Profile: ...*` employer descriptors from a subscriber's Markdown CV."""
+    profiles = {}
+    cur_co = ""
+    for raw_ln in (master_cv_text or "").splitlines():
+        ln = raw_ln.strip()
+        if ln.startswith("### "):
+            cur_co = re.sub(r"\*+", "", ln[4:].split("|")[0]).strip()
+        elif cur_co and re.match(r"^\*(?!\*)\s*(?:Company Profile:?\s*)?(.+?)\*$", ln, re.I):
+            m = re.match(r"^\*(?!\*)\s*(?:Company Profile:?\s*)?(.+?)\*$", ln, re.I)
+            prof = sanitize_ats_text(m.group(1))
+            if prof and norm(cur_co) not in profiles:
+                profiles[norm(cur_co)] = prof
+        elif ln.startswith("## ") and norm(ln[3:]) != "professional experience":
+            cur_co = ""
+    return profiles
 
 
 DEFAULT_UPGRADE_PATTERNS = [
@@ -1249,6 +1428,258 @@ def _fix_ats_employer_confusion(text, company_name, job_title=""):
         s = re.sub(rf"\b(at|for|join|joining|into|apply to|applying to)\s+{plat}\b", rf"\1 {co}", s, flags=re.I)
         s = re.sub(rf"\b{plat}(?:'s|’s)\b", f"{co}'s", s, flags=re.I)
     return s
+
+
+def build_deterministic_match_assessment(job_item, master_cv_text, sub_cfg):
+    """Build a grounded candidate-job match rationale from CV skills, past employer profiles,
+    career goal, and radar company metadata when Gemini API is unconfigured or unreachable."""
+    co = job_item.get("company") or "this employer"
+    title = job_item.get("title") or "this opening"
+    loc = job_item.get("location") or "Mexico"
+    co_ind = (job_item.get("company_industry") or "").strip()
+    co_desc = (job_item.get("company_description") or "").strip()
+    job_blob = norm(f"{title} {co} {job_item.get('team', '')} {co_ind} {co_desc} {job_item.get('description', '')}")
+
+    raw_skills = []
+    past_cos = []
+    in_comp = False
+    in_exp = False
+    for raw_ln in (master_cv_text or "").splitlines():
+        ln = raw_ln.strip()
+        if ln.startswith("## "):
+            sec = ln[3:].strip().upper()
+            in_comp = sec == "CORE COMPETENCIES"
+            in_exp = sec == "PROFESSIONAL EXPERIENCE"
+            continue
+        if in_comp and (ln.startswith("- ") or ln.startswith("* ")):
+            cleaned_ln = re.sub(r"\*\*[^*]+\*\*:?\s*", "", ln[2:])
+            for part in re.split(r"[,;]", cleaned_ln):
+                s = part.strip(" .")
+                if 2 < len(s) <= 52:
+                    raw_skills.append(s)
+        elif in_exp and ln.startswith("### "):
+            c_name = re.sub(r"\*+", "", ln[4:].split("|")[0]).strip()
+            if c_name and c_name not in past_cos:
+                past_cos.append(c_name)
+
+    matched_kw = [
+        s for s in dict.fromkeys(raw_skills)
+        if any(w in job_blob for w in norm(s).split() if len(w) > 3)
+    ][:5]
+    if not matched_kw:
+        matched_kw = list(dict.fromkeys(raw_skills))[:3] or ["Operations", "Leadership", "Execution"]
+
+    is_up, up_reason = is_career_upgrade_heuristic(job_item, sub_cfg)
+    score = min(95, 80 + 3 * len(matched_kw) + (2 if is_up else 0))
+
+    co_clause = f" ({co_ind})" if co_ind else ""
+    past_clause = f" across {', '.join(past_cos[:2])}" if past_cos else ""
+    rationale = (
+        f"Your proven track record{past_clause} in {', '.join(matched_kw[:3])} maps directly to "
+        f"{co}{co_clause} for the {title} opening in {loc}."
+    )
+    synergy = (
+        f"{co} operates in {co_ind}, aligning with your enterprise background{past_clause}."
+        if co_ind
+        else ""
+    )
+    return {
+        "is_good_match": True,
+        "match_score": score,
+        "is_career_upgrade": is_up,
+        "upgrade_reason": up_reason,
+        "match_rationale": rationale,
+        "industry_synergy": synergy,
+        "matched_keywords": matched_kw,
+        "match_source": "deterministic",
+        "match_model": "deterministic-fallback",
+    }
+
+
+def assess_candidate_job_matches(jobs, sub_cfg, root=ROOT, companies=None, jd_cache=None):
+    """Evaluate filtered job openings against the candidate's career goals, CV experience (including
+    past-employer profiles), and radar company descriptions using Gemini AI.
+
+    Returns `(kept_jobs, rejected_jobs)`:
+    - Only openings that Gemini validates as genuine matches (`is_good_match=True` and
+      `match_score >= min_match_score`) remain in `kept_jobs`, each enriched with
+      `j['match_assessment']` explaining the rationale of the match.
+    - Non-matching openings are returned in `rejected_jobs` so they are omitted from Lucy's report
+      and recorded in `state/seen.json` (`rejected_matches`) to avoid daily re-evaluation.
+    - If `GEMINI_API_KEY` is unset or Gemini is unreachable, falls back cleanly to deterministic
+      match rationales without dropping valid regex-matched openings."""
+    if not jobs:
+        return [], []
+
+    enrich_company_metadata(jobs, companies=companies, root=root)
+    master_cv = load_subscriber_cv(sub_cfg, root=root)
+    min_score = resolve_min_match_score(sub_cfg)
+
+    for j in jobs:
+        det = build_deterministic_match_assessment(j, master_cv, sub_cfg)
+        if "is_career_upgrade" not in j:
+            j["is_career_upgrade"] = det["is_career_upgrade"]
+        if det["upgrade_reason"] and not j.get("upgrade_reason"):
+            j["upgrade_reason"] = det["upgrade_reason"]
+        j.setdefault("match_assessment", det)
+
+    api_key = (os.environ.get("GEMINI_API_KEY") or "").strip()
+    if not api_key or not master_cv or api_key in _DEAD_GEMINI_API_KEYS:
+        return list(jobs), []
+
+    # Pre-fetch full job descriptions concurrently (reusing `jd_cache` across subscribers)
+    jd_cache = jd_cache if isinstance(jd_cache, dict) else {}
+
+    def _hydrate_jd(j_item):
+        k = j_item.get("key") or ""
+        if k and k in jd_cache and not j_item.get("description"):
+            j_item["description"] = jd_cache[k]
+            return j_item["description"]
+        desc = enrich_job_description(j_item)
+        if k and desc:
+            jd_cache[k] = desc
+        return desc
+
+    if len(jobs) > 1:
+        with ThreadPoolExecutor(max_workers=min(8, len(jobs))) as ex:
+            list(ex.map(_hydrate_jd, jobs))
+    else:
+        _hydrate_jd(jobs[0])
+
+    career_goal = (sub_cfg.get("career_goal") or "").strip()
+    goal_block = (
+        f"CANDIDATE CAREER GOAL & WHAT THEY ARE LOOKING FOR:\n{career_goal}\n\n"
+        if career_goal
+        else "CANDIDATE CAREER GOAL & WHAT THEY ARE LOOKING FOR:\n High-impact roles matching the seniority, domain strengths, and trajectory shown in their MASTER CV.\n\n"
+    )
+    model = (
+        (os.environ.get("GEMINI_MATCH_MODEL") or os.environ.get("GEMINI_MODEL") or "").strip()
+        or sub_cfg.get("match_llm_model")
+        or sub_cfg.get("llm_model", DEFAULT_LLM_MODEL)
+    )
+
+    kept_jobs = []
+    rejected_jobs = []
+    batch_size = 12
+    for start in range(0, len(jobs), batch_size):
+        chunk = jobs[start:start + batch_size]
+        job_blocks = []
+        for idx, j in enumerate(chunk):
+            co_name = j.get("company", "")
+            co_ind = j.get("company_industry") or "General Enterprise"
+            co_desc = j.get("company_description") or f"{co_name} employer portal."
+            jd_excerpt = (j.get("description") or "").strip()[:1100]
+            if not jd_excerpt:
+                jd_excerpt = "(Full job description not exposed in feed; evaluate using title, team, company industry/profile, and location.)"
+            job_blocks.append(
+                f"[JOB id={idx}]\n"
+                f"Title: {j.get('title', '')}\n"
+                f"Hiring Employer: {co_name}\n"
+                f"Company Industry: {co_ind}\n"
+                f"Company Profile: {co_desc}\n"
+                f"Team / Department: {j.get('team', '') or 'Not specified'}\n"
+                f"Location: {j.get('location', '')}\n"
+                f"Job Description Excerpt: {jd_excerpt}"
+            )
+
+        prompt = (
+            f"MINIMUM MATCH SCORE THRESHOLD FOR INCLUSION: {min_score} (out of 100).\n"
+            f"Assess every job `[JOB id=0..{len(chunk) - 1}]` below against the candidate's career goal, "
+            f"their MASTER CV (including the Company Profile context of their past employers), and each "
+            f"radar company's industry & description. Set `is_good_match: false` if a job is not a strong, "
+            f"genuine match for this candidate.\n\n"
+            f"{goal_block}"
+            f"---\nCANDIDATE MASTER CV (WITH ENHANCED PAST-COMPANY PROFILES):\n{master_cv[:6500]}\n\n"
+            f"---\nCANDIDATE JOB OPENINGS TO EVALUATE ({len(chunk)}):\n\n"
+            + "\n\n".join(job_blocks)
+        )
+
+        try:
+            parsed = call_gemini_job_matches(prompt, model=model, api_key=api_key)
+        except Exception as e:
+            gha_annotate(
+                "warning",
+                f"Gemini job-match screening fallback for {sub_cfg.get('name', sub_cfg.get('id', 'subscriber'))} "
+                f"({type(e).__name__}: {e}) — keeping deterministic matches.",
+            )
+            parsed = None
+
+        if not parsed or not isinstance(parsed.get("assessments"), list):
+            kept_jobs.extend(chunk)
+            continue
+
+        used_model = str(parsed.get("_llm_model") or _normalize_gemini_model(model) or DEFAULT_LLM_MODEL)
+        by_id = {}
+        for item in parsed.get("assessments") or []:
+            if not isinstance(item, dict):
+                continue
+            raw_id = item.get("id")
+            if not isinstance(raw_id, bool) and isinstance(raw_id, (int, str)) and str(raw_id).strip().isdigit():
+                idx_val = int(str(raw_id).strip())
+                if 0 <= idx_val < len(chunk):
+                    by_id[idx_val] = item
+
+        if not by_id:
+            kept_jobs.extend(chunk)
+            continue
+
+        for idx, j in enumerate(chunk):
+            item = by_id.get(idx)
+            if item is None:
+                kept_jobs.append(j)
+                continue
+            co_name = j.get("company", "")
+            job_title = j.get("title", "")
+            try:
+                score_val = max(0, min(100, int(round(float(item.get("match_score", 0))))))
+            except (ValueError, TypeError):
+                score_val = 0
+            raw_good = item.get("is_good_match")
+            is_good = (bool(raw_good) if raw_good is not None else (score_val >= min_score)) and (score_val >= min_score)
+
+            rationale = _fix_ats_employer_confusion(
+                _clean_briefing_text(item.get("match_rationale") or "", limit=700),
+                co_name,
+                job_title,
+            ) or j["match_assessment"].get("match_rationale", "")
+            synergy = _fix_ats_employer_confusion(
+                _clean_briefing_text(item.get("industry_synergy") or "", limit=280),
+                co_name,
+                job_title,
+            )
+            up_flag = bool(item.get("is_career_upgrade", j.get("is_career_upgrade")))
+            up_reason = _fix_ats_employer_confusion(
+                _clean_briefing_text(item.get("upgrade_reason") or "", limit=260),
+                co_name,
+                job_title,
+            ) or (j.get("upgrade_reason") or "")
+            kws = [
+                sanitize_ats_text(k)
+                for k in (item.get("matched_keywords") or [])
+                if sanitize_ats_text(k)
+            ][:6] or j["match_assessment"].get("matched_keywords", [])
+
+            j["is_career_upgrade"] = up_flag
+            if up_reason:
+                j["upgrade_reason"] = up_reason
+            j["_upgrades_classified"] = True
+            j["match_assessment"] = {
+                "is_good_match": is_good,
+                "match_score": score_val,
+                "is_career_upgrade": up_flag,
+                "upgrade_reason": up_reason,
+                "match_rationale": rationale,
+                "industry_synergy": synergy,
+                "matched_keywords": kws,
+                "match_source": "gemini",
+                "match_model": used_model,
+            }
+            if is_good:
+                kept_jobs.append(j)
+            else:
+                rejected_jobs.append(j)
+
+    return kept_jobs, rejected_jobs
 
 
 def classify_career_upgrades(jobs, sub_cfg, root=ROOT):
@@ -1376,8 +1807,8 @@ def sanitize_ats_text(text):
 
 def sanitize_cv_data_for_ats(cv_data):
     """Return a deep-sanitized copy of `cv_data` guaranteed to contain zero ATS-illegal
-    characters (< > [ ] " { } \\) across all header, summary, skill, experience,
-    education, and language fields."""
+    characters (< > [ ] " { } \\) across all header, summary, skill, experience (including
+    `company_context`), education, and language fields."""
     if not isinstance(cv_data, dict):
         return {}
     td = sanitize_ats_text(cv_data.get("target_direction") or "")
@@ -1388,13 +1819,17 @@ def sanitize_cv_data_for_ats(cv_data):
         if not isinstance(exp, dict):
             continue
         bullets = [sanitize_ats_text(b) for b in (exp.get("bullets") or [])]
-        clean_exp.append({
+        entry = {
             "company": sanitize_ats_text(exp.get("company") or ""),
             "role": sanitize_ats_text(exp.get("role") or ""),
             "location": sanitize_ats_text(exp.get("location") or ""),
             "dates": sanitize_ats_text(exp.get("dates") or ""),
             "bullets": [b for b in bullets if b],
-        })
+        }
+        comp_ctx = sanitize_ats_text(exp.get("company_context") or "")
+        if comp_ctx:
+            entry["company_context"] = comp_ctx
+        clean_exp.append(entry)
 
     clean_edu = []
     for edu in cv_data.get("education") or []:
@@ -1486,6 +1921,7 @@ def infer_target_direction(job_item, sub_cfg=None, core_skills=None):
 def tailor_cv_deterministic(job_item, master_cv_text, sub_cfg):
     """Build an ATS- and recruiter-optimized CV directly from the subscriber's master CV
     Markdown when Gemini API is unavailable, rate-limited, or unconfigured."""
+    enrich_company_metadata([job_item])
     lines = [ln.strip() for ln in (master_cv_text or "").splitlines()]
     full_name = sub_cfg.get("name", "Candidate")
     contact_line = sub_cfg.get("recipient_email", "")
@@ -1508,7 +1944,11 @@ def tailor_cv_deterministic(job_item, master_cv_text, sub_cfg):
     summary = " ".join(x for x in sections.get("PROFESSIONAL SUMMARY", []) if x)
     job_title = job_item.get("title", "Target Role")
     company = job_item.get("company", "Company")
-    job_blob = norm(f"{job_title} {company} {job_item.get('team', '')} {job_item.get('description', '')}")
+    co_ind = job_item.get("company_industry", "")
+    co_desc = job_item.get("company_description", "")
+    job_blob = norm(
+        f"{job_title} {company} {job_item.get('team', '')} {co_ind} {co_desc} {job_item.get('description', '')}"
+    )
 
     # Extract skills from CORE COMPETENCIES
     raw_skills = []
@@ -1519,12 +1959,12 @@ def tailor_cv_deterministic(job_item, master_cv_text, sub_cfg):
                 s = part.strip(" .")
                 if 2 < len(s) <= 52:
                     raw_skills.append(s)
-    # Sort skills so those matching the target job appear first for ATS keyword density
+    # Sort skills so those matching the target job & industry appear first for ATS keyword density
     raw_skills.sort(key=lambda s: (0 if any(w in job_blob for w in norm(s).split() if len(w) > 3) else 1))
     core_skills = list(dict.fromkeys(raw_skills))[:10] or ["Executive Leadership", "Operations", "Strategy"]
     matched_kw = [s for s in core_skills if any(w in job_blob for w in norm(s).split() if len(w) > 3)][:6] or core_skills[:4]
 
-    # Parse PROFESSIONAL EXPERIENCE blocks (### Company | Location + **Role** | Dates + bullets)
+    # Parse PROFESSIONAL EXPERIENCE blocks (### Company | Location + *Company Profile: ...* + **Role** | Dates + bullets)
     experience = []
     cur_exp = None
     for ln in sections.get("PROFESSIONAL EXPERIENCE", []):
@@ -1532,18 +1972,23 @@ def tailor_cv_deterministic(job_item, master_cv_text, sub_cfg):
             parts = [p.strip() for p in ln[4:].split("|")]
             cur_exp = {
                 "company": re.sub(r"\*+", "", parts[0]),
+                "company_context": "",
                 "location": parts[1] if len(parts) > 1 else "",
                 "role": "",
                 "dates": "",
                 "bullets": [],
             }
             experience.append(cur_exp)
+        elif cur_exp is not None and re.match(r"^\*(?!\*)\s*(?:Company Profile:?\s*)?(.+?)\*$", ln, re.I):
+            m_prof = re.match(r"^\*(?!\*)\s*(?:Company Profile:?\s*)?(.+?)\*$", ln, re.I)
+            cur_exp["company_context"] = m_prof.group(1).strip()
         elif cur_exp is not None and ln.startswith("**") and ("|" in ln or "–" in ln or "-" in ln):
             parts = [p.strip() for p in ln.split("|")]
             role_txt = re.sub(r"\*+", "", parts[0]).strip()
             if cur_exp["role"] and cur_exp["bullets"]:
                 cur_exp = {
                     "company": cur_exp["company"],
+                    "company_context": "",
                     "location": cur_exp["location"],
                     "role": role_txt,
                     "dates": parts[1] if len(parts) > 1 else "",
@@ -1586,8 +2031,12 @@ def tailor_cv_deterministic(job_item, master_cv_text, sub_cfg):
                         languages.append(seg.strip())
 
     target_direction = infer_target_direction(job_item, sub_cfg, core_skills)
-    score = min(96, 84 + 2 * len(matched_kw))
+    pre_match = job_item.get("match_assessment") or {}
+    score = int(pre_match["match_score"]) if isinstance(pre_match.get("match_score"), (int, float)) else min(96, 84 + 2 * len(matched_kw))
     is_up, up_reason = is_career_upgrade_heuristic(job_item, sub_cfg)
+    if "is_career_upgrade" in pre_match:
+        is_up = bool(pre_match["is_career_upgrade"])
+        up_reason = pre_match.get("upgrade_reason") or up_reason
     cv_payload = sanitize_cv_data_for_ats({
         "full_name": full_name,
         "target_direction": target_direction,
@@ -1599,17 +2048,19 @@ def tailor_cv_deterministic(job_item, master_cv_text, sub_cfg):
         "education": education[:3],
         "languages": languages[:4],
     })
+    ind_note = f" ({co_ind})" if co_ind else ""
+    why_txt = pre_match.get("match_rationale") or (
+        f"Your background in {', '.join(matched_kw[:3])} aligns directly with {company}{ind_note}'s "
+        f"{job_title} opening in {job_item.get('location') or 'Mexico'}."
+    )
     return {
         "tailor_source": "deterministic",
         "tailor_model": "deterministic-fallback",
         "match_score": score,
         "is_career_upgrade": is_up,
         "upgrade_reason": up_reason,
-        "lucy_why_it_fits": (
-            f"Your background in {', '.join(matched_kw[:3])} aligns directly with {company}'s "
-            f"{job_title} opening in {job_item.get('location') or 'Mexico'}."
-        ),
-        "matched_keywords": matched_kw,
+        "lucy_why_it_fits": why_txt,
+        "matched_keywords": pre_match.get("matched_keywords") or matched_kw,
         "gaps_to_address": [f"Emphasize measurable impact relevant to {company}'s {job_title} scope."],
         "cv": cv_payload,
     }
@@ -1621,37 +2072,62 @@ def tailor_cv_with_llm(job_item, master_cv_text, sub_cfg):
     if not api_key or not master_cv_text:
         return None
 
+    enrich_company_metadata([job_item])
+    co_name = job_item.get("company", "")
+    job_title = job_item.get("title", "")
+    co_ind = (job_item.get("company_industry") or "").strip()
+    co_desc = (job_item.get("company_description") or "").strip()
+
     jd_text = enrich_job_description(job_item)
     if not jd_text:
         jd_text = (
-            f"Role Title: {job_item.get('title', '')}\n"
-            f"Company: {job_item.get('company', '')}\n"
+            f"Role Title: {job_title}\n"
+            f"Company: {co_name}\n"
+            f"Company Industry: {co_ind or 'Enterprise'}\n"
+            f"Company Profile: {co_desc or co_name}\n"
             f"Department/Team: {job_item.get('team', 'General')}\n"
             f"Location: {job_item.get('location', '')}\n"
-            "(Full description text not exposed in feed; tailor CV to role title, company industry, and level.)"
+            "(Full description text not exposed in feed; tailor CV to role title, company industry/profile, and level.)"
         )
 
     career_goal = (sub_cfg.get("career_goal") or "").strip()
     goal_section = (
-        f"CANDIDATE CAREER GOAL & DIRECTION (align `target_direction`, `summary`, `core_skills`, and bullet emphasis truthfully toward this trajectory):\n{career_goal}\n\n---\n"
+        f"CANDIDATE CAREER GOAL & DIRECTION (align `target_direction`, `summary`, `core_skills`, `company_context`, and bullet emphasis truthfully toward this trajectory):\n{career_goal}\n\n---\n"
         if career_goal
         else ""
     )
-    co_name = job_item.get("company", "")
-    job_title = job_item.get("title", "")
+    pre_match = job_item.get("match_assessment") or {}
+    pre_match_section = ""
+    if pre_match.get("match_rationale"):
+        pre_match_section = (
+            f"VALIDATED MATCH RATIONALE (reinforce this fit in `lucy_why_it_fits` and CV framing):\n"
+            f"{pre_match['match_rationale']}\n"
+            + (f"Industry Synergy: {pre_match['industry_synergy']}\n" if pre_match.get("industry_synergy") else "")
+            + "\n---\n"
+        )
+
+    co_profile_lines = ""
+    if co_ind:
+        co_profile_lines += f"Company Industry: {co_ind}\n"
+    if co_desc:
+        co_profile_lines += f"Company Profile & Business Context: {co_desc}\n"
+
     prompt = (
         f"TARGET JOB POSTING:\n"
         f"Title: {job_title}\n"
         f"Hiring Employer (Company Name): {co_name}\n"
+        f"{co_profile_lines}"
         f"(IMPORTANT: The hiring employer is '{co_name}'. Never confuse '{co_name}' with its recruiting portal/ATS system such as Workday, Greenhouse, Lever, SmartRecruiters, Oracle HCM, or Eightfold.)\n"
         f"Location: {job_item.get('location', '')}\n"
         f"Team: {job_item.get('team', '')}\n"
         f"Job Description:\n{jd_text}\n\n"
         f"---\n"
         f"{goal_section}"
-        f"CANDIDATE MASTER CV:\n{master_cv_text}"
+        f"{pre_match_section}"
+        f"CANDIDATE MASTER CV (WITH ENHANCED COMPANY PROFILES):\n{master_cv_text}"
     )
     model = (os.environ.get("GEMINI_MODEL") or "").strip() or sub_cfg.get("llm_model", DEFAULT_LLM_MODEL)
+    cv_company_profiles = extract_cv_company_profiles(master_cv_text)
     try:
         raw_res = call_gemini_json(prompt, model=model, api_key=api_key)
         if raw_res and isinstance(raw_res.get("cv"), dict):
@@ -1661,10 +2137,25 @@ def tailor_cv_with_llm(job_item, master_cv_text, sub_cfg):
             res["tailor_model"] = used_model
             if res.get("lucy_why_it_fits"):
                 res["lucy_why_it_fits"] = _fix_ats_employer_confusion(res["lucy_why_it_fits"], co_name, job_title)
+            elif pre_match.get("match_rationale"):
+                res["lucy_why_it_fits"] = pre_match["match_rationale"]
             if res.get("upgrade_reason"):
                 res["upgrade_reason"] = _fix_ats_employer_confusion(res["upgrade_reason"], co_name, job_title)
             if res["cv"].get("summary"):
                 res["cv"]["summary"] = _fix_ats_employer_confusion(res["cv"]["summary"], co_name, job_title)
+            seen_exp_cos = set()
+            for exp_item in res["cv"].get("experience") or []:
+                if not isinstance(exp_item, dict):
+                    continue
+                c_key = norm(exp_item.get("company") or "").strip()
+                if exp_item.get("company_context"):
+                    exp_item["company_context"] = _fix_ats_employer_confusion(
+                        exp_item["company_context"], co_name, job_title
+                    )
+                elif c_key and c_key not in seen_exp_cos and c_key in cv_company_profiles:
+                    exp_item["company_context"] = cv_company_profiles[c_key]
+                if c_key:
+                    seen_exp_cos.add(c_key)
             cv_obj = sanitize_cv_data_for_ats(res["cv"])
             if not cv_obj.get("target_direction"):
                 cv_obj["target_direction"] = infer_target_direction(
@@ -1784,12 +2275,13 @@ def render_minimalist_cv_docx(cv_data, job_item=None):
             skill_runs.append(run_xml(sk, sz=19, bold=True, color="18181B"))
         paragraphs.append(p_xml(skill_runs, before=0, after=90, line=250))
 
-    # 7. Professional Experience (Reverse-Chronological, CAR/XYZ Impact Bullets)
+    # 7. Professional Experience (Reverse-Chronological, Employer Context + CAR/XYZ Impact Bullets)
     if experiences:
         paragraphs.append(section_header_xml("PROFESSIONAL EXPERIENCE"))
         for exp in experiences:
             role_str = exp.get("role") or ""
             comp_str = exp.get("company") or ""
+            comp_ctx = exp.get("company_context") or ""
             loc_str = exp.get("location") or ""
             dates_str = exp.get("dates") or ""
             head_runs = [run_xml(role_str, sz=21, bold=True, color="09090B")]
@@ -1800,7 +2292,13 @@ def render_minimalist_cv_docx(cv_data, job_item=None):
                 head_runs.append(run_xml(f"  ·  {loc_str}", sz=19, color="52525B"))
             if dates_str:
                 head_runs.append(run_xml(f"    |    {dates_str}", sz=19, italic=True, color="52525B"))
-            paragraphs.append(p_xml(head_runs, before=85, after=30, line=240, keep_next=True))
+            paragraphs.append(
+                p_xml(head_runs, before=85, after=15 if comp_ctx else 30, line=240, keep_next=True)
+            )
+            if comp_ctx:
+                paragraphs.append(
+                    p_xml([run_xml(comp_ctx, sz=17, italic=True, color="52525B")], before=0, after=30, line=235, keep_next=True)
+                )
 
             for b in exp.get("bullets") or []:
                 if not b:
@@ -1996,6 +2494,8 @@ def render_minimalist_cv_pdf(cv_data, job_item=None):
             if exp.get("dates"):
                 hdr += f" | {exp.get('dates')}"
             add_wrapped(hdr, width=92, font="F2", size=9.5, leading=13)
+            if exp.get("company_context"):
+                add_wrapped(exp["company_context"], width=95, font="F1", size=8.4, leading=11.5, x=48)
             for b in exp.get("bullets") or []:
                 if b:
                     add_wrapped(b, width=92, font="F1", size=9.0, leading=12, x=56, prefix="- ")
@@ -2063,12 +2563,18 @@ def render_minimalist_cv_html(cv_data, job_item=None):
     for exp in cv_data.get("experience") or []:
         bullets = "".join(f"<li>{esc(b)}</li>" for b in (exp.get("bullets") or []) if b)
         loc_part = f" &middot; {esc(exp.get('location', ''))}" if exp.get("location") else ""
+        ctx_part = (
+            f"<div class='company-ctx'>{esc(exp.get('company_context', ''))}</div>"
+            if exp.get("company_context")
+            else ""
+        )
         exp_blocks.append(f"""
         <div class="job">
           <div class="job-head">
             <div><span class="role">{esc(exp.get('role', ''))}</span> &mdash; <span class="company">{esc(exp.get('company', ''))}</span>{loc_part}</div>
             <div class="dates">{esc(exp.get('dates', ''))}</div>
           </div>
+          {ctx_part}
           <ul>{bullets}</ul>
         </div>""")
 
@@ -2169,6 +2675,7 @@ def render_minimalist_cv_html(cv_data, job_item=None):
   .job-head {{ display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 2px; }}
   .role {{ font-weight: 700; font-size: 10pt; color: #09090b; }}
   .company {{ font-weight: 600; color: #0f766e; }}
+  .company-ctx {{ font-size: 8.8pt; font-style: italic; color: #52525b; margin: 1px 0 3px; line-height: 1.35; }}
   .dates {{ font-size: 8.8pt; color: #71717a; white-space: nowrap; }}
   ul {{ margin: 3px 0 0 16px; padding: 0; }}
   li {{ margin-bottom: 3px; font-size: 9.5pt; color: #27272a; }}
@@ -2211,7 +2718,7 @@ def cv_attachment_filename(sub_name, job_item, ext="docx"):
     """Build a clean, filesystem-safe filename for a tailored CV attachment."""
     raw = f"CV_{sub_name}_{job_item.get('company', '')}_{job_item.get('title', '')}"
     clean = re.sub(r"[^a-zA-Z0-9]+", "_", norm(raw)).strip("_")
-    ext_clean = str(ext or "docx").lstrip(".")
+    ext_clean = re.sub(r"[^a-zA-Z0-9]+", "", str(ext or "docx").lstrip(".")) or "docx"
     return f"{clean[:60]}.{ext_clean}"
 
 
@@ -2219,6 +2726,7 @@ def cv_attachment_filename(sub_name, job_item, ext="docx"):
 # output & daily email notifications
 # --------------------------------------------------------------------------
 
+# TODO(security): Configure strict nonce-based CSP and X-Frame-Options HTTP headers at the CDN/GitHub Pages proxy layer; static HTML file uses strict DOM textContent/createElement rendering only.
 PAGE = r"""<!doctype html>
 <html lang="en">
 <head>
@@ -2233,7 +2741,10 @@ PAGE = r"""<!doctype html>
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 main{max-width:860px;margin:0 auto;padding:20px 16px 48px}
 h1{font-size:1.35rem;margin:0 0 2px}
-.sub{color:var(--mute);font-size:.875rem;margin:0 0 16px}
+.headbar{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.sub{color:var(--mute);font-size:.875rem;margin:0}
+.joinbtn{display:inline-block;padding:7px 13px;border-radius:999px;border:1px solid var(--accent);color:var(--accent);text-decoration:none;font-size:.8125rem;font-weight:600;white-space:nowrap}
+.joinbtn:hover{background:var(--accent);color:var(--card)}
 .controls{display:grid;gap:8px;grid-template-columns:1fr;margin-bottom:12px}
 @media (min-width:640px){.controls{grid-template-columns:2fr 1fr}}
 input[type=search],select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font:inherit}
@@ -2244,18 +2755,25 @@ input[type=search],select{width:100%;padding:10px 12px;border:1px solid var(--li
 .job:hover,.job:focus-visible{border-color:var(--accent);outline:none}
 .t{font-weight:600}
 .m{color:var(--mute);font-size:.875rem;margin-top:2px}
+.cd{color:var(--mute);font-size:.8125rem;margin-top:4px;line-height:1.4}
 .badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .b{font-size:.75rem;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--mute)}
+.b.ind{color:var(--accent);border-color:var(--accent)}
 .b.new{background:var(--newbg);color:var(--new);border-color:transparent;font-weight:600}
 .empty{color:var(--mute);padding:32px 0;text-align:center}
 </style>
 </head>
 <body>
 <main>
+<div class="headbar">
+<div>
 <h1>__TITLE__</h1>
 <p class="sub">Updated __UPDATED__</p>
+</div>
+<a class="joinbtn" href="onboard.html">&#10022; Join Radar / Onboard &rarr;</a>
+</div>
 <div class="controls">
-<input id="q" type="search" placeholder="Search title, company, team" aria-label="Search">
+<input id="q" type="search" placeholder="Search title, company, industry, team" aria-label="Search">
 <select id="co" aria-label="Company"><option value="">All companies</option></select>
 </div>
 <div class="toggles">
@@ -2288,7 +2806,7 @@ function render() {
     (!co.value || j.company === co.value) &&
     (!$("onlyNew").checked || j.is_new) &&
     (!$("onlyJal").checked || j.loc_class === "jalisco") &&
-    (!q || (j.title + " " + j.company + " " + j.team + " " + j.location).toLowerCase().includes(q)));
+    (!q || (j.title + " " + j.company + " " + j.team + " " + j.location + " " + (j.company_industry || "") + " " + (j.company_description || "")).toLowerCase().includes(q)));
   $("count").textContent = rows.length + " of " + DATA.length + " roles";
   const list = $("list");
   list.replaceChildren();
@@ -2309,10 +2827,17 @@ function render() {
       s.className = "b" + (cls ? " " + cls : ""); s.textContent = txt; b.appendChild(s);
     };
     if (j.is_new) add("NEW", "new");
+    if (j.company_industry) add(j.company_industry, "ind");
     add(LOC[j.loc_class] || j.loc_class);
     add((j.posted_at ? "Posted " : "First seen ") + when(daysAgo(j.posted_at || j.first_seen)));
     if (j.stale) add("last refresh failed");
-    a.append(t, m, b);
+    if (j.company_description) {
+      const cd = document.createElement("div");
+      cd.className = "cd"; cd.textContent = j.company_description;
+      a.append(t, m, cd, b);
+    } else {
+      a.append(t, m, b);
+    }
     list.appendChild(a);
   });
 }
@@ -2379,6 +2904,45 @@ def ensure_emailed_state(sub_state):
     return emailed
 
 
+def ensure_rejected_state(sub_state):
+    """Return the subscriber's `rejected_matches` ledger (key -> {date, sig, score}) storing
+    openings vetoed by Gemini's candidate-job match gate so they are never re-evaluated daily."""
+    if not isinstance(sub_state, dict):
+        return {}
+    rejected = sub_state.get("rejected_matches")
+    if not isinstance(rejected, dict):
+        rejected = {}
+        sub_state["rejected_matches"] = rejected
+    return rejected
+
+
+def record_rejected_jobs(sub_state, jobs_rejected, today, retention_days=120):
+    """Persist AI-vetoed non-matching openings (key + signature) so subsequent daily runs skip them
+    without burning Gemini API quota; prune entries after `retention_days`."""
+    if not isinstance(sub_state, dict):
+        return
+    rejected = ensure_rejected_state(sub_state)
+    for j in jobs_rejected or []:
+        if j.get("key"):
+            an = j.get("match_assessment") or {}
+            rejected[j["key"]] = {
+                "date": today.isoformat(),
+                "sig": job_signature(j),
+                "score": an.get("match_score", 0),
+            }
+    known = sub_state.get("jobs") if isinstance(sub_state.get("jobs"), dict) else {}
+    for k in list(rejected):
+        rec = rejected.get(k)
+        if not isinstance(rec, dict):
+            del rejected[k]
+            continue
+        if k in known:
+            continue
+        rej_on = _safe_iso_date(rec.get("date"), today)
+        if (today - rej_on).days > retention_days:
+            del rejected[k]
+
+
 def record_emailed_jobs(sub_state, jobs_sent, today, retention_days=120):
     """Mark delivered roles (key + signature) so they are never emailed to this subscriber again;
     prune ledger entries for roles that disappeared from the radar longer than `retention_days` ago."""
@@ -2402,10 +2966,10 @@ def record_emailed_jobs(sub_state, jobs_sent, today, retention_days=120):
 
 
 def select_jobs_for_email(jobs, baseline, cfg, sub_state=None):
-    """Choose which roles go into a subscriber's email: ONLY active roles that have never been
-    emailed to them (by key or by company+title signature). Newly discovered roles come first;
-    roles that were discovered earlier but never shown (e.g. beyond `max_email_jobs`) carry over
-    until delivered. `email_mode: all` (manual --email-all runs) re-sends every active match."""
+    """Choose which roles go into a subscriber's email candidate pool: ONLY active roles that have
+    never been emailed OR vetoed by AI match review (by key or by company+title signature). Newly
+    discovered roles come first; overflow roles beyond `max_email_jobs` carry over until delivered.
+    `email_mode: all` (manual --email-all runs) re-evaluates and sends every active match."""
     mode = cfg.get("email_mode", "new_or_discovered")
     active = [j for j in jobs if not j.get("stale")]
     if mode == "all":
@@ -2414,17 +2978,35 @@ def select_jobs_for_email(jobs, baseline, cfg, sub_state=None):
         return []
     emailed = (sub_state or {}).get("emailed")
     emailed = emailed if isinstance(emailed, dict) else {}
-    sent_sigs = {v.get("sig") for v in emailed.values() if isinstance(v, dict) and v.get("sig")}
-    never_sent = [j for j in active if j.get("key") not in emailed and job_signature(j) not in sent_sigs]
+    rejected = (sub_state or {}).get("rejected_matches")
+    rejected = rejected if isinstance(rejected, dict) else {}
+    skip_sigs = {
+        v.get("sig")
+        for ledger in (emailed, rejected)
+        for v in ledger.values()
+        if isinstance(v, dict) and v.get("sig")
+    }
+    never_sent = [
+        j for j in active
+        if j.get("key") not in emailed
+        and j.get("key") not in rejected
+        and job_signature(j) not in skip_sigs
+    ]
     if mode == "discovered_only" and not baseline:
         never_sent = [j for j in never_sent if j.get("discovered_now")]
     return never_sent
 
 
+def _job_match_score(j):
+    an = j.get("llm_analysis") or j.get("match_assessment") or {}
+    sc = an.get("match_score")
+    return int(sc) if isinstance(sc, (int, float)) else 0
+
+
 def cap_email_jobs(jobs, cfg, today):
     """Keep the email digestible: at most `max_email_jobs` roles (brand-new first, then Career
-    Upgrade Moves, hot postings, recency). Returns (shown, overflow_count); overflow roles carry
-    over to the next briefing automatically because they are not recorded as emailed."""
+    Upgrade Moves, highest AI match score, hot postings, recency). Returns (shown, overflow_count);
+    overflow roles carry over to the next briefing automatically because they are not recorded as emailed."""
     limit = int(cfg.get("max_email_jobs", 12) or 0)
     if limit <= 0 or len(jobs) <= limit:
         return list(jobs), 0
@@ -2432,7 +3014,8 @@ def cap_email_jobs(jobs, cfg, today):
         jobs,
         key=lambda j: (
             not bool(j.get("discovered_now")),
-            not is_career_upgrade_heuristic(j, cfg)[0],
+            not bool(j.get("is_career_upgrade") or is_career_upgrade_heuristic(j, cfg)[0]),
+            -_job_match_score(j),
             not job_age_info(j, today)[1],
             job_age_info(j, today)[0],
             j.get("company", "").lower(),
@@ -2443,8 +3026,14 @@ def cap_email_jobs(jobs, cfg, today):
 
 def select_quiet_spotlight(jobs, cfg, sub_state=None):
     """Legacy quiet-day behaviour (`quiet_day_mode: spotlight`): rotate through up to
-    `quiet_spotlight_count` active matches not spotlighted in recent quiet runs."""
-    active = [j for j in jobs if not j.get("stale")]
+    `quiet_spotlight_count` active matches not spotlighted in recent quiet runs and never AI-rejected."""
+    rejected = (sub_state or {}).get("rejected_matches")
+    rejected = rejected if isinstance(rejected, dict) else {}
+    rej_sigs = {v.get("sig") for v in rejected.values() if isinstance(v, dict) and v.get("sig")}
+    active = [
+        j for j in jobs
+        if not j.get("stale") and j.get("key") not in rejected and job_signature(j) not in rej_sigs
+    ]
     if not active:
         return []
     rel = (sub_state or {}).get("relationship") or {}
@@ -2641,7 +3230,7 @@ def ats_intel_for(job_item):
 def compose_partner_briefing_prompt(
     sub_cfg, top_job, rel_ctx, today, beat, cadence, cv_snapshot,
     upgrade_count, hot_count, total_count, cvs_today_count, is_quiet_spotlight, language="English",
-    quiet_day=False, active_count=None,
+    quiet_day=False, active_count=None, ai_rejected_count=0,
 ):
     """Assemble the fully grounded 'Us vs. Their Machine' briefing prompt for Gemini."""
     first_name = ((sub_cfg or {}).get("name") or "Candidate").split()[0]
@@ -2650,7 +3239,11 @@ def compose_partner_briefing_prompt(
     arc_title, arc_guidance = partnership_arc_for(edition)
     cadence_title, cadence_subline = cadence
     beat_title, beat_insight = beat
+    if top_job:
+        enrich_company_metadata([top_job])
     top_co = (top_job or {}).get("company") or "a top employer"
+    top_co_ind = ((top_job or {}).get("company_industry") or "").strip()
+    top_co_desc = ((top_job or {}).get("company_description") or "").strip()
     top_title = (top_job or {}).get("title") or "a step-up role"
     top_loc = (top_job or {}).get("location") or "Jalisco / Remote Mexico"
     ats_name, ats_intel = ats_intel_for(top_job)
@@ -2673,7 +3266,7 @@ def compose_partner_briefing_prompt(
     elif is_quiet_spotlight:
         mode_note = "Quiet-market momentum spotlight: zero brand-new postings dropped overnight, so you hand-picked their top unclaimed Career Upgrade Moves still live on the board to keep daily momentum unbroken."
     else:
-        mode_note = "Fresh market drop: never-seen openings matched overnight (every role listed today is new to the candidate; we never repeat a role)."
+        mode_note = "Fresh market drop: never-seen openings matched overnight (every role listed today is AI-validated for true career & CV fit and new to the candidate; we never repeat a role)."
     cv_line = (
         f"{cvs_today_count} tailored Word CV(s) attached, each rebuilt by our Gemini AI from the real master CV plus the specific posting"
         if cvs_today_count
@@ -2685,14 +3278,23 @@ def compose_partner_briefing_prompt(
             f"Their screening tools in general: {GENERIC_ATS_INTEL}.\n"
         )
     else:
+        co_ctx_line = ""
+        if top_co_ind or top_co_desc:
+            co_ctx_line = f"Spotlight employer industry & profile: {top_co_ind + ' — ' if top_co_ind else ''}{top_co_desc}\n"
         spotlight_block = (
             f"Spotlight hiring employer: '{top_co}' | Spotlight role: '{top_title}' | Location: {top_loc}\n"
+            f"{co_ctx_line}"
             f"Their screening tool for this role: {ats_name}. How it reads a CV: {ats_intel}.\n"
             + (f"Attached CV built for the spotlight role: {cv_file}\n" if cv_file else "")
         )
     active_line = (
         f"Roles already delivered in earlier briefings that remain open on the board: {active_count}\n"
         if isinstance(active_count, int) and active_count >= 0
+        else ""
+    )
+    rejected_line = (
+        f"Off-target openings automatically suppressed by our AI Match Gate overnight: {ai_rejected_count}\n"
+        if isinstance(ai_rejected_count, int) and ai_rejected_count > 0
         else ""
     )
     return (
@@ -2713,6 +3315,7 @@ def compose_partner_briefing_prompt(
         f"Employer career portals swept: {b_cnt} across 9 ATS platforms (Workday, Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Oracle Recruiting Cloud, Eightfold, BambooHR)\n"
         f"Run context: {mode_note}\n"
         f"Today's briefing: {total_count} role(s) new to the candidate, {upgrade_count} Career Upgrade Move(s), {hot_count} hot opening(s) posted within 48 hours, {cv_line}\n"
+        f"{rejected_line}"
         f"{active_line}"
         f"{spotlight_block}"
         + "\n=== STORY SO FAR (continuity memory: reference lightly, never scold) ===\n"
@@ -3064,7 +3667,7 @@ def call_gemini_daily_motivation(prompt_text, model=DEFAULT_LLM_MODEL, api_key=N
 def generate_daily_briefing_pack(
     sub_cfg, top_job, upgrade_count, hot_count, total_count, today,
     rel_ctx=None, cvs_today_count=0, is_quiet_spotlight=False, root=ROOT,
-    quiet_day=False, active_count=None,
+    quiet_day=False, active_count=None, ai_rejected_count=0,
 ):
     """Generate today's unique 'Us vs. Their Machine' partner briefing for the subscriber.
 
@@ -3163,7 +3766,7 @@ def generate_daily_briefing_pack(
         prompt = compose_partner_briefing_prompt(
             sub_cfg, top_job, rel_ctx, today, (beat_title, beat_insight), (cadence_title, cadence_subline),
             cv_snapshot, upgrade_count, hot_count, total_count, cvs_today_count, is_quiet_spotlight, language=language,
-            quiet_day=quiet_day, active_count=active_count,
+            quiet_day=quiet_day, active_count=active_count, ai_rejected_count=ai_rejected_count,
         )
         try:
             res = call_gemini_daily_motivation(
@@ -3237,6 +3840,7 @@ def generate_daily_insider_note(sub_cfg, top_job, upgrade_count, hot_count, tota
 def _render_job_card_html(j, today):
     """Render an email-safe, ultra-clean executive job card (using presentation tables so
     alignment stays razor-sharp in Gmail Web, iOS, Android, Apple Mail, and Outlook)."""
+    enrich_company_metadata([j])
     days, is_hot, age_label = job_age_info(j, today)
     loc_tag = html.escape(LOC_LABELS.get(j.get("loc_class"), j.get("loc_class", "")))
     title_esc = html.escape(j.get("title", "Untitled Role"))
@@ -3247,14 +3851,36 @@ def _render_job_card_html(j, today):
     age_esc = html.escape(age_label)
 
     analysis = j.get("llm_analysis") or {}
-    is_upgrade = bool(j.get("is_career_upgrade") or analysis.get("is_career_upgrade"))
-    upgrade_reason = (j.get("upgrade_reason") or analysis.get("upgrade_reason") or "").strip()
+    match_meta = j.get("match_assessment") or {}
+    is_upgrade = bool(
+        j.get("is_career_upgrade")
+        or analysis.get("is_career_upgrade")
+        or match_meta.get("is_career_upgrade")
+    )
+    upgrade_reason = (
+        j.get("upgrade_reason")
+        or analysis.get("upgrade_reason")
+        or match_meta.get("upgrade_reason")
+        or ""
+    ).strip()
 
     meta_parts = [f"<strong style='color:#18181b;'>{company_esc}</strong>", loc_esc]
     if team_esc:
         meta_parts.append(team_esc)
     meta_parts.append(age_esc)
     meta_html = " &nbsp;&middot;&nbsp; ".join(meta_parts)
+
+    co_ind = (j.get("company_industry") or "").strip()
+    co_desc = (j.get("company_description") or "").strip()
+    company_profile_html = ""
+    if co_ind or co_desc:
+        ind_span = f"<span style='font-weight:700;color:#0f766e;'>{html.escape(co_ind)}</span>" if co_ind else ""
+        desc_span = html.escape(co_desc) if co_desc else ""
+        sep = " &mdash; " if (ind_span and desc_span) else ""
+        company_profile_html = (
+            f"<div style='font-size:11.8px;color:#52525b;margin-top:4px;line-height:1.42;'>"
+            f"&#127970; {ind_span}{sep}{desc_span}</div>"
+        )
 
     badges = []
     if is_upgrade:
@@ -3278,6 +3904,8 @@ def _render_job_card_html(j, today):
         )
 
     score = analysis.get("match_score")
+    if not isinstance(score, (int, float)):
+        score = match_meta.get("match_score")
     score_int = int(score) if isinstance(score, (int, float)) else None
     if score_int is not None:
         badges.append(
@@ -3294,42 +3922,63 @@ def _render_job_card_html(j, today):
     )
 
     llm_box_html = ""
-    if analysis:
-        why_esc = html.escape(analysis.get("lucy_why_it_fits", ""))
-        cv_obj = analysis.get("cv") or {}
-        dir_txt = cv_obj.get("target_direction") or infer_target_direction(
-            j, None, cv_obj.get("core_skills") or []
+    if analysis or match_meta:
+        why_raw = (analysis.get("lucy_why_it_fits") or match_meta.get("match_rationale") or "").strip()
+        why_esc = html.escape(why_raw)
+        synergy_raw = (match_meta.get("industry_synergy") or "").strip()
+        synergy_html = (
+            f"<div style='font-size:11.5px;color:#52525b;margin-top:4px;font-style:italic;'>"
+            f"&#128279; Industry &amp; Company Fit: {html.escape(synergy_raw)}</div>"
+            if synergy_raw
+            else ""
         )
-        dir_esc = html.escape(dir_txt)
+        kws = (analysis.get("matched_keywords") or match_meta.get("matched_keywords") or [])[:6]
         kw_pills = "".join(
             f"<span style='display:inline-block;background-color:#ffffff;border:1px solid #e4e4e7;"
             f"color:#3f3f46;font-size:10.5px;padding:1px 6px;border-radius:4px;margin:2px 4px 2px 0;'>"
             f"{html.escape(k)}</span>"
-            for k in (analysis.get("matched_keywords") or [])[:6]
+            for k in kws
         )
-        att_name = html.escape(j.get("cv_filename", "Tailored_CV.docx"))
-        bar_pct = max(50, min(100, score_int or 90))
+        bar_pct = max(50, min(100, score_int or 88))
         meter_html = (
             f"<div style='background-color:#e4e4e7;height:4px;border-radius:999px;overflow:hidden;margin:5px 0 8px;'>"
             f"<div style='background-color:#10b981;width:{bar_pct}%;height:4px;border-radius:999px;'></div>"
             f"</div>"
         )
-        dir_line = (
-            f"<div style='font-size:11.5px;color:#0f766e;font-weight:700;margin-bottom:4px;'>"
-            f"{dir_esc}</div>"
-            if dir_esc else ""
-        )
         kw_line = f"<div style='margin-top:6px;'>{kw_pills}</div>" if kw_pills else ""
-        llm_box_html = f"""
+
+        if analysis and (j.get("cv_filename") or analysis.get("cv")):
+            cv_obj = analysis.get("cv") or {}
+            dir_txt = cv_obj.get("target_direction") or infer_target_direction(
+                j, None, cv_obj.get("core_skills") or []
+            )
+            dir_esc = html.escape(dir_txt)
+            dir_line = (
+                f"<div style='font-size:11.5px;color:#0f766e;font-weight:700;margin-bottom:4px;'>"
+                f"{dir_esc}</div>"
+                if dir_esc else ""
+            )
+            att_name = html.escape(j.get("cv_filename", "Tailored_CV.docx"))
+            llm_box_html = f"""
       <div style="background-color:#fafafa;border:1px solid #e4e4e7;border-left:3px solid #10b981;border-radius:6px;padding:10px 13px;margin-top:10px;font-size:12.5px;line-height:1.5;color:#27272a;">
         <div style="font-size:11.5px;font-weight:700;color:#09090b;letter-spacing:0.1px;">&#10024; Lucy&rsquo;s Headhunter Take &amp; Tailored CV</div>
         {meter_html}
         {dir_line}
         <div style="color:#27272a;">{why_esc}</div>
+        {synergy_html}
         {kw_line}
         <div style="margin-top:8px;padding-top:6px;border-top:1px solid #e4e4e7;font-size:11.5px;color:#0f766e;font-weight:700;">
           &#128206; ATS-Armed &amp; Attached: <code style="background-color:#ffffff;border:1px solid #e4e4e7;color:#09090b;padding:1px 6px;border-radius:4px;font-size:11px;">{att_name}</code>
         </div>
+      </div>"""
+        elif why_esc:
+            llm_box_html = f"""
+      <div style="background-color:#fafafa;border:1px solid #e4e4e7;border-left:3px solid #0f766e;border-radius:6px;padding:10px 13px;margin-top:10px;font-size:12.5px;line-height:1.5;color:#27272a;">
+        <div style="font-size:11.5px;font-weight:700;color:#09090b;letter-spacing:0.1px;">&#127919; Why This Role &amp; Company Match Your Profile</div>
+        {meter_html}
+        <div style="color:#27272a;">{why_esc}</div>
+        {synergy_html}
+        {kw_line}
       </div>"""
 
     card_style = (
@@ -3356,6 +4005,7 @@ def _render_job_card_html(j, today):
             <div style="font-size:12.5px;color:#71717a;margin-top:3px;line-height:1.4;">
               {meta_html}
             </div>
+            {company_profile_html}
           </td>
           <td valign="top" align="right" width="96" style="white-space:nowrap;">
             <a href="{url_esc}" style="{btn_style}">Apply &rarr;</a>
@@ -3370,12 +4020,12 @@ def _render_job_card_html(j, today):
 def build_email_message(
     jobs_to_send, all_jobs_count, sub_cfg, today, sender_email,
     attachments=None, sub_state=None, root=ROOT, board_count=109, return_meta=False,
-    quiet_day=False, overflow_count=0, board_html=None,
+    quiet_day=False, overflow_count=0, board_html=None, ai_rejected_count=0,
 ):
     """Construct an editorial-grade, minimalist executive daily briefing with a guaranteed-unique
     daily GenAI 'Us vs. Their Machine' partner manifesto, personal relationship streak with Lucy,
-    and 60-second completion challenge. Only roles never sent before are listed; on a quiet day
-    (`quiet_day=True`) no roles are listed and nothing is re-sent."""
+    and 60-second completion challenge. Only AI-validated matches never sent before are listed; on
+    a quiet day (`quiet_day=True`) no roles are listed and nothing is re-sent."""
     recipient = sub_cfg.get("recipient_email", "lucasschollmatter@gmail.com")
     sub_name = sub_cfg.get("name") or recipient
     sub_id = sub_cfg.get("id") or (sub_name or "subscriber").lower()
@@ -3385,17 +4035,35 @@ def build_email_message(
     quiet_day = bool(quiet_day) or (not jobs_to_send)
     resend_all = sub_cfg.get("email_mode") == "all"
 
+    enrich_company_metadata(jobs_to_send, root=root)
+    master_cv_for_cards = load_subscriber_cv(sub_cfg, root=root) if jobs_to_send else ""
+    for j in jobs_to_send:
+        if "match_assessment" not in j and "llm_analysis" not in j:
+            j["match_assessment"] = build_deterministic_match_assessment(j, master_cv_for_cards, sub_cfg)
+
     # Ensure every job has career-upgrade classification
     classify_career_upgrades(jobs_to_send, sub_cfg, root=root)
 
-    # Sort: Career Upgrade Moves first, then HOT (0-2d), then newest, then company
+    # Sort: Career Upgrade Moves first, then highest match score, HOT (0-2d), newest, company
     enriched = []
     for j in jobs_to_send:
         days, is_hot, age_label = job_age_info(j, today)
-        is_up = bool(j.get("is_career_upgrade") or (j.get("llm_analysis") or {}).get("is_career_upgrade"))
+        is_up = bool(
+            j.get("is_career_upgrade")
+            or (j.get("llm_analysis") or {}).get("is_career_upgrade")
+            or (j.get("match_assessment") or {}).get("is_career_upgrade")
+        )
         j["is_career_upgrade"] = is_up
         enriched.append((not is_up, not is_hot, days, j, is_hot, age_label, is_up))
-    enriched.sort(key=lambda item: (item[0], item[1], item[2], item[3].get("company", "").lower()))
+    enriched.sort(
+        key=lambda item: (
+            item[0],
+            -_job_match_score(item[3]),
+            item[1],
+            item[2],
+            item[3].get("company", "").lower(),
+        )
+    )
 
     upgrade_jobs = [item[3] for item in enriched if item[6]]
     hot_jobs = [item[3] for item in enriched if item[4]]
@@ -3412,6 +4080,7 @@ def build_email_message(
         rel_ctx=rel_ctx, cvs_today_count=len(attachments),
         is_quiet_spotlight=is_quiet_spotlight, root=root,
         quiet_day=quiet_day, active_count=int(all_jobs_count or 0),
+        ai_rejected_count=ai_rejected_count,
     )
     insider_headline = pack["headline"]
     insider_message = pack["message"]
@@ -3452,12 +4121,12 @@ def build_email_message(
     msg["To"] = recipient
     msg["Reply-To"] = sender_email
 
-    scope_bits = ["Jalisco"]
+    scope_bits = ["Jalisco"] if sub_cfg.get("locations") != [] else []
     if sub_cfg.get("include_remote_mexico", True):
         scope_bits.append("Remote Mexico")
     if sub_cfg.get("include_country_only", True):
         scope_bits.append("Mexico (city not listed)")
-    radar_scope = " + ".join(scope_bits)
+    radar_scope = " + ".join(scope_bits) or "Mexico"
     board_name = f"Lucy_Board_{sub_id}_{date_str}.html"
     overflow_note = (
         f"+{overflow_count} more never-sent role(s) are waiting on your personal board (attached: {board_name}); "
@@ -3472,7 +4141,7 @@ def build_email_message(
         else ""
     )
     radar_footer = (
-        f"Your radar: {board_count} employer portals · {radar_scope} · only roles never sent to you before appear here. "
+        f"Your radar: {board_count} employer portals · {radar_scope} · AI-validated career & CV fit · only roles never sent to you before appear here. "
         "Reply to this email to pause, change cities or add target roles."
     )
 
@@ -3511,16 +4180,32 @@ def build_email_message(
         prefix = (" ".join(tags) + " ") if tags else ""
         txt_lines.append(f"- {prefix}{j['title']} at {j['company']}")
         txt_lines.append(f"  {j.get('location') or loc_tag} · {age_label} · {j.get('url')}")
+        co_ind = (j.get("company_industry") or "").strip()
+        co_desc = (j.get("company_description") or "").strip()
+        if co_ind or co_desc:
+            ind_lbl = f" ({co_ind})" if co_ind else ""
+            txt_lines.append(f"  Company{ind_lbl}: {co_desc or j['company']}")
         if is_up and j.get("upgrade_reason"):
             txt_lines.append(f"  Upgrade: {j['upgrade_reason']}")
-        if j.get("llm_analysis"):
-            an = j["llm_analysis"]
+        an = j.get("llm_analysis") or {}
+        ma = j.get("match_assessment") or {}
+        if an:
             cv_obj = an.get("cv") or {}
             if cv_obj.get("target_direction"):
                 txt_lines.append(f"  {cv_obj['target_direction']}")
-            txt_lines.append(f"  Fit ({an.get('match_score', '?')}% Match): {an.get('lucy_why_it_fits', '')}")
+            fit_txt = an.get("lucy_why_it_fits") or ma.get("match_rationale") or ""
+            sc_txt = an.get("match_score", ma.get("match_score", "?"))
+            txt_lines.append(f"  Fit ({sc_txt}% Match): {fit_txt}")
+            if ma.get("industry_synergy"):
+                txt_lines.append(f"  Industry Fit: {ma['industry_synergy']}")
             if j.get("cv_filename"):
                 txt_lines.append(f"  Attached CV: {j['cv_filename']}")
+        elif ma:
+            sc_txt = ma.get("match_score", "?")
+            if ma.get("match_rationale"):
+                txt_lines.append(f"  Fit ({sc_txt}% Match): {ma['match_rationale']}")
+            if ma.get("industry_synergy"):
+                txt_lines.append(f"  Industry Fit: {ma['industry_synergy']}")
         txt_lines.append("")
     if overflow_note:
         txt_lines.extend([overflow_note, ""])
@@ -3760,6 +4445,8 @@ def _format_cv_markdown_preview(cv_data):
         lines.append("")
     for exp in cv_data.get("experience") or []:
         lines.append(f"**{exp.get('role', '')}** — *{exp.get('company', '')}* ({exp.get('dates', '')})")
+        if exp.get("company_context"):
+            lines.append(f"*{exp.get('company_context')}*")
         for b in exp.get("bullets") or []:
             if b:
                 lines.append(f"- {b}")
@@ -3775,7 +4462,7 @@ def prepare_tailored_cvs(jobs_to_send, sub_cfg, today, root=ROOT):
     repository), attaches the ATS-ready `.docx` (or configured `cv_attachment_format`) to the
     email so it previews natively in Gmail, and appends a preview to the GitHub Actions summary."""
     sub_name = sub_cfg.get("name") or sub_cfg.get("id", "Candidate")
-    sub_id = sub_cfg.get("id", "default")
+    sub_id = re.sub(r"[^a-zA-Z0-9_-]+", "_", str(sub_cfg.get("id", "default"))).strip("_") or "default"
     api_key = (os.environ.get("GEMINI_API_KEY") or "").strip()
     max_cvs = int(sub_cfg.get("max_tailored_cvs", 3))
     att_fmt = str(sub_cfg.get("cv_attachment_format") or "docx").lower().lstrip(".")
@@ -3792,11 +4479,12 @@ def prepare_tailored_cvs(jobs_to_send, sub_cfg, today, root=ROOT):
 
     classify_career_upgrades(jobs_to_send, sub_cfg, root=root)
 
-    # Prioritize Career Upgrade Moves first, then HOT (0-2d) roles
+    # Prioritize Career Upgrade Moves first, then highest AI match score, then HOT (0-2d) roles
     ranked = sorted(
         jobs_to_send,
         key=lambda j: (
             not bool(j.get("is_career_upgrade")),
+            -_job_match_score(j),
             not job_age_info(j, today)[1],
             job_age_info(j, today)[0],
             j.get("company", "").lower(),
@@ -3905,7 +4593,7 @@ def prepare_tailored_cvs(jobs_to_send, sub_cfg, today, root=ROOT):
 def send_email_digest(
     jobs_to_send, all_jobs_count, sub_cfg, today, root=ROOT,
     attachments=None, sub_state=None, board_count=109, ai_stats=None,
-    quiet_day=False, overflow_count=0, board_html=None,
+    quiet_day=False, overflow_count=0, board_html=None, ai_rejected_count=0,
 ):
     """Send a single subscriber's daily digest via Gmail/SMTP if credentials are configured.
     With `quiet_day=True` a role-free briefing is sent (nothing is ever re-sent)."""
@@ -3937,6 +4625,7 @@ def send_email_digest(
         attachments=attachments, sub_state=sub_state, root=root,
         board_count=board_count, return_meta=True,
         quiet_day=quiet_day, overflow_count=overflow_count, board_html=board_html,
+        ai_rejected_count=ai_rejected_count,
     )
     in_test = "unittest" in sys.modules
     last_smtp_err = None
@@ -3981,6 +4670,9 @@ def send_email_digest(
             an = j.get("llm_analysis") or {}
             if an.get("tailor_source") == "gemini" and an.get("tailor_model"):
                 ai_stats.setdefault("models_used", set()).add(an["tailor_model"])
+            ma = j.get("match_assessment") or {}
+            if ma.get("match_source") == "gemini" and ma.get("match_model"):
+                ai_stats.setdefault("models_used", set()).add(ma["match_model"])
     cv_detail = (
         f"{len(attachments)} tailored CVs [{ai_cvs} Gemini AI, {fb_cvs} fallback]"
         if attachments
@@ -3997,10 +4689,12 @@ def send_email_digest(
 
 
 def process_subscribers(
-    fetched, state, cfg, today, send_email=True, only_id=None, root=ROOT, board_count=109, ai_stats=None
+    fetched, state, cfg, today, send_email=True, only_id=None, root=ROOT,
+    board_count=109, ai_stats=None, companies=None,
 ):
-    """Filter fetched jobs for each active subscriber, update their personal seen
-    state in state['subscribers'][sub_id], and send each subscriber's email.
+    """Filter fetched jobs for each active subscriber, validate candidate-job fit via Gemini AI,
+    update their personal seen/emailed/rejected state in state['subscribers'][sub_id], and send
+    each subscriber's email containing ONLY strong, verified matches with clear rationales.
 
     Returns the list of subscriber ids whose email delivery raised. For those
     subscribers the per-subscriber state is rolled back to what it was before
@@ -4012,20 +4706,23 @@ def process_subscribers(
     sub_states = state["subscribers"]
     retention = int(cfg["state_retention_days"])
     failed_ids = []
+    jd_cache = {}
 
     if send_email and not (os.environ.get("GEMINI_API_KEY") or "").strip():
         gha_annotate(
             "warning",
-            "GEMINI_API_KEY is not set in environment/secrets — LLM tailored CVs were skipped. "
+            "GEMINI_API_KEY is not set in environment/secrets — LLM match validation & tailored CVs used deterministic fallback. "
             "Add GEMINI_API_KEY in GitHub Settings > Secrets and variables > Actions.",
         )
 
     for sub_cfg in subscribers:
         sub_id = sub_cfg["id"]
+        sub_label = sub_cfg.get("name") or sub_id
         previous_state = copy.deepcopy(sub_states.get(sub_id))
         try:
             sub_rules = build_rules(sub_cfg)
             sub_matched = list({j["key"]: copy.deepcopy(j) for j in select(fetched, sub_rules, sub_cfg)}.values())
+            enrich_company_metadata(sub_matched, companies=companies, root=root)
 
             sub_state = sub_states.setdefault(sub_id, {})
             if not isinstance(sub_state, dict):
@@ -4033,6 +4730,7 @@ def process_subscribers(
             # Seed the 'emailed' ledger BEFORE today's keys are stamped so legacy subscribers are
             # never re-sent old roles, while brand-new subscribers start with an empty ledger.
             ensure_emailed_state(sub_state)
+            ensure_rejected_state(sub_state)
             sub_baseline = update_state(sub_matched, sub_state, today, retention)
             sub_matched = dedupe_subscriber_jobs(sub_matched)
             new_days = int(sub_cfg.get("new_days", cfg["new_days"]))
@@ -4043,32 +4741,79 @@ def process_subscribers(
             sub_matched.sort(key=lambda j: j["eff_date"], reverse=True)
 
             if send_email:
-                to_email = select_jobs_for_email(sub_matched, sub_baseline, sub_cfg, sub_state=sub_state)
-                to_email, overflow = cap_email_jobs(to_email, sub_cfg, today)
+                candidates = select_jobs_for_email(sub_matched, sub_baseline, sub_cfg, sub_state=sub_state)
+                max_em = int(sub_cfg.get("max_email_jobs", 12) or 12)
+                eval_limit = max(24, max_em * 2) if max_em > 0 else len(candidates)
+                eval_pool = candidates[:eval_limit]
+                unevaluated_overflow = max(0, len(candidates) - len(eval_pool))
+
+                matched_jobs, rejected_jobs = assess_candidate_job_matches(
+                    eval_pool, sub_cfg, root=root, companies=companies, jd_cache=jd_cache
+                )
+                ai_eval_cnt = sum(
+                    1 for j in (matched_jobs + rejected_jobs)
+                    if (j.get("match_assessment") or {}).get("match_source") == "gemini"
+                )
+                if isinstance(ai_stats, dict):
+                    ai_stats["ai_screened"] = ai_stats.get("ai_screened", 0) + ai_eval_cnt
+                    ai_stats["ai_rejected"] = ai_stats.get("ai_rejected", 0) + len(rejected_jobs)
+                    for j in matched_jobs + rejected_jobs:
+                        ma = j.get("match_assessment") or {}
+                        if ma.get("match_source") == "gemini" and ma.get("match_model"):
+                            ai_stats.setdefault("models_used", set()).add(ma["match_model"])
+                if rejected_jobs:
+                    print(
+                        f"  [{sub_label}] AI Match Gate filtered out {len(rejected_jobs)}/{len(eval_pool)} "
+                        f"non-matching role(s); {len(matched_jobs)} verified match(es) kept."
+                    )
+
+                to_email, cap_overflow = cap_email_jobs(matched_jobs, sub_cfg, today)
+                overflow = cap_overflow + unevaluated_overflow
                 quiet_day = False
                 skip_today = False
-                if not to_email and not sub_baseline:
+                if sub_baseline and not sub_cfg.get("email_on_baseline", True):
+                    skip_today = True
+                elif not to_email and (not sub_baseline or rejected_jobs):
                     q_mode = resolve_quiet_day_mode(sub_cfg)
                     if q_mode == "skip":
                         skip_today = True
-                    elif q_mode == "spotlight":
-                        to_email = select_quiet_spotlight(sub_matched, sub_cfg, sub_state=sub_state)
+                    elif q_mode == "spotlight" and not sub_baseline:
+                        # Record today's rejected roles before selecting spotlight so they are excluded
+                        if rejected_jobs and sub_cfg.get("email_mode") != "all":
+                            record_rejected_jobs(sub_state, rejected_jobs, today, retention)
+                            rejected_jobs = []
+                        spot_pool = select_quiet_spotlight(sub_matched, sub_cfg, sub_state=sub_state)
+                        to_email, spot_rejected = assess_candidate_job_matches(
+                            spot_pool, sub_cfg, root=root, companies=companies, jd_cache=jd_cache
+                        )
+                        rejected_jobs.extend(spot_rejected)
                         quiet_day = not to_email
                     else:
                         quiet_day = True
+
                 if skip_today:
-                    print(f"  [{sub_cfg.get('name') or sub_id}] Quiet day: no never-sent roles and quiet_day_mode=skip, no email.")
+                    if rejected_jobs and sub_cfg.get("email_mode") != "all":
+                        record_rejected_jobs(sub_state, rejected_jobs, today, retention)
+                    print(f"  [{sub_label}] Quiet day: no never-sent matching roles and quiet_day_mode=skip, no email.")
                 else:
+                    rejected_keys_now = {j.get("key") for j in rejected_jobs} | {
+                        k for k in (sub_state.get("rejected_matches") or {})
+                    }
+                    board_jobs = [j for j in sub_matched if j.get("key") not in rejected_keys_now]
                     stamp_txt = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-                    board_html = render_subscriber_board(sub_matched, sub_cfg, stamp_txt) if overflow > 0 else None
+                    board_html = render_subscriber_board(board_jobs, sub_cfg, stamp_txt) if overflow > 0 else None
                     attachments = prepare_tailored_cvs(to_email, sub_cfg, today, root=root) if to_email else []
                     sent = send_email_digest(
-                        to_email, len(sub_matched), sub_cfg, today, root=root,
+                        to_email, len(board_jobs), sub_cfg, today, root=root,
                         attachments=attachments, sub_state=sub_state, board_count=board_count,
                         ai_stats=ai_stats, quiet_day=quiet_day, overflow_count=overflow, board_html=board_html,
+                        ai_rejected_count=len(rejected_jobs),
                     )
-                    if sent and to_email:
-                        record_emailed_jobs(sub_state, to_email, today, retention)
+                    if sent:
+                        if to_email:
+                            record_emailed_jobs(sub_state, to_email, today, retention)
+                        if rejected_jobs and sub_cfg.get("email_mode") != "all":
+                            record_rejected_jobs(sub_state, rejected_jobs, today, retention)
         except Exception as e:
             gha_annotate("error", f"email delivery failed for {sub_id}: {type(e).__name__}: {e}")
             failed_ids.append(sub_id)
@@ -4080,11 +4825,18 @@ def process_subscribers(
 
 
 def strip_transient_fields(jobs):
-    """Remove heavy job description / detail_api fields before writing static JSON files."""
+    """Remove heavy job description / detail_api / transient LLM fields before writing static JSON files."""
     clean = []
     for j in jobs:
-         item = {k: v for k, v in j.items() if k not in ("description", "detail_api", "llm_analysis", "cv_filename", "is_career_upgrade", "upgrade_reason", "quiet_spotlight", "_wd_multi_term", "_upgrades_classified")}
-         clean.append(item)
+        item = {
+            k: v for k, v in j.items()
+            if k not in (
+                "description", "detail_api", "llm_analysis", "match_assessment",
+                "cv_filename", "is_career_upgrade", "upgrade_reason",
+                "quiet_spotlight", "_wd_multi_term", "_upgrades_classified",
+            )
+        }
+        clean.append(item)
     return clean
 
 
@@ -4097,6 +4849,11 @@ def write_outputs(root, cfg, jobs, state, today, stamp):
     docs = root / "docs"
     docs.mkdir(parents=True, exist_ok=True)
     (docs / "index.html").write_text(render_page(clean_jobs, cfg, stamp), encoding="utf-8")
+    try:
+        import onboard_subscriber as _ob
+        (docs / "onboard.html").write_text(_ob.render_onboard_page(cfg), encoding="utf-8")
+    except Exception:
+        pass
     (docs / "robots.txt").write_text("User-agent: *\nDisallow: /\n", encoding="utf-8")
     alert = root / "out" / "new_jobs.md"
     alert.parent.mkdir(parents=True, exist_ok=True)
@@ -4124,6 +4881,7 @@ def refresh(cfg, companies, root=ROOT, today=None, send_email=True, subscriber_i
         return 1
 
     fetched = [j for _, jobs, _ in results if jobs for j in jobs]
+    enrich_company_metadata(fetched, companies=companies, root=root)
     all_rule_sets = [rules] + [build_rules(s) for s in get_subscribers(cfg)]
     resolve_workday_multi_locations(fetched, all_rule_sets, rules, cfg)
     matched = {j["key"]: j for j in select(fetched, rules, cfg)}.values()
@@ -4140,6 +4898,7 @@ def refresh(cfg, companies, root=ROOT, today=None, send_email=True, subscriber_i
         if p.get("company") in failed_names and p.get("key") not in existing_keys:
             jobs.append({**p, "stale": True, "discovered_now": False})
             existing_keys.add(p.get("key"))
+    enrich_company_metadata(jobs, companies=companies, root=root)
 
     for j in jobs:
         j["is_new"] = flag_new(j, today, int(cfg["new_days"]))
@@ -4147,11 +4906,20 @@ def refresh(cfg, companies, root=ROOT, today=None, send_email=True, subscriber_i
     jobs.sort(key=lambda j: (j["company"].lower(), j["title"].lower()))
     jobs.sort(key=lambda j: j["eff_date"], reverse=True)
 
-    # Process per-subscriber filtering, LLM CV tailoring, state updates, and email digests
-    ai_stats = {"gemini_cvs": 0, "fallback_cvs": 0, "gemini_briefings": 0, "vault_briefings": 0, "models_used": set()}
+    # Process per-subscriber filtering, AI match screening, LLM CV tailoring, state updates, and email digests
+    ai_stats = {
+        "ai_screened": 0,
+        "ai_rejected": 0,
+        "gemini_cvs": 0,
+        "fallback_cvs": 0,
+        "gemini_briefings": 0,
+        "vault_briefings": 0,
+        "models_used": set(),
+    }
     email_failures = process_subscribers(
         fetched, state, cfg, today, send_email=send_email,
-        only_id=subscriber_id, root=root, board_count=len(companies), ai_stats=ai_stats,
+        only_id=subscriber_id, root=root, board_count=len(companies),
+        ai_stats=ai_stats, companies=companies,
     )
 
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -4164,7 +4932,8 @@ def refresh(cfg, companies, root=ROOT, today=None, send_email=True, subscriber_i
           f"{n_new} marked NEW, {len(fresh)} first seen this run.")
     if send_email:
         print(
-            f"AI Telemetry: {ai_stats['gemini_cvs']}/{total_cvs} CVs generated by Gemini AI "
+            f"AI Telemetry: {ai_stats['ai_screened']} roles AI-screened ({ai_stats['ai_rejected']} non-matches filtered out) | "
+            f"{ai_stats['gemini_cvs']}/{total_cvs} CVs generated by Gemini AI "
             f"({ai_stats['fallback_cvs']} fallback) | {ai_stats['gemini_briefings']} AI briefings "
             f"({ai_stats['vault_briefings']} vault) | models: {models_str}"
         )
@@ -4176,7 +4945,9 @@ def refresh(cfg, companies, root=ROOT, today=None, send_email=True, subscriber_i
                f"- Matching roles: **{len(jobs)}** · NEW: **{n_new}** · first seen this run: **{len(fresh)}**"]
     if send_email:
         summary.append(
-            f"- Gemini AI Telemetry: **{ai_stats['gemini_cvs']}/{total_cvs} CVs tailored by Gemini AI** "
+            f"- Gemini AI Telemetry: **{ai_stats['ai_screened']} candidate roles AI-screened** "
+            f"({ai_stats['ai_rejected']} weak/unrelated matches suppressed) · "
+            f"**{ai_stats['gemini_cvs']}/{total_cvs} CVs tailored by Gemini AI** "
             f"({ai_stats['fallback_cvs']} deterministic fallback) · **{ai_stats['gemini_briefings']} AI daily briefings** "
             f"({ai_stats['vault_briefings']} vault) · active model(s): `{models_str}`"
         )
@@ -4223,20 +4994,31 @@ def demo(cfg, root=ROOT):
     today = today_utc()
     iso = lambda n: (today - timedelta(days=n)).isoformat()
     rows = [
-        ("Senior Director, Site Operations", "Example Semiconductors", "Guadalajara, Jalisco, Mexico", "jalisco", "Operations", iso(1), True),
-        ("Director of Engineering", "Example Cloud", "Zapopan, Jalisco", "jalisco", "Engineering", iso(2), True),
-        ("VP, Latin America Operations", "Example Payments", "Remote - Mexico", "remote_mx", "Operations", iso(9), False),
-        ("Head of Supply Chain", "Example Devices", "Tlaquepaque, Jalisco", "jalisco", "Supply Chain", None, False),
-        ("Directora de Finanzas", "Example Retail", "Mexico", "mx_country", "Finance", iso(20), False),
+        ("Senior Director, Site Operations", "Example Semiconductors", "Semiconductors & AI Computing",
+         "Global silicon design and validation hub in Guadalajara.", "Guadalajara, Jalisco, Mexico", "jalisco", "Operations", iso(1), True),
+        ("Director of Engineering", "Example Cloud", "Enterprise Cloud & AI Infrastructure",
+         "Global cloud platform engineering center in Zapopan.", "Zapopan, Jalisco", "jalisco", "Engineering", iso(2), True),
+        ("VP, Latin America Operations", "Example Payments", "Fintech & Digital Payments",
+         "Cross-border B2B and consumer digital payments platform.", "Remote - Mexico", "remote_mx", "Operations", iso(9), False),
+        ("Head of Supply Chain", "Example Devices", "EMS & Smart Manufacturing",
+         "High-complexity electronics manufacturing campus in Jalisco.", "Tlaquepaque, Jalisco", "jalisco", "Supply Chain", None, False),
+        ("Directora de Transformación Digital", "Example Biopharma", "Biopharmaceuticals & GBS",
+         "Global business services and digital innovation center in Mexico.", "Mexico", "mx_country", "Transformation", iso(20), False),
     ]
-    jobs = [{"key": f"demo:{i}", "company": co, "ats": "demo", "title": t, "location": loc,
+    jobs = [{"key": f"demo:{i}", "company": co, "company_industry": ind, "company_description": desc,
+             "ats": "demo", "title": t, "location": loc,
              "team": team, "url": "https://example.com/jobs/" + str(i), "posted_at": posted,
              "loc_class": lc, "first_seen": iso(3 if posted is None else 0), "baseline": False,
              "is_new": new, "eff_date": posted or iso(3)}
-            for i, (t, co, loc, lc, team, posted, new) in enumerate(rows)]
+            for i, (t, co, ind, desc, loc, lc, team, posted, new) in enumerate(rows)]
     out = Path(root) / "out" / "demo.html"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(render_page(jobs, cfg, "demo data"), encoding="utf-8")
+    try:
+        import onboard_subscriber as _ob
+        (out.parent / "onboard.html").write_text(_ob.render_onboard_page(cfg), encoding="utf-8")
+    except Exception:
+        pass
     print(f"Wrote {out}")
     return 0
 
@@ -4250,8 +5032,19 @@ def main(argv=None):
     ap.add_argument("--no-email", action="store_true", help="skip sending email digest")
     ap.add_argument("--email-all", action="store_true", help="email all current matching roles")
     ap.add_argument("--subscriber", help="only send email for a specific subscriber id")
+    ap.add_argument("--model", help="override Gemini model (default: free-tier gemini-4-hydrogen)")
+    ap.add_argument("--min-match-score", type=int, help="override minimum AI match score (0-100, default: 70)")
     args = ap.parse_args(argv)
     cfg = load_config()
+    if args.model:
+        os.environ["GEMINI_MODEL"] = args.model.strip()
+        cfg["llm_model"] = args.model.strip()
+    if args.min_match_score is not None:
+        score_override = max(0, min(100, int(args.min_match_score)))
+        os.environ["MIN_MATCH_SCORE"] = str(score_override)
+        cfg["min_match_score"] = score_override
+        for sub in cfg.get("subscribers") or []:
+            sub["min_match_score"] = score_override
     if args.email_all:
         cfg["email_mode"] = "all"
         for sub in cfg.get("subscribers") or []:

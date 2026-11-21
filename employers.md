@@ -1,6 +1,6 @@
 # Jalisco & Remote-Mexico Employer Radar (`companies.json`)
 
-Updated November 2026. `companies.json` tracks **109 verified live employer boards** across **8 active public JSON ATS engines** (9 supported in `fetch_jobs.py`: **Workday**, **Greenhouse**, **SmartRecruiters**, **Oracle Recruiting Cloud (`oracle_hcm`)**, **Eightfold AI (`eightfold`)**, **Lever**, **Ashby**, **BambooHR (`bamboohr`)**, and **Workable**).
+Updated November 2026. `companies.json` tracks **109 verified live employer boards** across **8 active public JSON ATS engines** (9 supported in `fetch_jobs.py`: **Workday**, **Greenhouse**, **SmartRecruiters**, **Oracle Recruiting Cloud (`oracle_hcm`)**, **Eightfold AI (`eightfold`)**, **Lever**, **Ashby**, **BambooHR (`bamboohr`)**, and **Workable**). Every entry in `companies.json` also carries curated `"industry"` and `"description"` fields describing what the company builds, its sector, and its Jalisco / Remote-Mexico hub context so Gemini's Candidate-Job Match Gate and Lucy's daily briefings evaluate industry synergy accurately.
 
 ## 1. Geographic Coverage (`jalisco_locations` + Remote Mexico)
 
