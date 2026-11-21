@@ -2,7 +2,7 @@ name: Refresh job board & send daily email
 
 on:
   schedule:
-    # Runs daily at 13:00 UTC (7:00 AM CST in Guadalajara/Zapopan; Mexico has no DST).
+    # Runs daily at 07:00 UTC (1:00 AM CST) or adjust cron as desired; Mexico has no DST.
     # NOTE: scheduled runs only fire on the repository's default branch.
     - cron: "0 7 * * *"
   workflow_dispatch:
@@ -13,21 +13,31 @@ on:
         default: false
         type: boolean
       subscriber:
-        description: "Target subscriber (select 'all' to run for everyone)"
+        description: "Target subscriber id (leave 'all' for everyone, or enter any id in config.json e.g. lucas, luis, ewerson, monica)"
         required: false
         default: "all"
-        type: choice
-        options:
-          - all
-          - lucas
-          - luis
-          - ewerson
-          - monica
+        type: string
       check_only:
         description: "Only run `--check` (board health report). No emails, no commit."
         required: false
         default: false
         type: boolean
+      gemini_model:
+        description: "Gemini free-tier model override ('default' uses config/vars -> gemini-4-hydrogen)"
+        required: false
+        default: "default"
+        type: choice
+        options:
+          - default
+          - gemini-4-hydrogen
+          - gemini-3.8-flash
+          - gemini-3.5-flash-lite
+          - gemini-3.1-flash-lite
+      min_match_score:
+        description: "Minimum AI candidate-job match score (0-100, leave blank for config default 70)"
+        required: false
+        default: ""
+        type: string
 
 # Never cancel an in-flight run: emails are sent before state/seen.json is committed,
 # so killing a run mid-flight would cause duplicate emails on the next run.
@@ -44,7 +54,7 @@ env:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -63,7 +73,7 @@ jobs:
         if: ${{ inputs.check_only == true }}
         run: python3 fetch_jobs.py --check
 
-      - name: Fetch jobs, tailor CVs with Gemini, and send emails
+      - name: Fetch jobs, screen matches & tailor CVs with Gemini, and send emails
         id: refresh
         if: ${{ inputs.check_only != true }}
         env:
@@ -72,8 +82,13 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL || secrets.GEMINI_MODEL }}
+          GEMINI_MATCH_MODEL: ${{ vars.GEMINI_MATCH_MODEL || secrets.GEMINI_MATCH_MODEL }}
+          MIN_MATCH_SCORE: ${{ vars.MIN_MATCH_SCORE || secrets.MIN_MATCH_SCORE }}
+          ONBOARD_WEBHOOK_URL: ${{ vars.ONBOARD_WEBHOOK_URL || secrets.ONBOARD_WEBHOOK_URL }}
           INPUT_EMAIL_ALL: ${{ inputs.email_all }}
           INPUT_SUBSCRIBER: ${{ inputs.subscriber }}
+          INPUT_GEMINI_MODEL: ${{ inputs.gemini_model }}
+          INPUT_MIN_MATCH_SCORE: ${{ inputs.min_match_score }}
         run: |
           args=()
           if [ "$INPUT_EMAIL_ALL" = "true" ]; then
@@ -81,6 +96,12 @@ jobs:
           fi
           if [ -n "$INPUT_SUBSCRIBER" ] && [ "$INPUT_SUBSCRIBER" != "all" ]; then
             args+=(--subscriber "$INPUT_SUBSCRIBER")
+          fi
+          if [ -n "$INPUT_GEMINI_MODEL" ] && [ "$INPUT_GEMINI_MODEL" != "default" ]; then
+            args+=(--model "$INPUT_GEMINI_MODEL")
+          fi
+          if [[ "$INPUT_MIN_MATCH_SCORE" =~ ^[0-9]+$ ]]; then
+            args+=(--min-match-score "$INPUT_MIN_MATCH_SCORE")
           fi
           set +e
           python3 fetch_jobs.py "${args[@]}"
@@ -160,5 +181,5 @@ jobs:
       - name: Fail workflow if any subscriber email failed
         if: ${{ !cancelled() && steps.refresh.outputs.exit_code == '2' }}
         run: |
-          echo "::error::One or more subscriber email digests failed to send (their state was rolled back for retry). Check the 'Fetch jobs' step log."
+          echo "::error::One or more subscriber email digests failed to send (their state was rolled back for retry). Check the 'Fetch jobs, screen matches & tailor CVs with Gemini, and send emails' step log."
           exit 1
