@@ -1,0 +1,183 @@
+name: Onboard new subscriber & send confirmation email
+
+on:
+  repository_dispatch:
+    types: [onboard_subscriber]
+  workflow_dispatch:
+    inputs:
+      name:
+        description: "Candidate full name (e.g. Sofia Ramirez)"
+        required: true
+        type: string
+      email:
+        description: "Candidate email address"
+        required: true
+        type: string
+      cv_text:
+        description: "Candidate plain-text or Markdown CV"
+        required: true
+        type: string
+      levels:
+        description: "Comma-separated seniority IDs (c_exec,director,sr_manager,manager,senior_ic)"
+        required: false
+        default: "director,sr_manager"
+        type: string
+      domains:
+        description: "Comma-separated domain IDs (ops_supply_chain,gbs_process,automation_ai,engineering_cloud,tpm_pmo,sales_commercial,change_cx,finance_hr_strategy)"
+        required: false
+        default: "gbs_process,automation_ai"
+        type: string
+      locations:
+        description: "Comma-separated location IDs (jalisco,remote_mx,mx_country)"
+        required: false
+        default: "jalisco,remote_mx,mx_country"
+        type: string
+      language:
+        description: "Daily briefing language"
+        required: false
+        default: "English"
+        type: choice
+        options:
+          - English
+          - Spanish
+          - Portuguese
+      free_text:
+        description: "Free-text career goals, target industries & roles to exclude"
+        required: false
+        default: ""
+        type: string
+      send_initial_matches:
+        description: "Also run an immediate first job-match briefing right after confirmation"
+        required: false
+        default: false
+        type: boolean
+
+# Share concurrency group with daily refresh so git pushes never race each other.
+concurrency:
+  group: jobs-sentinel-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  onboard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Structure CV & register subscriber in codebase
+        id: register
+        env:
+          PYTHONUNBUFFERED: "1"
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || secrets.GEMINI_MODEL }}
+          ONBOARD_WEBHOOK_URL: ${{ vars.ONBOARD_WEBHOOK_URL || secrets.ONBOARD_WEBHOOK_URL }}
+        run: |
+          RESULT_JSON="${RUNNER_TEMP:-/tmp}/onboard_result.json"
+          python3 onboard_subscriber.py \
+            --from-event "$GITHUB_EVENT_PATH" \
+            --no-email \
+            --result-out "$RESULT_JSON"
+          SUB_ID=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["subscriber_id"])' "$RESULT_JSON")
+          echo "subscriber_id=$SUB_ID" >> "$GITHUB_OUTPUT"
+          echo "result_json=$RESULT_JSON" >> "$GITHUB_OUTPUT"
+
+      - name: Verify codebase & ATS integrity tests
+        run: python3 -W error::SyntaxWarning -m unittest discover -s tests -b -v
+
+      - name: Commit new subscriber & CV to repository
+        env:
+          BRANCH: ${{ github.ref_name }}
+          SUB_ID: ${{ steps.register.outputs.subscriber_id }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p cvs docs
+
+          SNAP_DIR="${RUNNER_TEMP:-/tmp}/onboard_snapshot"
+          rm -rf "$SNAP_DIR"
+          mkdir -p "$SNAP_DIR"
+          cp -a config.json "$SNAP_DIR/config.json"
+          cp -a cvs "$SNAP_DIR/cvs"
+          if [ -f docs/onboard.html ]; then
+            cp -a docs/onboard.html "$SNAP_DIR/onboard.html"
+          fi
+
+          for attempt in 1 2 3 4; do
+            if [ "$attempt" -gt 1 ]; then
+              echo "Syncing with origin/$BRANCH before retry #$attempt..."
+              git rebase --abort 2>/dev/null || true
+              git merge --abort 2>/dev/null || true
+              git fetch origin "$BRANCH"
+              git reset --hard "origin/$BRANCH"
+              cp -a "$SNAP_DIR/config.json" config.json
+              cp -a "$SNAP_DIR/cvs/." cvs/
+              if [ -f "$SNAP_DIR/onboard.html" ]; then
+                mkdir -p docs
+                cp -a "$SNAP_DIR/onboard.html" docs/onboard.html
+              fi
+            fi
+
+            git add -- config.json "cvs/${SUB_ID}.md"
+            if [ -f docs/onboard.html ]; then
+              git add -- docs/onboard.html
+            fi
+            if git diff --staged --quiet; then
+              echo "Subscriber profile unchanged in repository."
+              exit 0
+            fi
+
+            git commit -m "feat(onboard): register subscriber ${SUB_ID} in Jobs Sentinel"
+            if git push origin "HEAD:$BRANCH"; then
+              echo "Subscriber ${SUB_ID} committed & pushed cleanly on attempt #$attempt."
+              exit 0
+            fi
+
+            echo "Push attempt #$attempt failed, retrying in $((attempt * 5))s..."
+            sleep $((attempt * 5))
+          done
+
+          echo "::error::Could not push onboarded subscriber after 4 attempts."
+          exit 1
+
+      - name: Send professional confirmation email from Lucy
+        env:
+          PYTHONUNBUFFERED: "1"
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          RESULT_JSON: ${{ steps.register.outputs.result_json }}
+        run: python3 onboard_subscriber.py --send-confirmation-from "$RESULT_JSON"
+
+      - name: Optional immediate first match briefing
+        if: ${{ inputs.send_initial_matches == true || github.event.client_payload.send_initial_matches == true }}
+        env:
+          PYTHONUNBUFFERED: "1"
+          BRANCH: ${{ github.ref_name }}
+          SUB_ID: ${{ steps.register.outputs.subscriber_id }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || secrets.GEMINI_MODEL }}
+          GEMINI_MATCH_MODEL: ${{ vars.GEMINI_MATCH_MODEL || secrets.GEMINI_MATCH_MODEL }}
+          MIN_MATCH_SCORE: ${{ vars.MIN_MATCH_SCORE || secrets.MIN_MATCH_SCORE }}
+          ONBOARD_WEBHOOK_URL: ${{ vars.ONBOARD_WEBHOOK_URL || secrets.ONBOARD_WEBHOOK_URL }}
+        run: |
+          python3 fetch_jobs.py --subscriber "$SUB_ID"
+          git add -A -- state docs
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: update job radar state after onboarding ${SUB_ID} [skip ci]"
+            git push origin "HEAD:$BRANCH" || true
+          fi
