@@ -11,7 +11,7 @@
  "min_match_score": 70,
  "max_tailored_cvs": 3,
  "onboard_webhook_url": "",
- "onboard_require_invite_code": false,
+ "onboard_require_invite_code": true,
  "title_include": [
   "\\bdirector(a)?\\b",
   "\\bhead of\\b",
