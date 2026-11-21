@@ -13,12 +13,14 @@ Trilingual (Spanish, Portuguese, English) B2B Enterprise & Digital Sales profess
 ## PROFESSIONAL EXPERIENCE
 
 ### F5 Networks | Guadalajara, Mexico
+*Company Profile: Global enterprise multi-cloud application security, API protection, and ADC networking SaaS/hardware leader ($2.8B+ revenue) serving Fortune 500 banks, telcos, and enterprises from its Guadalajara engineering and LATAM digital sales hub.*
 **Business Development Representative, LATAM** | 2022 – Present
 - Drive high-velocity inbound and outbound B2B enterprise sales motions across Latin America, qualifying IT/security buyers and converting net-new prospects into active revenue opportunities.
 - Pioneered and opened the LATAM market for F5 Digital Sales, building territory playbooks and generating the largest BDR sales pipeline to date in the region.
 - Partner directly with Account Executives and regional sales leaders in Spanish, Portuguese, and English to accelerate multi-stakeholder enterprise deals from discovery to close.
 
 ### IBM Global Services – Campus Tecnológico Guadalajara | Guadalajara, Mexico
+*Company Profile: Global Fortune 100 enterprise hybrid cloud, enterprise software, AI, and IT services leader ($60B+ revenue) operating a major Americas commercial sales operations, software licensing, and enterprise deal desk hub in Guadalajara.*
 **Business Operations & Commercial Sales Support Analyst** | 2015 – 2021
 - Partnered with enterprise sales leadership on territory forecasting, pipeline health inspection, deal qualification rigor, and commercial stakeholder management.
 - Earned distinction as a **Trusted Advisor to Sales Management**—awarded to a select tier of commercial partners—driving a 20% organization-wide improvement in opportunity analysis quality through coaching.
@@ -28,6 +30,7 @@ Trilingual (Spanish, Portuguese, English) B2B Enterprise & Digital Sales profess
 - Managed enterprise software license renewals and commercial compliance across LATAM and North America accounts, protecting recurring revenue and customer retention.
 
 ### Alcatel Mexico | Guadalajara, Mexico
+*Company Profile: Global telecommunications, mobile devices, and carrier/enterprise communications brand (Alcatel / Nokia telecom ecosystem) serving telecom operators, retail channels, and enterprise customers across Latin America and North America.*
 **Manager – Trilingual Customer & Commercial Support (LATAM & North America)**
 - Promoted to Manager within 6 months; led, coached, and scaled a trilingual team of 20+ specialists supporting LATAM and North America markets.
 - Formulated new commercial and customer-retention strategies while coordinating product readiness for regional market launches.

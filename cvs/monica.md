@@ -13,6 +13,7 @@ Change Enablement, Customer Experience (CX), and Digital Transformation leader w
 ## PROFESSIONAL EXPERIENCE
 
 ### Hewlett Packard Enterprise (HPE) | Guadalajara, Mexico
+*Company Profile: Fortune 500 global edge-to-cloud enterprise IT infrastructure, hybrid cloud SaaS (HPE GreenLake), AI server, and networking leader ($28B+ revenue) operating a flagship global partner ecosystem, CX/BPI, and commercial operations hub in Guadalajara.*
 **Customer Experience & Business Process Innovation (CX & BPI)** | 2023 – Present
 - **Global Partner Lifecycle Transformation:** Led the end-to-end global transformation of the HPE Partner Lifecycle (Registration, Enrollment, Onboarding, and Distributor Expansion), architecting digital workflows, scalable processes, and adoption strategies to accelerate partner acquisition and time-to-value.
 - **90% Onboarding Cycle-Time Reduction:** Spearheaded digitalization and process automation strategy that reduced global partner onboarding turnaround time from 24 days to 2 days (90% improvement), establishing a repeatable global operating standard.
@@ -30,6 +31,7 @@ Change Enablement, Customer Experience (CX), and Digital Transformation leader w
 - **Global Capability Building (Key Player Program):** Designed and delivered the Key Player Program for Global Operations to upskill top operational talent; trained and audited Field and Internal Sales Representatives on process and compliance standards.
 
 ### Hospital Real San José | Guadalajara, Mexico
+*Company Profile: Premier private tertiary-care specialty hospital group in Zapopan/Guadalajara delivering high-acuity clinical care, surgical specialties, commercial insurer partnerships, and accredited healthcare quality governance.*
 **Healthcare Business Analyst** | 2011 – 2015
 - **Pricing & Commercial Strategy:** Developed data-backed healthcare pricing strategies to ensure financial accuracy and regional market competitiveness.
 - **Governance, Audit & Risk Systems:** Strengthened operational audit and regulatory compliance controls, and implemented a clinical incident reporting system that improved patient safety and enterprise risk management.
