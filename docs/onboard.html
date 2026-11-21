@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Join Jobs Sentinel · Lucy Private AI Talent Radar</title>
+<style>
+:root{--bg:#fafaf9;--card:#ffffff;--ink:#09090b;--body:#27272a;--mute:#71717a;--line:#e4e4e7;--accent:#059669;--accent-ink:#065f46;--accent-bg:#ecfdf5;--obsidian:#09090b;--danger:#dc2626;--danger-bg:#fef2f2}
+@media (prefers-color-scheme:dark){:root{--bg:#0c0c0d;--card:#18181b;--ink:#fafafa;--body:#e4e4e7;--mute:#a1a1aa;--line:#27272a;--accent:#10b981;--accent-ink:#6ee7b7;--accent-bg:#064e3b;--obsidian:#18181b;--danger:#f87171;--danger-bg:#450a0a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--body);font:15.5px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+main{max-width:780px;margin:0 auto;padding:28px 16px 64px}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;font-size:.82rem}
+.brand{font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:var(--accent)}
+.back{color:var(--mute);text-decoration:none;font-weight:600}
+.back:hover{color:var(--accent)}
+.hero{background:#09090b;color:#fafafa;border-radius:16px;padding:26px 26px 24px;margin-bottom:22px;border:1px solid #27272a}
+.hero .eyebrow{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1.4px;color:#34d399;margin-bottom:6px}
+.hero h1{margin:0 0 8px;font-size:1.65rem;font-weight:800;letter-spacing:-.4px;color:#fff;line-height:1.22}
+.hero p{margin:0;color:#d4d4d8;font-size:.93rem;line-height:1.55}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:16px}
+.sec-title{font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--ink);margin:0 0 4px}
+.sec-sub{font-size:.86rem;color:var(--mute);margin:0 0 14px}
+.grid2{display:grid;gap:12px;grid-template-columns:1fr}
+@media (min-width:600px){.grid2{grid-template-columns:1fr 1fr}}
+label.field{display:block;font-size:.85rem;font-weight:700;color:var(--ink);margin-bottom:12px}
+label.field span.req{color:var(--accent)}
+input[type=text],input[type=email],input[type=password],select,textarea{width:100%;margin-top:5px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:inherit;transition:border-color .15s}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+.dropzone{border:1.5px dashed var(--line);border-radius:12px;padding:18px;text-align:center;background:var(--bg);cursor:pointer;transition:border-color .15s,background .15s;margin-bottom:12px}
+.dropzone:hover,.dropzone.drag{border-color:var(--accent);background:var(--accent-bg)}
+.dropzone strong{color:var(--ink);display:block;font-size:.95rem;margin-bottom:3px}
+.dropzone small{color:var(--mute);font-size:.82rem}
+.cv-meta{display:flex;justify-content:space-between;align-items:center;font-size:.8rem;color:var(--mute);margin:6px 0 4px}
+.checks{display:grid;gap:9px;grid-template-columns:1fr}
+@media (min-width:620px){.checks.two{grid-template-columns:1fr 1fr}}
+.chk{display:flex;gap:10px;align-items:flex-start;padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:var(--bg);cursor:pointer;transition:border-color .15s,background .15s}
+.chk:hover{border-color:var(--accent)}
+.chk input{margin-top:3px;accent-color:var(--accent);width:16px;height:16px;flex-shrink:0}
+.chk .clabel{font-weight:700;font-size:.88rem;color:var(--ink);display:block;line-height:1.3}
+.chk .chint{font-size:.78rem;color:var(--mute);display:block;margin-top:2px;line-height:1.35}
+.submit-bar{display:flex;flex-direction:column;gap:10px;margin-top:18px}
+button.primary{background:var(--accent);color:#fff;border:none;border-radius:11px;padding:14px 22px;font:700 1rem/1.2 inherit;cursor:pointer;transition:opacity .15s}
+button.primary:hover{opacity:.92}
+button.primary:disabled{opacity:.55;cursor:not-allowed}
+button.secondary{background:transparent;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 16px;font:600 .88rem/1.2 inherit;cursor:pointer}
+.banner{border-radius:12px;padding:16px 18px;margin-top:14px;font-size:.9rem;line-height:1.5;display:none}
+.banner.ok{display:block;background:var(--accent-bg);color:var(--accent-ink);border:1px solid var(--accent)}
+.banner.err{display:block;background:var(--danger-bg);color:var(--danger);border:1px solid var(--danger)}
+.foot{text-align:center;font-size:.78rem;color:var(--mute);margin-top:24px}
+</style>
+</head>
+<body>
+<main>
+  <div class="topbar">
+    <span class="brand">&#10022; Lucy &middot; Jobs Sentinel</span>
+    <a class="back" href="index.html">&larr; View Live Job Board</a>
+  </div>
+
+  <section class="hero">
+    <div class="eyebrow">&#9889; Candidate Self-Service Onboarding</div>
+    <h1>Get Your Own Private AI Headhunter</h1>
+    <p>Upload your plain-text CV and tell Lucy what you&rsquo;re aiming for next. Every morning she sweeps <strong>109 verified employer career boards</strong> across Jalisco &amp; Remote Mexico, filters out weak matches with Gemini AI, explains why each role fits your trajectory, and attaches <strong>ATS-ready Word (.docx) CVs</strong> built from your real experience.</p>
+  </section>
+
+  <form id="onboardForm" novalidate>
+    <section class="card">
+      <h2 class="sec-title">1. Your Contact Details</h2>
+      <p class="sec-sub">Where Lucy will send your onboarding confirmation and daily match briefings.</p>
+      <div class="grid2">
+        <label class="field">Full Name <span class="req">*</span>
+          <input id="fullName" type="text" required maxlength="80" placeholder="e.g. Sofia Ramirez" autocomplete="name">
+        </label>
+        <label class="field">Email Address <span class="req">*</span>
+          <input id="email" type="email" required maxlength="180" placeholder="sofia@example.com" autocomplete="email">
+        </label>
+      </div>
+      <div class="grid2">
+        <label class="field">Preferred Daily Briefing Language
+          <select id="language">
+            <option value="English" selected>English</option>
+            <option value="Spanish">Spanish (Espa&ntilde;ol)</option>
+            <option value="Portuguese">Portuguese (Portugu&ecirc;s)</option>
+          </select>
+        </label>
+        <label class="field" id="inviteWrap">Team Invite Code <span id="inviteHint" style="font-weight:400;color:var(--mute);">(if provided by admin)</span>
+          <input id="inviteCode" type="password" maxlength="80" placeholder="Optional invite code" autocomplete="off">
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 class="sec-title">2. Upload Your CV (Plain Text / Markdown) <span style="color:var(--accent);">*</span></h2>
+      <p class="sec-sub">Upload a <code>.txt</code> or <code>.md</code> resume file, or paste the plain text from your current CV / LinkedIn profile below. Lucy will automatically enrich each past employer with company &amp; industry context.</p>
+      <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload plain-text CV file">
+        <strong id="dropLabel">&#128196; Click to choose a .txt or .md CV file (or drag &amp; drop here)</strong>
+        <small>Plain text only &middot; up to 45,000 characters &middot; 100% private to this repository</small>
+        <input id="cvFile" type="file" accept=".txt,.md,.markdown,text/plain,text/markdown" style="display:none">
+      </div>
+      <div class="cv-meta">
+        <span id="fileStatus">Or paste / edit your CV text directly below:</span>
+        <span id="charCount">0 / 45,000 chars</span>
+      </div>
+      <textarea id="cvText" rows="9" maxlength="45000" required placeholder="Paste your full resume text here (Summary, Skills, Work Experience with companies/dates/achievements, Education, Languages)..."></textarea>
+    </section>
+
+    <section class="card">
+      <h2 class="sec-title">3. Target Seniority Level <span style="color:var(--accent);">*</span></h2>
+      <p class="sec-sub">Check every level you want Lucy to include on your radar.</p>
+      <div class="checks two" id="levelChecks"></div>
+    </section>
+
+    <section class="card">
+      <h2 class="sec-title">4. Functional Domains &amp; Career Tracks <span style="color:var(--accent);">*</span></h2>
+      <p class="sec-sub">Select the areas that match your background and where you want to grow next.</p>
+      <div class="checks two" id="domainChecks"></div>
+    </section>
+
+    <section class="card">
+      <h2 class="sec-title">5. Location &amp; Work Modality <span style="color:var(--accent);">*</span></h2>
+      <p class="sec-sub">Choose which geographic scopes should trigger matches for you.</p>
+      <div class="checks" id="locationChecks"></div>
+    </section>
+
+    <section class="card">
+      <h2 class="sec-title">6. Describe What You Are Looking For Next (Free Text)</h2>
+      <p class="sec-sub">Tell Lucy in your own words: dream roles, target industries, strengths you want to highlight, and specific job types you want her AI Match Gate to <strong>exclude</strong>.</p>
+      <textarea id="freeText" rows="4" maxlength="4000" placeholder="Example: Looking to step up into a Senior Manager or Director role in Process Excellence, GBS Transformation, or Digital Automation at a global tech, pharma, or fintech company. Please exclude pure accounting/tax, QA software testing, or factory-floor maintenance roles."></textarea>
+    </section>
+
+    <div class="submit-bar">
+      <button type="submit" class="primary" id="submitBtn">&#10022; Activate My AI Job Radar with Lucy</button>
+      <button type="button" class="secondary" id="downloadFallbackBtn" style="display:none;">Download Onboarding Packet (.json) for CLI Import</button>
+    </div>
+
+    <div id="statusBanner" class="banner" role="status" aria-live="polite"></div>
+  </form>
+
+  <p class="foot">Powered by Jobs Sentinel &middot; Gemini 4 Hydrogen Match Gate &middot; Zero-noise daily briefings</p>
+</main>
+<script>
+const CONFIG = {"webhook_url": "", "require_invite_code": false, "local_server": false, "levels": [{"id": "c_exec", "label": "VP / GM / C-Level / Country Head", "hint": "VP, SVP, General Manager, Managing Director, Country Lead"}, {"id": "director", "label": "Director / Head of Function", "hint": "Director, Senior Director, Directora, Head of Department"}, {"id": "sr_manager", "label": "Senior Manager / Principal / Practice or CoE Lead", "hint": "Sr. Manager, Principal, Solution Architect, Global/Regional/CoE Lead"}, {"id": "manager", "label": "Manager / Program Manager / Team or Delivery Lead", "hint": "Manager, Gerente, Program/Project Lead, Team Lead, Agile Delivery Lead"}, {"id": "senior_ic", "label": "Senior Specialist / Consultant / Account Executive / IC", "hint": "Senior Analyst, Consultant, Architect, Account Executive, KAM, Specialist"}], "domains": [{"id": "ops_supply_chain", "label": "Operations, Supply Chain, Manufacturing & Quality", "hint": "Site/Plant Ops, Logistics, Procurement, Supply Chain, Operational Quality"}, {"id": "gbs_process", "label": "GBS / Shared Services, Process Mining & Continuous Improvement", "hint": "GBS, Process Intelligence (Celonis), Operational Excellence, Lean Six Sigma, BPI"}, {"id": "automation_ai", "label": "Intelligent Automation (RPA / Low-Code), AI & Digital Transformation", "hint": "RPA, Power Platform, Hyperautomation, AI Enablement, Digital Transformation"}, {"id": "engineering_cloud", "label": "Software Engineering, Cloud, Data & Analytics Platforms", "hint": "Engineering Leadership, Cloud/DevOps/SRE, Data Engineering, BI & Analytics"}, {"id": "tpm_pmo", "label": "Technical Program Management (TPM), PMO & Agile Delivery", "hint": "TPM, Program/Portfolio Management, Enterprise PMO, Scrum/Agile Delivery"}, {"id": "sales_commercial", "label": "B2B Enterprise Sales, Account Management (AE / KAM) & Customer Success", "hint": "Account Executive, KAM, Sales Leadership, BDR/SDR, Customer Success (CSM), Renewals"}, {"id": "change_cx", "label": "Organizational Change Management (OCM), CX & Enablement", "hint": "Change Management, Digital Adoption, Customer/Partner Experience (CX), Enablement"}, {"id": "finance_hr_strategy", "label": "Finance / FP&A, People / HR Leadership & Corporate Strategy", "hint": "Finance Director/Manager, FP&A, HRBP / Talent Leadership, Strategy & BizOps"}], "locations": [{"id": "jalisco", "label": "Guadalajara Metro / Jalisco (On-site or Hybrid)", "hint": "Guadalajara, Zapopan, Tlaquepaque, Tlajomulco, El Salto & regional Jalisco hubs", "default": true}, {"id": "remote_mx", "label": "Remote in Mexico", "hint": "Roles tagged Remote - Mexico across global SaaS, fintech & enterprise hubs", "default": true}, {"id": "mx_country", "label": "Mexico (City Unspecified)", "hint": "Country-wide Mexico postings where no non-Jalisco city restriction is listed", "default": true}]};
+const $ = id => document.getElementById(id);
+
+function buildCheckboxes(containerId, items, defaultIds) {
+  const wrap = $(containerId);
+  items.forEach(item => {
+    const lbl = document.createElement("label");
+    lbl.className = "chk";
+    const inp = document.createElement("input");
+    inp.type = "checkbox";
+    inp.value = item.id;
+    inp.checked = Boolean(item.default || (defaultIds && defaultIds.includes(item.id)));
+    const textWrap = document.createElement("div");
+    const title = document.createElement("span");
+    title.className = "clabel";
+    title.textContent = item.label;
+    const hint = document.createElement("span");
+    hint.className = "chint";
+    hint.textContent = item.hint;
+    textWrap.append(title, hint);
+    lbl.append(inp, textWrap);
+    wrap.appendChild(lbl);
+  });
+}
+
+buildCheckboxes("levelChecks", CONFIG.levels, ["director", "sr_manager"]);
+buildCheckboxes("domainChecks", CONFIG.domains, []);
+buildCheckboxes("locationChecks", CONFIG.locations, ["jalisco", "remote_mx", "mx_country"]);
+
+if (CONFIG.require_invite_code) {
+  $("inviteHint").textContent = "* required";
+  $("inviteHint").style.color = "var(--accent)";
+  $("inviteCode").required = true;
+}
+
+const cvText = $("cvText");
+const cvFile = $("cvFile");
+const dropzone = $("dropzone");
+
+function updateCounter() {
+  $("charCount").textContent = cvText.value.length.toLocaleString() + " / 45,000 chars";
+}
+cvText.addEventListener("input", updateCounter);
+
+function loadTextFile(file) {
+  if (!file) return;
+  if (file.size > 512000) {
+    showStatus("err", "File is too large. Please upload a plain-text (.txt or .md) resume under 500 KB.");
+    return;
+  }
+  const nameLow = (file.name || "").toLowerCase();
+  if (nameLow.endsWith(".pdf") || nameLow.endsWith(".docx") || nameLow.endsWith(".doc")) {
+    showStatus("err", "Please upload your CV in plain-text (.txt or .md) format, or copy and paste the text from your PDF/Word resume into the box below.");
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const raw = String(reader.result || "").slice(0, 45000);
+    cvText.value = raw;
+    $("fileStatus").textContent = "Loaded file: " + file.name;
+    updateCounter();
+    hideStatus();
+  };
+  reader.onerror = () => showStatus("err", "Could not read file. Please paste your CV text directly.");
+  reader.readAsText(file, "utf-8");
+}
+
+dropzone.addEventListener("click", () => cvFile.click());
+dropzone.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); cvFile.click(); } });
+cvFile.addEventListener("change", () => { if (cvFile.files && cvFile.files[0]) loadTextFile(cvFile.files[0]); });
+["dragenter", "dragover"].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add("drag"); }));
+["dragleave", "drop"].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.remove("drag"); }));
+dropzone.addEventListener("drop", e => {
+  if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) loadTextFile(e.dataTransfer.files[0]);
+});
+
+function checkedValues(containerId) {
+  return [...$(containerId).querySelectorAll("input[type=checkbox]:checked")].map(el => el.value);
+}
+
+function showStatus(kind, message) {
+  const b = $("statusBanner");
+  b.className = "banner " + kind;
+  b.textContent = message;
+}
+function hideStatus() {
+  const b = $("statusBanner");
+  b.className = "banner";
+  b.textContent = "";
+}
+
+function collectPayload() {
+  const name = $("fullName").value.trim();
+  const email = $("email").value.trim().toLowerCase();
+  const cv = cvText.value.trim();
+  const levels = checkedValues("levelChecks");
+  const domains = checkedValues("domainChecks");
+  const locations = checkedValues("locationChecks");
+  if (!name) throw new Error("Please enter your full name.");
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new Error("Please enter a valid email address.");
+  if (cv.length < 60) throw new Error("Please upload a .txt/.md CV file or paste your resume text (at least 60 characters).");
+  if (!levels.length) throw new Error("Please check at least one Target Seniority Level.");
+  if (!domains.length) throw new Error("Please check at least one Functional Domain.");
+  if (!locations.length) throw new Error("Please check at least one Location preference.");
+  if (CONFIG.require_invite_code && !$("inviteCode").value.trim()) {
+    throw new Error("Please enter your Team Invite Code.");
+  }
+  return {
+    name: name,
+    email: email,
+    invite_code: $("inviteCode").value.trim(),
+    cv_text: cv.slice(0, 45000),
+    levels: levels,
+    domains: domains,
+    locations: locations,
+    language: $("language").value,
+    free_text: $("freeText").value.trim().slice(0, 4000)
+  };
+}
+
+let lastPacket = null;
+$("downloadFallbackBtn").addEventListener("click", () => {
+  try {
+    const pkt = lastPacket || collectPayload();
+    const copyPkt = Object.assign({}, pkt);
+    delete copyPkt.invite_code;
+    const blob = new Blob([JSON.stringify(copyPkt, null, 2)], {type: "application/json"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "onboard_" + pkt.email.split("@")[0].replace(/[^a-z0-9]+/gi, "_") + ".json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } catch (err) {
+    showStatus("err", err.message || String(err));
+  }
+});
+
+$("onboardForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  hideStatus();
+  let payload;
+  try {
+    payload = collectPayload();
+    lastPacket = payload;
+  } catch (err) {
+    showStatus("err", err.message || String(err));
+    return;
+  }
+
+  const isLocalServer = Boolean(CONFIG.local_server);
+  const endpoint = isLocalServer ? "/api/onboard" : (CONFIG.webhook_url || "").trim();
+
+  if (!endpoint) {
+    $("downloadFallbackBtn").style.display = "inline-block";
+    showStatus(
+      "err",
+      "Cloud webhook URL is not configured in config.json yet (see onboarding/README.md for 2-minute Google Apps Script setup, or run `python3 onboard_subscriber.py --serve` locally). Click 'Download Onboarding Packet (.json)' above to import right away via `python3 onboard_subscriber.py --from-file <packet.json>`."
+    );
+    return;
+  }
+
+  const btn = $("submitBtn");
+  btn.disabled = true;
+  btn.textContent = "Calibrating your radar with Lucy...";
+
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {"Content-Type": isLocalServer ? "application/json;charset=utf-8" : "text/plain;charset=utf-8"},
+      body: JSON.stringify(payload)
+    });
+    let data = {};
+    try { data = await res.json(); } catch (_) {}
+    if (!res.ok || data.ok === false) {
+      throw new Error(data.error || data.message || ("Submission failed with HTTP " + res.status));
+    }
+    showStatus(
+      "ok",
+      data.message || ("Welcome aboard, " + payload.name + "! Your profile is being added to the Jobs Sentinel codebase right now, and Lucy is sending a confirmation email to " + payload.email + ".")
+    );
+    btn.textContent = "Radar Activated — Check Your Inbox!";
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = "\u2726 Activate My AI Job Radar with Lucy";
+    $("downloadFallbackBtn").style.display = "inline-block";
+    showStatus("err", (err.message || String(err)) + " (You can also download your onboarding packet above if offline.)");
+  }
+});
+</script>
+</body>
+</html>
