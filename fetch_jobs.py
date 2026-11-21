@@ -3837,17 +3837,39 @@ def generate_daily_insider_note(sub_cfg, top_job, upgrade_count, hot_count, tota
     return pack["headline"], pack["message"]
 
 
-def _render_job_card_html(j, today):
-    """Render an email-safe, ultra-clean executive job card (using presentation tables so
-    alignment stays razor-sharp in Gmail Web, iOS, Android, Apple Mail, and Outlook)."""
+# Minimalist email design tokens: one ink, one muted grey, one hairline and one accent (links only).
+# Hierarchy comes from type size and whitespace; there are no boxes, badges, meters or pictographs.
+EMAIL_INK = "#18181b"
+EMAIL_BODY = "#27272a"
+EMAIL_MUTE = "#71717a"
+EMAIL_LINE = "#e4e4e7"
+EMAIL_ACCENT = "#0f766e"
+EMAIL_FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif"
+EMAIL_LABEL_STYLE = "font-size:11px;font-weight:600;letter-spacing:0.8px;text-transform:uppercase;line-height:1.5;"
+
+
+def _safe_http_url(url):
+    """Return `url` only when it is an absolute http(s) link; anything else becomes '#', so a
+    malformed or hostile ATS feed can never place another URL scheme behind an email link."""
+    u = str(url or "").strip()
+    return u if re.match(r"^https?://", u, re.I) else "#"
+
+
+def _render_job_card_html(j, today, show_company_profile=True):
+    """Render one role as a minimalist, email-safe table row separated from its neighbours by a
+    hairline: a quiet label line, the linked title, one meta line, the employer profile (pass
+    `show_company_profile=False` to skip it when the same employer was already described earlier
+    in the email), the match rationale and a single text 'Apply' link.
+
+    Every dynamic value is HTML-escaped and the link target is restricted to http(s)."""
     enrich_company_metadata([j])
-    days, is_hot, age_label = job_age_info(j, today)
-    loc_tag = html.escape(LOC_LABELS.get(j.get("loc_class"), j.get("loc_class", "")))
-    title_esc = html.escape(j.get("title", "Untitled Role"))
-    company_esc = html.escape(j.get("company", ""))
-    loc_esc = html.escape(j.get("location") or loc_tag)
-    team_esc = html.escape(j.get("team", ""))
-    url_esc = html.escape(j.get("url", "#"))
+    _, is_hot, age_label = job_age_info(j, today)
+    loc_tag = LOC_LABELS.get(j.get("loc_class"), j.get("loc_class") or "") or ""
+    title_esc = html.escape(str(j.get("title") or "Untitled Role"))
+    company_esc = html.escape(str(j.get("company") or ""))
+    loc_esc = html.escape(str(j.get("location") or loc_tag))
+    team_esc = html.escape(str(j.get("team") or ""))
+    url_esc = html.escape(_safe_http_url(j.get("url")), quote=True)
     age_esc = html.escape(age_label)
 
     analysis = j.get("llm_analysis") or {}
@@ -3857,164 +3879,89 @@ def _render_job_card_html(j, today):
         or analysis.get("is_career_upgrade")
         or match_meta.get("is_career_upgrade")
     )
-    upgrade_reason = (
+    upgrade_reason = str(
         j.get("upgrade_reason")
         or analysis.get("upgrade_reason")
         or match_meta.get("upgrade_reason")
         or ""
     ).strip()
 
-    meta_parts = [f"<strong style='color:#18181b;'>{company_esc}</strong>", loc_esc]
-    if team_esc:
-        meta_parts.append(team_esc)
-    meta_parts.append(age_esc)
-    meta_html = " &nbsp;&middot;&nbsp; ".join(meta_parts)
-
-    co_ind = (j.get("company_industry") or "").strip()
-    co_desc = (j.get("company_description") or "").strip()
-    company_profile_html = ""
-    if co_ind or co_desc:
-        ind_span = f"<span style='font-weight:700;color:#0f766e;'>{html.escape(co_ind)}</span>" if co_ind else ""
-        desc_span = html.escape(co_desc) if co_desc else ""
-        sep = " &mdash; " if (ind_span and desc_span) else ""
-        company_profile_html = (
-            f"<div style='font-size:11.8px;color:#52525b;margin-top:4px;line-height:1.42;'>"
-            f"&#127970; {ind_span}{sep}{desc_span}</div>"
-        )
-
-    badges = []
-    if is_upgrade:
-        badges.append(
-            "<span style='display:inline-block;background-color:#09090b;color:#ffffff;"
-            "font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px;"
-            "letter-spacing:0.6px;margin:0 6px 4px 0;text-transform:uppercase;'>"
-            "&uarr; Career Upgrade Move</span>"
-        )
-    if is_hot:
-        badges.append(
-            f"<span style='display:inline-block;background-color:#fef3c7;color:#92400e;"
-            f"border:1px solid #fde68a;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;"
-            f"letter-spacing:0.4px;margin:0 6px 4px 0;'>&#128293; HOT &middot; {age_esc.upper()}</span>"
-        )
-    elif j.get("is_new"):
-        badges.append(
-            "<span style='display:inline-block;background-color:#f4f4f5;color:#27272a;"
-            "font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;"
-            "margin:0 6px 4px 0;'>NEW</span>"
-        )
-
     score = analysis.get("match_score")
     if not isinstance(score, (int, float)):
         score = match_meta.get("match_score")
     score_int = int(score) if isinstance(score, (int, float)) else None
+
+    # One quiet label line instead of coloured badges (the section heading already says "upgrade")
+    label_bits = []
+    if is_hot:
+        label_bits.append("Hot")
+    elif j.get("is_new"):
+        label_bits.append("New")
     if score_int is not None:
-        badges.append(
-            f"<span style='display:inline-block;background-color:#ecfdf5;color:#065f46;"
-            f"border:1px solid #a7f3d0;font-size:10px;font-weight:700;padding:2px 8px;"
-            f"border-radius:4px;margin:0 6px 4px 0;'>&#9733; {score_int}% CV Match</span>"
-        )
+        label_bits.append(f"{score_int}% CV Match")
+    label_html = (
+        f'<div style="{EMAIL_LABEL_STYLE}color:{EMAIL_MUTE};margin:0 0 5px;">{" &middot; ".join(label_bits)}</div>'
+        if label_bits
+        else ""
+    )
+
+    meta_bits = [f'<span style="color:{EMAIL_INK};">{company_esc}</span>'] if company_esc else []
+    meta_bits.extend(bit for bit in (loc_esc, team_esc, age_esc) if bit)
+    meta_html = " &middot; ".join(meta_bits)
+
+    small_style = f"font-size:13px;line-height:1.55;color:{EMAIL_MUTE};"
+
+    co_ind = str(j.get("company_industry") or "").strip()
+    co_desc = str(j.get("company_description") or "").strip()
+    profile_html = ""
+    if show_company_profile and (co_ind or co_desc):
+        ind_html = f'<span style="color:{EMAIL_INK};">{html.escape(co_ind)}</span>' if co_ind else ""
+        sep = " &mdash; " if (co_ind and co_desc) else ""
+        profile_html = f'<div style="margin:8px 0 0;{small_style}">{ind_html}{sep}{html.escape(co_desc)}</div>'
 
     upgrade_html = (
-        f"<div style='font-size:12.5px;color:#047857;font-weight:600;margin:6px 0 4px;line-height:1.4;'>"
-        f"&uarr; {html.escape(upgrade_reason)}</div>"
+        f'<div style="margin:8px 0 0;font-size:13px;line-height:1.55;color:{EMAIL_BODY};">&uarr; {html.escape(upgrade_reason)}</div>'
         if is_upgrade and upgrade_reason
         else ""
     )
 
-    llm_box_html = ""
+    fit_html = ""
     if analysis or match_meta:
-        why_raw = (analysis.get("lucy_why_it_fits") or match_meta.get("match_rationale") or "").strip()
-        why_esc = html.escape(why_raw)
-        synergy_raw = (match_meta.get("industry_synergy") or "").strip()
-        synergy_html = (
-            f"<div style='font-size:11.5px;color:#52525b;margin-top:4px;font-style:italic;'>"
-            f"&#128279; Industry &amp; Company Fit: {html.escape(synergy_raw)}</div>"
-            if synergy_raw
-            else ""
-        )
-        kws = (analysis.get("matched_keywords") or match_meta.get("matched_keywords") or [])[:6]
-        kw_pills = "".join(
-            f"<span style='display:inline-block;background-color:#ffffff;border:1px solid #e4e4e7;"
-            f"color:#3f3f46;font-size:10.5px;padding:1px 6px;border-radius:4px;margin:2px 4px 2px 0;'>"
-            f"{html.escape(k)}</span>"
-            for k in kws
-        )
-        bar_pct = max(50, min(100, score_int or 88))
-        meter_html = (
-            f"<div style='background-color:#e4e4e7;height:4px;border-radius:999px;overflow:hidden;margin:5px 0 8px;'>"
-            f"<div style='background-color:#10b981;width:{bar_pct}%;height:4px;border-radius:999px;'></div>"
-            f"</div>"
-        )
-        kw_line = f"<div style='margin-top:6px;'>{kw_pills}</div>" if kw_pills else ""
-
-        if analysis and (j.get("cv_filename") or analysis.get("cv")):
-            cv_obj = analysis.get("cv") or {}
-            dir_txt = cv_obj.get("target_direction") or infer_target_direction(
-                j, None, cv_obj.get("core_skills") or []
+        why_raw = str(analysis.get("lucy_why_it_fits") or match_meta.get("match_rationale") or "").strip()
+        synergy_raw = str(match_meta.get("industry_synergy") or "").strip()
+        has_cv = bool(analysis and (j.get("cv_filename") or analysis.get("cv")))
+        if has_cv or why_raw:
+            heading = (
+                "Lucy&rsquo;s Headhunter Take &amp; Tailored CV"
+                if has_cv
+                else "Why This Role &amp; Company Match Your Profile"
             )
-            dir_esc = html.escape(dir_txt)
-            dir_line = (
-                f"<div style='font-size:11.5px;color:#0f766e;font-weight:700;margin-bottom:4px;'>"
-                f"{dir_esc}</div>"
-                if dir_esc else ""
-            )
-            att_name = html.escape(j.get("cv_filename", "Tailored_CV.docx"))
-            llm_box_html = f"""
-      <div style="background-color:#fafafa;border:1px solid #e4e4e7;border-left:3px solid #10b981;border-radius:6px;padding:10px 13px;margin-top:10px;font-size:12.5px;line-height:1.5;color:#27272a;">
-        <div style="font-size:11.5px;font-weight:700;color:#09090b;letter-spacing:0.1px;">&#10024; Lucy&rsquo;s Headhunter Take &amp; Tailored CV</div>
-        {meter_html}
-        {dir_line}
-        <div style="color:#27272a;">{why_esc}</div>
-        {synergy_html}
-        {kw_line}
-        <div style="margin-top:8px;padding-top:6px;border-top:1px solid #e4e4e7;font-size:11.5px;color:#0f766e;font-weight:700;">
-          &#128206; ATS-Armed &amp; Attached: <code style="background-color:#ffffff;border:1px solid #e4e4e7;color:#09090b;padding:1px 6px;border-radius:4px;font-size:11px;">{att_name}</code>
-        </div>
-      </div>"""
-        elif why_esc:
-            llm_box_html = f"""
-      <div style="background-color:#fafafa;border:1px solid #e4e4e7;border-left:3px solid #0f766e;border-radius:6px;padding:10px 13px;margin-top:10px;font-size:12.5px;line-height:1.5;color:#27272a;">
-        <div style="font-size:11.5px;font-weight:700;color:#09090b;letter-spacing:0.1px;">&#127919; Why This Role &amp; Company Match Your Profile</div>
-        {meter_html}
-        <div style="color:#27272a;">{why_esc}</div>
-        {synergy_html}
-        {kw_line}
-      </div>"""
-
-    card_style = (
-        "border:1.5px solid #18181b;border-left:4px solid #09090b;background-color:#ffffff;border-radius:10px;padding:15px 17px;margin-bottom:12px;"
-        if is_upgrade
-        else "border:1px solid #e4e4e7;background-color:#ffffff;border-radius:10px;padding:13px 16px;margin-bottom:9px;"
-    )
-    btn_style = (
-        "display:inline-block;background-color:#09090b;color:#ffffff;padding:7px 13px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap;"
-        if is_upgrade
-        else "display:inline-block;background-color:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap;"
-    )
-    badge_row = f"<div style='margin-bottom:5px;'>{''.join(badges)}</div>" if badges else ""
+            parts = [f'<div style="{EMAIL_LABEL_STYLE}color:{EMAIL_MUTE};margin:14px 0 4px;">{heading}</div>']
+            if why_raw:
+                parts.append(
+                    f'<div style="font-size:14px;line-height:1.6;color:{EMAIL_BODY};">{html.escape(why_raw)}</div>'
+                )
+            if synergy_raw:
+                parts.append(
+                    f'<div style="margin:6px 0 0;{small_style}">Industry &amp; Company Fit: {html.escape(synergy_raw)}</div>'
+                )
+            if has_cv:
+                att_name = html.escape(str(j.get("cv_filename") or "Tailored_CV.docx"))
+                parts.append(
+                    f'<div style="margin:6px 0 0;{small_style}">Attached: <span style="color:{EMAIL_INK};">{att_name}</span></div>'
+                )
+            fit_html = "".join(parts)
 
     return f"""
-    <div style="{card_style}">
-      {badge_row}
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
-        <tr>
-          <td valign="top" style="padding-right:12px;">
-            <div style="font-size:15.5px;font-weight:700;color:#09090b;line-height:1.35;">
-              <a href="{url_esc}" style="color:#09090b;text-decoration:none;">{title_esc}</a>
-            </div>
-            <div style="font-size:12.5px;color:#71717a;margin-top:3px;line-height:1.4;">
-              {meta_html}
-            </div>
-            {company_profile_html}
-          </td>
-          <td valign="top" align="right" width="96" style="white-space:nowrap;">
-            <a href="{url_esc}" style="{btn_style}">Apply &rarr;</a>
-          </td>
-        </tr>
-      </table>
-      {upgrade_html}
-      {llm_box_html}
-    </div>"""
+                <tr>
+                  <td style="padding:18px 0 20px;border-top:1px solid {EMAIL_LINE};font-family:{EMAIL_FONT};">
+                    {label_html}
+                    <div style="font-size:16px;font-weight:600;line-height:1.4;"><a href="{url_esc}" style="color:{EMAIL_INK};text-decoration:none;">{title_esc}</a></div>
+                    <div style="margin:3px 0 0;{small_style}">{meta_html}</div>
+                    {profile_html}{upgrade_html}{fit_html}
+                    <div style="margin:12px 0 0;font-size:13px;line-height:1.5;"><a href="{url_esc}" style="color:{EMAIL_ACCENT};font-weight:600;text-decoration:none;">Apply &rarr;</a></div>
+                  </td>
+                </tr>"""
 
 
 def build_email_message(
@@ -4151,12 +4098,12 @@ def build_email_message(
         f"{pack['cadence_subline']} — Lucy, your personal headhunter & your daily reminder to check where to apply today.",
         "",
         f"Us vs. Their Machine · Chapter {edition}: {chapter_title}" if chapter_title else f"Us vs. Their Machine · Chapter {edition}",
-        f"⚡ {insider_headline}",
+        insider_headline,
         insider_message,
     ]
     if ai_intel:
-        txt_lines.append(f"🛰 Their AI vs. Our AI: {ai_intel}")
-    txt_lines.append(f"🤝 Lucy's Corner: {connection_ps}")
+        txt_lines.append(f"Their AI vs. Our AI: {ai_intel}")
+    txt_lines.append(f"Lucy's Corner: {connection_ps}")
     if partner_signoff:
         txt_lines.append(f"— {partner_signoff}")
     txt_lines.append("")
@@ -4209,60 +4156,67 @@ def build_email_message(
         txt_lines.append("")
     if overflow_note:
         txt_lines.extend([overflow_note, ""])
-    txt_lines.append(f"🎯 Today's 60-Second Play: {micro_challenge}")
+    txt_lines.append(f"Today's 60-second play: {micro_challenge}")
     txt_lines.extend(["", radar_footer])
     msg.set_content("\n".join(txt_lines))
 
-    # Minimalist HTML sections
+    # Minimalist HTML: one column on white, hairline dividers and type-only hierarchy.
+    profiled_companies = set()
+
+    def _job_rows(job_list):
+        """Render the rows for one section; each employer's profile is shown once per email."""
+        rows = []
+        for jb in job_list:
+            co_key = norm(jb.get("company") or "")
+            rows.append(_render_job_card_html(jb, today, show_company_profile=co_key not in profiled_companies))
+            if co_key:
+                profiled_companies.add(co_key)
+        return "".join(rows)
+
+    def _section_html(heading, job_list):
+        return f"""
+              <div style="{EMAIL_LABEL_STYLE}color:{EMAIL_INK};margin:30px 0 0;padding:0 0 9px;">{heading} ({len(job_list)})</div>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">{_job_rows(job_list)}
+              </table>"""
+
+    small_note_style = f"font-size:13px;line-height:1.6;color:{EMAIL_MUTE};"
     sections_html = []
     if quiet_day:
         sections_html.append(
-            "<div style='background-color:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:8px;"
-            "padding:10px 13px;margin-bottom:16px;font-size:12.5px;line-height:1.5;'>"
-            f"<strong>&#127774; {html.escape(quiet_note)}</strong></div>"
+            f'<div style="margin:28px 0 0;font-size:14px;line-height:1.6;color:{EMAIL_BODY};">{html.escape(quiet_note)}</div>'
         )
-    elif is_quiet_spotlight:
+    else:
+        # One summary line replaces the scoreboard tiles
+        summary_bits = [_plural(n_roles, "matching role") if resend_all else f"{n_roles} new for you"]
+        if upgrade_jobs:
+            summary_bits.append(_plural(len(upgrade_jobs), "Career Upgrade Move"))
+        if hot_jobs:
+            summary_bits.append(f"{len(hot_jobs)} Hot Off the Press")
+        if attachments:
+            summary_bits.append(_plural(len(attachments), "Tailored CV") + " attached")
+        if not resend_all and int(all_jobs_count or 0) > n_roles:
+            summary_bits.append(f"{int(all_jobs_count)} active matches")
         sections_html.append(
-            "<div style='background-color:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;border-radius:8px;"
-            "padding:9px 12px;margin-bottom:16px;font-size:12px;line-height:1.45;'>"
-            "<strong>&#10024; Quiet-Market Momentum Spotlight:</strong> Zero brand-new postings dropped overnight, "
-            "so I hand-picked your top unclaimed step-up opportunities still live on the radar to keep your daily momentum unbroken."
-            "</div>"
+            f'<div style="margin:28px 0 0;{small_note_style}">'
+            + " &middot; ".join(html.escape(bit) for bit in summary_bits)
+            + "</div>"
         )
+        if is_quiet_spotlight:
+            sections_html.append(
+                f'<div style="margin:10px 0 0;{small_note_style}">'
+                f'<span style="color:{EMAIL_INK};font-weight:600;">Quiet-Market Momentum Spotlight:</span> '
+                "Zero brand-new postings dropped overnight, so I hand-picked your top unclaimed step-up "
+                "opportunities still live on the radar to keep your daily momentum unbroken.</div>"
+            )
 
     if upgrade_jobs:
-        up_cards = "".join(_render_job_card_html(j, today) for j in upgrade_jobs)
-        sections_html.append(f"""
-        <div style="margin-bottom:24px;">
-          <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.1px;color:#09090b;border-bottom:2px solid #09090b;padding-bottom:6px;margin-bottom:12px;">
-            &#9889; Career Upgrade Moves ({len(upgrade_jobs)}) &middot; Step-Up Targets
-          </div>
-          {up_cards}
-        </div>""")
-
+        sections_html.append(_section_html("Career Upgrade Moves", upgrade_jobs))
     if standard_jobs:
-        std_heading = (
-            "Hot Off the Press &amp; Additional Matches"
-            if hot_jobs
-            else "Additional Curated Matches"
-        )
-        std_cards = "".join(_render_job_card_html(j, today) for j in standard_jobs)
-        sections_html.append(f"""
-        <div style="margin-bottom:16px;">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.1px;color:#71717a;border-bottom:1px solid #e4e4e7;padding-bottom:6px;margin-bottom:12px;">
-            {std_heading} ({len(standard_jobs)})
-          </div>
-          {std_cards}
-        </div>""")
-    elif hot_jobs:
-        sections_html.append(
-            "<div style='font-size:11px;color:#71717a;margin:0 0 12px;'>Hot Off the Press: includes roles posted in the last 1&ndash;2 days.</div>"
-        )
+        sections_html.append(_section_html("More Matches" if upgrade_jobs else "Matches", standard_jobs))
     if overflow_note:
         sections_html.append(
-            "<div style='background-color:#fafafa;border:1px dashed #d4d4d8;color:#3f3f46;border-radius:8px;"
-            "padding:9px 12px;margin:4px 0 12px;font-size:12px;line-height:1.5;'>"
-            f"&#128194; {html.escape(overflow_note)}</div>"
+            f'<div style="margin:0;padding:16px 0 0;border-top:1px solid {EMAIL_LINE};{small_note_style}">'
+            f"{html.escape(overflow_note)}</div>"
         )
 
     first_name_esc = html.escape(first_name)
@@ -4274,40 +4228,28 @@ def build_email_message(
     intel_esc = html.escape(ai_intel)
     signoff_esc = html.escape(partner_signoff)
     radar_footer_esc = html.escape(radar_footer)
-    cadence_title_esc = html.escape(pack["cadence_title"])
     cadence_sub_esc = html.escape(pack["cadence_subline"])
     preheader_core = f"{subject_spark} — " if subject_spark else ""
     preheader_esc = html.escape(f"{preheader_core}{insider_headline}: {insider_message}")
     chapter_label = (
-        f"&#9889; Us vs. The System &middot; Chapter {edition}: {chapter_esc} &middot; {cadence_title_esc}"
-        if chapter_title
-        else f"&#9889; Today&rsquo;s Edge &middot; Us vs. The System &middot; {cadence_title_esc}"
+        f"Us vs. The System &middot; Chapter {edition}: {chapter_esc}" if chapter_title else "Us vs. The System"
+    )
+    streak_label = f"{streak_days}d Streak" if streak_days >= 2 else "Day 1 Live"
+    lead_in_style = f"color:{EMAIL_INK};font-weight:600;"
+    milestone_html = (
+        f'<div style="{EMAIL_LABEL_STYLE}color:{EMAIL_ACCENT};margin:0 0 6px;">{html.escape(milestone_badge)}</div>'
+        if milestone_badge
+        else ""
     )
     intel_html = (
-        f"<div style='margin-top:11px;padding:9px 12px;background-color:#18181b;border:1px solid #27272a;"
-        f"border-left:3px solid #34d399;border-radius:7px;font-size:12px;color:#d4d4d8;line-height:1.5;'>"
-        f"<span style='color:#34d399;font-weight:700;'>&#128737; Their AI vs. Our AI:</span> {intel_esc}</div>"
+        f'<div style="margin:14px 0 0;{small_note_style}">'
+        f'<span style="{lead_in_style}">Their AI vs. Our AI:</span> {intel_esc}</div>'
         if ai_intel
         else ""
     )
     signoff_html = (
-        f"<div style='margin-top:6px;font-size:11.5px;color:#71717a;font-style:italic;'>&mdash; {signoff_esc}</div>"
-        if partner_signoff
-        else ""
+        f'<div style="margin:10px 0 0;{small_note_style}">&mdash; {signoff_esc}</div>' if partner_signoff else ""
     )
-
-    streak_label = f"&#128293; {streak_days}d Streak" if streak_days >= 2 else "Day 1 Live"
-    milestone_html = (
-        f"<div style='display:inline-block;background-color:#064e3b;border:1px solid #059669;color:#6ee7b7;"
-        f"font-size:10px;font-weight:700;padding:3px 9px;border-radius:999px;letter-spacing:0.5px;"
-        f"margin-bottom:10px;text-transform:uppercase;'>&#127942; {html.escape(milestone_badge)}</div>"
-        if milestone_badge
-        else ""
-    )
-
-    up_color = "#059669" if upgrade_jobs else "#18181b"
-    hot_color = "#d97706" if hot_jobs else "#18181b"
-    cv_color = "#0f766e" if attachments else "#71717a"
 
     html_body = f"""<!doctype html>
 <html lang="en">
@@ -4316,83 +4258,51 @@ def build_email_message(
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lucy &middot; Briefing #{edition}</title>
 </head>
-<body style="margin:0;padding:28px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:#18181b;background-color:#f4f4f5;-webkit-font-smoothing:antialiased;">
+<body style="margin:0;padding:0;background-color:#ffffff;color:{EMAIL_INK};font-family:{EMAIL_FONT};-webkit-font-smoothing:antialiased;">
   <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">{preheader_esc}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;background-color:#ffffff;">
+    <tr>
+      <td align="center" style="padding:32px 20px 40px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;max-width:600px;">
+          <tr>
+            <td align="left" style="text-align:left;font-family:{EMAIL_FONT};color:{EMAIL_INK};">
 
-  <div style="max-width:640px;margin:0 auto;background-color:#ffffff;border:1px solid #e4e4e7;border-radius:14px;padding:30px 28px 24px;">
+              <!-- Masthead: one quiet line -->
+              <div style="{EMAIL_LABEL_STYLE}color:{EMAIL_MUTE};">
+                <span style="color:{EMAIL_INK};">Lucy &middot; Personal Headhunter</span> &nbsp;&middot;&nbsp; Briefing #{edition} &middot; {streak_label} &middot; {date_str}
+              </div>
 
-    <!-- Editorial Masthead + Briefing Edition & Streak -->
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin-bottom:10px;">
-      <tr>
-        <td align="left" style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:1.3px;color:#059669;">
-          &#10022; Lucy &middot; Personal Headhunter
-        </td>
-        <td align="right" style="font-size:11px;font-weight:700;color:#52525b;">
-          Briefing #{edition} &middot; {streak_label} &middot; {date_str}
-        </td>
-      </tr>
-    </table>
+              <h1 style="margin:22px 0 6px;font-size:24px;font-weight:700;letter-spacing:-0.3px;line-height:1.25;color:{EMAIL_INK};">Good morning, {first_name_esc}.</h1>
+              <div style="font-size:14px;line-height:1.55;color:{EMAIL_MUTE};">{cadence_sub_esc} &mdash; your daily reminder to check where to apply today.</div>
 
-    <h1 style="margin:0 0 4px;font-size:23px;font-weight:800;letter-spacing:-0.5px;color:#09090b;line-height:1.25;">
-      Good morning, {first_name_esc}.
-    </h1>
-    <div style="font-size:13px;color:#52525b;margin-bottom:16px;line-height:1.45;">
-      <strong style="color:#18181b;">{cadence_sub_esc}</strong> &mdash; your daily reminder to check where to apply today.
-    </div>
+              <!-- Lucy's daily note: plain type, no card -->
+              <div style="margin:30px 0 0;">
+                {milestone_html}
+                <div style="{EMAIL_LABEL_STYLE}color:{EMAIL_MUTE};">{chapter_label}</div>
+                <div style="margin:6px 0 8px;font-size:18px;font-weight:700;letter-spacing:-0.2px;line-height:1.35;color:{EMAIL_INK};">{headline_esc}</div>
+                <div style="font-size:15px;line-height:1.65;color:{EMAIL_BODY};">{message_esc}</div>
+                {intel_html}
+                <div style="margin:10px 0 0;{small_note_style}"><span style="{lead_in_style}">Lucy&rsquo;s Corner:</span> {conn_esc}</div>
+                {signoff_html}
+              </div>
 
-    <!-- Dark Obsidian 'Us vs. Their Machine' Daily Manifesto + Their-AI-vs-Our-AI Intel + Lucy Partnership Corner -->
-    <div style="background-color:#09090b;color:#fafafa;border-radius:11px;padding:18px 20px;margin-bottom:16px;">
-      {milestone_html}
-      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1.4px;color:#34d399;margin-bottom:6px;">
-        {chapter_label}
-      </div>
-      <div style="font-size:16.5px;font-weight:800;color:#ffffff;letter-spacing:-0.2px;margin-bottom:7px;line-height:1.3;">
-        {headline_esc}
-      </div>
-      <div style="font-size:13px;color:#e4e4e7;line-height:1.58;">
-        {message_esc}
-      </div>
-      {intel_html}
-      <div style="margin-top:12px;padding-top:10px;border-top:1px solid #27272a;font-size:12px;color:#a1a1aa;line-height:1.5;">
-        <span style="color:#34d399;font-weight:700;">&#129309; Lucy&rsquo;s Corner:</span> {conn_esc}
-        {signoff_html}
-      </div>
-    </div>
+              {''.join(sections_html)}
 
-    <!-- 4-Tile Minimalist Scoreboard Strip -->
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;border-spacing:0;background-color:#fafafa;border:1px solid #e4e4e7;border-radius:10px;margin-bottom:22px;text-align:center;">
-      <tr>
-        <td width="25%" style="padding:10px 6px;border-right:1px solid #e4e4e7;">
-          <div style="font-size:17px;font-weight:800;color:{up_color};line-height:1.1;">{len(upgrade_jobs)}</div>
-          <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#71717a;margin-top:3px;">Upgrade Moves</div>
-        </td>
-        <td width="25%" style="padding:10px 6px;border-right:1px solid #e4e4e7;">
-          <div style="font-size:17px;font-weight:800;color:{hot_color};line-height:1.1;">{len(hot_jobs)}</div>
-          <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#71717a;margin-top:3px;">Hot (0&ndash;2d)</div>
-        </td>
-        <td width="25%" style="padding:10px 6px;border-right:1px solid #e4e4e7;">
-          <div style="font-size:17px;font-weight:800;color:{cv_color};line-height:1.1;">{len(attachments)}</div>
-          <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#71717a;margin-top:3px;">Ready CVs</div>
-        </td>
-        <td width="25%" style="padding:10px 6px;">
-          <div style="font-size:17px;font-weight:800;color:#18181b;line-height:1.1;">{len(jobs_to_send)}</div>
-          <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#71717a;margin-top:3px;">New for you ({all_jobs_count} Active)</div>
-        </td>
-      </tr>
-    </table>
+              <!-- Today's 60-second play -->
+              <div style="margin:30px 0 0;padding:18px 0 0;border-top:1px solid {EMAIL_LINE};">
+                <div style="{EMAIL_LABEL_STYLE}color:{EMAIL_MUTE};">Today&rsquo;s 60-second play</div>
+                <div style="margin:6px 0 0;font-size:14px;line-height:1.6;color:{EMAIL_BODY};">{challenge_esc}</div>
+              </div>
 
-    {''.join(sections_html)}
+              <!-- Radar transparency footer -->
+              <div style="margin:26px 0 0;padding:16px 0 0;border-top:1px solid {EMAIL_LINE};font-size:12px;line-height:1.6;color:{EMAIL_MUTE};">{radar_footer_esc}</div>
 
-    <!-- Dynamic Daily 60-Second Dopamine Challenge Footer -->
-    <div style="margin-top:18px;padding:14px 16px;background-color:#fafafa;border:1px solid #e4e4e7;border-left:3px solid #059669;border-radius:9px;font-size:12px;color:#27272a;line-height:1.5;">
-      <strong style="color:#09090b;">&#127919; Today&rsquo;s 60-Second Dopamine Play:</strong> {challenge_esc}
-    </div>
-
-    <!-- Radar transparency footer -->
-    <div style="margin-top:16px;padding-top:12px;border-top:1px solid #e4e4e7;font-size:11px;color:#a1a1aa;line-height:1.55;text-align:center;">
-      {radar_footer_esc}
-    </div>
-  </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>"""
     msg.add_alternative(html_body, subtype="html")
