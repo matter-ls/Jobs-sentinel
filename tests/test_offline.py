@@ -266,13 +266,17 @@ class TitleAndLocation(unittest.TestCase):
 
     def test_companies_json_integrity(self):
         companies = fj.load_companies()
-        self.assertGreaterEqual(len(companies), 105)
+        self.assertGreaterEqual(len(companies), 109)
         seen_names = set()
         seen_targets = set()
         for c in companies:
             name = c.get("name", "").strip()
             ats = c.get("ats", "").strip()
+            industry = c.get("industry", "").strip()
+            description = c.get("description", "").strip()
             self.assertTrue(name)
+            self.assertGreaterEqual(len(industry), 4, f"Missing/short industry for {name}")
+            self.assertGreaterEqual(len(description), 40, f"Missing/short description for {name}")
             self.assertIn(ats, fj.FETCHERS, f"Unsupported ATS for {name}: {ats}")
             self.assertNotIn(name.lower(), seen_names, f"Duplicate company name: {name}")
             seen_names.add(name.lower())
@@ -1111,9 +1115,14 @@ class EndToEnd(unittest.TestCase):
         desc = fj.enrich_job_description(jobs[0])
         self.assertIn("Drive B2B enterprise crypto payment sales", desc)
 
-    def test_gemini_3_8_flash_default_and_404_auto_discovery(self):
-        self.assertEqual(CFG["llm_model"], "gemini-3.8-flash")
-        self.assertEqual(fj.DEFAULT_LLM_MODEL, "gemini-3.8-flash")
+    def test_gemini_4_hydrogen_free_tier_default_cascade_and_auto_discovery(self):
+        self.assertEqual(CFG["llm_model"], "gemini-4-hydrogen")
+        self.assertEqual(fj.DEFAULT_LLM_MODEL, "gemini-4-hydrogen")
+        self.assertEqual(
+            fj.FALLBACK_LLM_MODELS,
+            ("gemini-4-hydrogen", "gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-latest"),
+        )
+        self.assertNotIn("gemini-3.8-flash-lite", fj.FALLBACK_LLM_MODELS)
 
         fj._DEAD_GEMINI_MODELS.clear()
         fj._DISCOVERED_GEMINI_MODELS = None
@@ -1126,10 +1135,10 @@ class EndToEnd(unittest.TestCase):
                 return {
                     "models": [
                         {"name": "models/gemini-4.2-flash-tts", "supportedGenerationMethods": ["generateContent"]},
-                        {"name": "models/gemini-4.2-flash", "supportedGenerationMethods": ["generateContent"]},
+                        {"name": "models/gemini-4.2-hydrogen", "supportedGenerationMethods": ["generateContent"]},
                     ]
                 }
-            if "gemini-4.2-flash:generateContent" in url:
+            if "gemini-4.2-hydrogen:generateContent" in url:
                 return {
                     "candidates": [{
                         "content": {
@@ -1145,11 +1154,18 @@ class EndToEnd(unittest.TestCase):
             self.assertEqual(out["match_score"], 95)
             # First call normalized 'models/gemini-2.5-flash' -> '/models/gemini-2.5-flash:generateContent'
             self.assertIn("/v1beta/models/gemini-2.5-flash:generateContent", calls[0][0])
-            # Also tried gemini-3.8-flash with thinkingLevel: low
+            # Cascaded through gemini-4-hydrogen with Gemini 4 API compliance:
+            # no temperature field, maxOutputTokens >= 16384, thinkingLevel == "low"
+            c4 = [p for u, p in calls if "gemini-4-hydrogen:generateContent" in u][0]
+            self.assertNotIn("temperature", c4["generationConfig"])
+            self.assertGreaterEqual(c4["generationConfig"]["maxOutputTokens"], 16384)
+            self.assertEqual(c4["generationConfig"]["thinkingConfig"], {"thinkingLevel": "low"})
+            # Also tried gemini-3.8-flash and gemini-3.5-flash-lite
             c38 = [p for u, p in calls if "gemini-3.8-flash:generateContent" in u][0]
             self.assertEqual(c38["generationConfig"]["thinkingConfig"], {"thinkingLevel": "low"})
-            # Auto-discovered gemini-4.2-flash (skipping -tts) and succeeded
-            self.assertTrue(any("gemini-4.2-flash:generateContent" in u for u, _ in calls))
+            self.assertTrue(any("gemini-3.5-flash-lite:generateContent" in u for u, _ in calls))
+            # Auto-discovered gemini-4.2-hydrogen (skipping -tts) and succeeded
+            self.assertTrue(any("gemini-4.2-hydrogen:generateContent" in u for u, _ in calls))
             self.assertIn("gemini-2.5-flash", fj._DEAD_GEMINI_MODELS)
         finally:
             fj._DEAD_GEMINI_MODELS.clear()
@@ -1537,9 +1553,404 @@ class EndToEnd(unittest.TestCase):
         self.assertIn("default: false", email_all_block, "Manual runs must not re-send every role by default")
         for action_ref in ("actions/checkout@v7", "actions/setup-python@v7", "actions/upload-artifact@v7"):
             self.assertIn(action_ref, wf_txt)
-        for sub in fj.get_subscribers(CFG):
-            self.assertIn(f"- {sub['id']}", wf_txt, f"Subscriber {sub['id']} missing from workflow_dispatch options")
+        sub_block = wf_txt.split("subscriber:")[1].split("check_only:")[0]
+        self.assertIn("type: string", sub_block, "subscriber input must be string so unlimited auto-onboarded IDs work")
+        self.assertIn('default: "all"', sub_block)
+        self.assertIn("gemini-4-hydrogen", wf_txt)
+        self.assertIn("min_match_score:", wf_txt)
+
+        onboard_wf_path = Path(fj.ROOT) / ".github" / "workflows" / "onboard.yml"
+        self.assertTrue(onboard_wf_path.exists())
+        onboard_wf_txt = onboard_wf_path.read_text(encoding="utf-8")
+        self.assertNotIn("\t", onboard_wf_txt)
+        self.assertIn("onboard_subscriber", onboard_wf_txt)
+        self.assertIn("-m unittest discover -s tests -b -v", onboard_wf_txt)
+        self.assertIn("--send-confirmation-from", onboard_wf_txt)
+
+    @patch("smtplib.SMTP_SSL")
+    def test_genai_candidate_job_match_gate_and_rejection_ledger(self, mock_smtp_ssl):
+        """GenAI Match Gate validates every filtered opening against candidate career_goal + CV +
+        radar company profile, suppresses non-matches from Lucy's report, explains match rationale
+        and industry synergy on every kept card, caches rejections in state/seen.json, and rolls
+        back cleanly if SMTP delivery fails."""
+        mock_server = MagicMock()
+        mock_smtp_ssl.return_value.__enter__.return_value = mock_server
+
+        real_companies_by_name = {c["name"]: c for c in fj.load_companies()}
+        radar_cos = [
+            {
+                "name": "AstraZeneca",
+                "ats": "greenhouse",
+                "board": "azboard",
+                "industry": real_companies_by_name["AstraZeneca"]["industry"],
+                "description": real_companies_by_name["AstraZeneca"]["description"],
+            },
+            {
+                "name": "Flex",
+                "ats": "lever",
+                "board": "flexboard",
+                "industry": real_companies_by_name["Flex"]["industry"],
+                "description": real_companies_by_name["Flex"]["description"],
+            },
+        ]
+
+        az_feed = {
+            "jobs": [
+                {
+                    "id": 101,
+                    "title": "Director, Global Process Excellence & Automation",
+                    "location": {"name": "Guadalajara, Jalisco, Mexico"},
+                    "absolute_url": "https://boards.greenhouse.io/azboard/jobs/101",
+                    "first_published": "2026-11-04T10:00:00Z",
+                    "content": "<p>Lead enterprise process mining, GBS transformation, and automation across AstraZeneca hubs.</p>",
+                },
+                {
+                    "id": 102,
+                    "title": "Director, Clinical Oncology Wet-Lab Research",
+                    "location": {"name": "Guadalajara, Jalisco, Mexico"},
+                    "absolute_url": "https://boards.greenhouse.io/azboard/jobs/102",
+                    "first_published": "2026-11-04T12:00:00Z",
+                    "content": "<p>Requires MD or PhD in Molecular Oncology and 10+ years of clinical trial wet-lab bench science.</p>",
+                },
+            ]
+        }
+        flex_feed = [
+            {
+                "id": "fx201",
+                "text": "Senior Director, Supply Chain Process Intelligence",
+                "categories": {"location": "Zapopan, Jalisco", "allLocations": ["Zapopan, Jalisco"], "team": "Operations"},
+                "hostedUrl": "https://jobs.lever.co/flexboard/fx201",
+                "createdAt": 1793750400000,
+                "descriptionPlain": "Drive end-to-end operational excellence and process analytics across Jalisco manufacturing.",
+            }
+        ]
+        fj.http_json = fake_http({"greenhouse.io": az_feed, "lever.co": flex_feed})
+
+        match_prompts = []
+
+        def fake_match_gate(prompt_text, **kwargs):
+            import re as _re
+            match_prompts.append(prompt_text)
+            out_matches = []
+            for m in _re.finditer(r"\[JOB id=(\d+)\]\nTitle: ([^\n]+)\nHiring Employer: ([^\n]+)", prompt_text):
+                job_id = int(m.group(1))
+                title = m.group(2).strip()
+                employer = m.group(3).strip()
+                if "Clinical Oncology" in title:
+                    out_matches.append({
+                        "id": job_id,
+                        "is_good_match": False,
+                        "match_score": 24,
+                        "is_career_upgrade": False,
+                        "match_rationale": "Requires an MD/PhD in wet-lab oncology research, which conflicts with Lucas's GBS, Process Mining, and Tech Operations career track.",
+                        "industry_synergy": "",
+                        "matched_keywords": [],
+                        "upgrade_reason": "",
+                    })
+                elif "AstraZeneca" in employer:
+                    out_matches.append({
+                        "id": job_id,
+                        "is_good_match": True,
+                        "match_score": 95,
+                        "is_career_upgrade": True,
+                        "match_rationale": "Direct match with your Process Mining & Automation track record at AstraZeneca GITC Guadalajara and Google Cloud infrastructure.",
+                        "industry_synergy": "Biopharmaceutical GBS & Enterprise IT synergy with your prior Global Process Mining Lead tenure at AstraZeneca.",
+                        "matched_keywords": ["Process Mining", "GBS Transformation", "Automation"],
+                        "upgrade_reason": "Steps up into global Director ownership across AstraZeneca's enterprise hubs.",
+                    })
+                else:
+                    out_matches.append({
+                        "id": job_id,
+                        "is_good_match": True,
+                        "match_score": 88,
+                        "is_career_upgrade": True,
+                        "match_rationale": "Strong fit between your large-scale data center and supply chain process intelligence leadership and Flex's Jalisco campus.",
+                        "industry_synergy": "High-tech hardware & EMS operations scale directly mirrors your global infrastructure operations background.",
+                        "matched_keywords": ["Process Intelligence", "Operational Excellence"],
+                        "upgrade_reason": "Senior Director scope leading multi-site operational intelligence at Flex.",
+                    })
+            return {"_llm_model": "gemini-4-hydrogen", "assessments": out_matches}
+
+        # Cap tailored CVs at 1 so we verify BOTH CV-attached and non-CV-attached cards render Match Rationale & Company Profile
+        test_cfg = {
+            **CFG,
+            "max_tailored_cvs": 1,
+            "subscribers": [
+                {**s, "max_tailored_cvs": 1} if s["id"] == "lucas" else s
+                for s in CFG["subscribers"]
+            ],
+        }
+
+        env = {
+            "GMAIL_USER": "sender@gmail.com",
+            "GMAIL_APP_PASSWORD": "app-secret-password",
+            "GEMINI_API_KEY": "fake-gemini-key",
+        }
+
+        # --- Day 1: 3 filtered openings -> 1 vetoed (Oncology), 2 kept & emailed with rationales ---
+        with patch.dict(os.environ, env), \
+             patch("fetch_jobs.call_gemini_job_matches", side_effect=fake_match_gate) as mock_gate, \
+             patch("fetch_jobs._invoke_gemini_json", return_value=None):
+            code = fj.refresh(test_cfg, radar_cos, root=self.root, today=date(2026, 11, 5), send_email=True, subscriber_id="lucas")
+
+        self.assertEqual(code, 0)
+        self.assertEqual(mock_gate.call_count, 1)
+        # Prompt grounded in career_goal, enhanced CV company profiles, and radar company industry/description
+        self.assertIn("CANDIDATE CAREER GOAL", match_prompts[0])
+        self.assertIn("Biopharmaceuticals", match_prompts[0])
+        self.assertIn("CANDIDATE MASTER CV", match_prompts[0])
+
+        sent_msg = mock_server.send_message.call_args_list[-1][0][0]
+        self.assertIn("2 new roles for you", sent_msg["Subject"])
+        html_body = sent_msg.get_body(preferencelist=("html",)).get_content()
+        plain_body = sent_msg.get_body(preferencelist=("plain",)).get_content()
+
+        # Vetoed Oncology role MUST NOT appear anywhere in the email
+        self.assertNotIn("Clinical Oncology", html_body)
+        self.assertNotIn("Clinical Oncology", plain_body)
+        self.assertEqual(plain_body.count("\n- "), 2)
+
+        # Both kept roles MUST appear with company profile + industry + match rationale + industry synergy
+        self.assertIn("Director, Global Process Excellence &amp; Automation", html_body)
+        self.assertIn("Senior Director, Supply Chain Process Intelligence", html_body)
+        self.assertIn("Lucy&rsquo;s Headhunter Take &amp; Tailored CV", html_body)      # Role 1 (with CV)
+        self.assertIn("Why This Role &amp; Company Match Your Profile", html_body)      # Role 3 (without CV)
+        self.assertIn("Industry &amp; Company Fit:", html_body)
+        self.assertIn("95% CV Match", html_body)
+        self.assertIn("88% CV Match", html_body)
+        self.assertIn("Biopharmaceuticals", html_body)
+        self.assertIn("EMS", html_body)
+        self.assertIn("Industry Fit:", plain_body)
+
+        # Rejection ledger persisted in state/seen.json
+        seen_day1 = fj.load_json(self.root / "state" / "seen.json", {})
+        rej_ledger = seen_day1["subscribers"]["lucas"]["rejected_matches"]
+        self.assertIn("greenhouse:AstraZeneca:102", rej_ledger)
+        self.assertEqual(rej_ledger["greenhouse:AstraZeneca:102"]["score"], 24)
+
+        # --- Day 2: Identical feed -> rejected role is skipped from ledger (0 Gemini Match Gate calls) -> Quiet Day ---
+        with patch.dict(os.environ, env), \
+             patch("fetch_jobs.call_gemini_job_matches", side_effect=fake_match_gate) as mock_gate_d2, \
+             patch("fetch_jobs._invoke_gemini_json", return_value=None):
+            code2 = fj.refresh(test_cfg, radar_cos, root=self.root, today=date(2026, 11, 6), send_email=True, subscriber_id="lucas")
+        self.assertEqual(code2, 0)
+        self.assertEqual(mock_gate_d2.call_count, 0)
+        msg_d2 = mock_server.send_message.call_args_list[-1][0][0]
+        self.assertIn("Quiet day", msg_d2["Subject"])
+
+        # --- Day 3: New off-target role arrives AND SMTP fails -> rejected_matches rolls back cleanly ---
+        az_feed_d3 = {
+            "jobs": az_feed["jobs"] + [{
+                "id": 103,
+                "title": "Director, Clinical Oncology Wet-Lab Research II",
+                "location": {"name": "Guadalajara, Jalisco, Mexico"},
+                "absolute_url": "https://boards.greenhouse.io/azboard/jobs/103",
+                "first_published": "2026-11-07T08:00:00Z",
+            }]
+        }
+        fj.http_json = fake_http({"greenhouse.io": az_feed_d3, "lever.co": flex_feed})
+        mock_server.send_message.side_effect = OSError("smtp temporary outage")
+        with patch.dict(os.environ, env), \
+             patch("fetch_jobs.call_gemini_job_matches", side_effect=fake_match_gate), \
+             patch("fetch_jobs._invoke_gemini_json", return_value=None):
+            code3 = fj.refresh(test_cfg, radar_cos, root=self.root, today=date(2026, 11, 7), send_email=True, subscriber_id="lucas")
+        self.assertEqual(code3, 2)
+        seen_day3 = fj.load_json(self.root / "state" / "seen.json", {})
+        self.assertNotIn("greenhouse:AstraZeneca:103", seen_day3["subscribers"]["lucas"]["rejected_matches"])
+
+        # --- Day 4: SMTP recovers -> vetoed role results in honest Quiet Day (never emailed) and is now recorded ---
+        mock_server.send_message.side_effect = None
+        with patch.dict(os.environ, env), \
+             patch("fetch_jobs.call_gemini_job_matches", side_effect=fake_match_gate), \
+             patch("fetch_jobs._invoke_gemini_json", return_value=None):
+            code4 = fj.refresh(test_cfg, radar_cos, root=self.root, today=date(2026, 11, 7), send_email=True, subscriber_id="lucas")
+        self.assertEqual(code4, 0)
+        msg_d4 = mock_server.send_message.call_args_list[-1][0][0]
+        self.assertIn("Quiet day", msg_d4["Subject"])
+        self.assertNotIn("Oncology", msg_d4.get_body(preferencelist=("plain",)).get_content())
+        seen_day4 = fj.load_json(self.root / "state" / "seen.json", {})
+        self.assertIn("greenhouse:AstraZeneca:103", seen_day4["subscribers"]["lucas"]["rejected_matches"])
+
+    def test_enhanced_cv_company_profiles_across_subscribers_and_formats(self):
+        """Every subscriber has an explicit career_goal and enhanced employer Company Profile lines
+        in cvs/*.md, and tailored .docx/.pdf/.html resumes preserve company_context cleanly."""
+        subs = fj.get_subscribers(fj.load_config())
+        self.assertGreaterEqual(len(subs), 4)
+        sample_job = {
+            "title": "Director, Digital Transformation & Operations",
+            "company": "Flex",
+            "location": "Guadalajara, Jalisco, Mexico",
+            "team": "Global Operations",
+        }
+        for sub in subs:
+            sub_id = sub["id"]
+            self.assertTrue((sub.get("career_goal") or "").strip(), f"Missing career_goal for {sub_id}")
+            cv_md = fj.load_subscriber_cv(sub)
+            self.assertIn("*Company Profile:", cv_md, f"Missing enhanced Company Profile lines in cvs/{sub_id}.md")
+            profiles = fj.extract_cv_company_profiles(cv_md)
+            self.assertGreaterEqual(len(profiles), 1, f"Expected >=1 extracted employer profile for {sub_id}")
+
+            det = fj.tailor_cv_deterministic(sample_job, cv_md, sub)
+            exp_with_ctx = [e for e in det["cv"]["experience"] if e.get("company_context")]
+            self.assertTrue(exp_with_ctx, f"Deterministic CV for {sub_id} lost company_context")
+            sample_ctx_snippet = exp_with_ctx[0]["company_context"][:32]
+
+            docx_txt = fj.extract_docx_text(fj.render_minimalist_cv_docx(det["cv"], sample_job))
+            pdf_raw = fj.render_minimalist_cv_pdf(det["cv"], sample_job).decode("latin-1", errors="replace")
+            html_out = fj.render_minimalist_cv_html(det["cv"], sample_job)
+
+            self.assertIn(sample_ctx_snippet, docx_txt)
+            self.assertIn(sample_ctx_snippet[:20], pdf_raw)
+            self.assertIn(fj.html.escape(sample_ctx_snippet), html_out)
+            self.assertIsNone(fj.ATS_ILLEGAL_CHARS_RE.search(docx_txt))
+
+    @patch("smtplib.SMTP_SSL")
+    def test_self_service_candidate_onboarding_flow_and_immediate_matching(self, mock_smtp_ssl):
+        """Verify end-to-end onboarding: web form HTML generation, Gemini CV structuring with
+        company profiles, checkbox + free-text rule synthesis, config.json & cvs/<id>.md updates,
+        professional confirmation email, idempotent re-onboarding, and automatic daily match delivery."""
+        import onboard_subscriber as ob
+        import shutil
+
+        mock_server = MagicMock()
+        mock_smtp_ssl.return_value.__enter__.return_value = mock_server
+
+        # Prepare isolated repo workspace with real config.json and cvs/
+        shutil.copy2(Path(fj.ROOT) / "config.json", self.root / "config.json")
+        shutil.copytree(Path(fj.ROOT) / "cvs", self.root / "cvs")
+
+        # 1. Verify rendered onboarding webpage contains email, .txt/.md CV upload, checkboxes & free-text
+        onboard_html = ob.render_onboard_page({"onboard_webhook_url": "https://script.google.com/macros/s/test/exec"})
+        self.assertIn('type="email"', onboard_html)
+        self.assertIn('accept=".txt,.md', onboard_html)
+        self.assertIn("levelChecks", onboard_html)
+        self.assertIn("domainChecks", onboard_html)
+        self.assertIn("locationChecks", onboard_html)
+        self.assertIn("freeText", onboard_html)
+        self.assertNotIn("</script><script>", onboard_html)
+
+        # 2. Simulate candidate submitting web form via GitHub repository_dispatch event JSON
+        event_file = self.root / "event.json"
+        raw_uploaded_cv = (
+            "Sofia Ramirez\n"
+            "Guadalajara, MX | sofia.ramirez@example.com\n"
+            "Senior leader with >10 years driving [GBS] & Intelligent Automation across LATAM.\n"
+            "- Led 25+ RPA & Power Platform automations saving >=$3.5M at 'Global Pharma Hub'.\n"
+            "- Built Celonis process mining CoE reducing order-to-cash cycle time <48 hours.\n"
+            "B.S. Industrial Engineering — ITESO\n"
+        )
+        event_payload = {
+            "action": "onboard_subscriber",
+            "client_payload": {
+                "name": "Sofia Ramirez",
+                "email": "sofia.ramirez@example.com",
+                "cv_text": raw_uploaded_cv,
+                "levels": ["director", "sr_manager"],
+                "domains": ["gbs_process", "automation_ai"],
+                "locations": ["remote_mx"],  # Opted into Remote Mexico ONLY (unchecked Jalisco!)
+                "language": "Spanish",
+                "free_text": "Looking for Director or Senior Manager roles in Process Mining, GBS Transformation, or Intelligent Automation. Exclude pure accounting, tax, or factory maintenance roles.",
+            },
+        }
+        event_file.write_text(json.dumps(event_payload), encoding="utf-8")
+
+        def fake_onboard_gemini(prompt_text, system_text=None, **kwargs):
+            if system_text == ob.ONBOARD_CV_SYSTEM_PROMPT:
+                return {
+                    "_llm_model": "gemini-4-hydrogen",
+                    "full_name": 'Sofia "S." Ramirez [PMP]',
+                    "contact_line": "Guadalajara, Jalisco | sofia.ramirez@example.com",
+                    "summary": "Executive GBS and Intelligent Automation leader with >10 years scaling regional transformation hubs.",
+                    "core_competencies": [
+                        {"category": "Process & Automation", "items": "Celonis Process Mining, RPA, Microsoft Power Platform, GBS Strategy"}
+                    ],
+                    "experience": [
+                        {
+                            "company": "AstraZeneca",
+                            "location": "Guadalajara, Mexico",
+                            "company_profile": "Global biopharmaceutical leader operating a major Global Innovation & Technology Centre and GBS hub in Guadalajara.",
+                            "role": "Senior Manager, GBS Automation & Process Mining",
+                            "dates": "2021 - Present",
+                            "bullets": [
+                                "Delivered >=$3.5M in annualized savings across [LATAM] via 25+ RPA and Power Platform automations.",
+                                "Cut order-to-cash cycle time <48 hours using Celonis process intelligence.",
+                            ],
+                        }
+                    ],
+                    "education": ["B.S. Industrial Engineering — ITESO"],
+                    "languages": ["Spanish (Native)", "English (Fluent)"],
+                }
+            if system_text == ob.ONBOARD_PROFILE_SYSTEM_PROMPT:
+                return {
+                    "_llm_model": "gemini-4-hydrogen",
+                    "career_goal": "Targeting Director and Senior Manager roles in GBS Transformation, Process Mining (Celonis), and Intelligent Automation in Remote Mexico—excluding accounting, tax, and factory maintenance.",
+                    "extra_title_include": [r"\bprocess intelligence\b"],
+                    "extra_title_exclude": [r"\b(tax|accounting|maintenance)\b"],
+                }
+            return None
+
+        env = {
+            "GMAIL_USER": "sender@gmail.com",
+            "GMAIL_APP_PASSWORD": "app-secret-password",
+            "GEMINI_API_KEY": "fake-gemini-key",
+        }
+        extracted = ob.extract_payload_from_github_event(event_file)
+        validated = ob.validate_onboarding_payload(extracted)
+
+        with patch.dict(os.environ, env), patch("fetch_jobs._invoke_gemini_json", side_effect=fake_onboard_gemini):
+            res = ob.register_subscriber_in_codebase(validated, root=self.root)
+            sent_conf = ob.send_onboarding_confirmation_email(res, board_count=109)
+
+        self.assertTrue(sent_conf)
+        self.assertEqual(res["subscriber_id"], "sofia")
+        self.assertFalse(res["updated_existing"])
+
+        # 3. Verify generated cvs/sofia.md is ATS-clean & contains *Company Profile: ...*
+        sofia_cv_path = self.root / "cvs" / "sofia.md"
+        self.assertTrue(sofia_cv_path.exists())
+        sofia_cv_txt = sofia_cv_path.read_text(encoding="utf-8")
+        self.assertIn("*Company Profile: Global biopharmaceutical leader", sofia_cv_txt)
+        self.assertIsNone(fj.ATS_ILLEGAL_CHARS_RE.search(sofia_cv_txt), f"Illegal ATS chars in onboarded CV: {sofia_cv_txt}")
+        self.assertIn("at least $3.5M", sofia_cv_txt)
+        self.assertIn("under 48 hours", sofia_cv_txt)
+
+        # 4. Verify Confirmation Email content
+        conf_msg = mock_server.send_message.call_args_list[-1][0][0]
+        self.assertEqual(conf_msg["To"], "sofia.ramirez@example.com")
+        self.assertIn("Welcome to Jobs Sentinel, Sofia", conf_msg["Subject"])
+        conf_html = conf_msg.get_body(preferencelist=("html",)).get_content()
+        self.assertIn("RADAR LIVE &amp; ARMED", conf_html)
+        self.assertIn("AstraZeneca", conf_html)
+        self.assertIn("Spanish", conf_html)
+        self.assertIn("Remote in Mexico", conf_html)
+
+        # 5. Verify idempotent re-onboarding (same email keeps ID 'sofia') & name collision disambiguation ('lucas' -> 'lucas_m')
+        updated_cfg = fj.load_json(self.root / "config.json", {})
+        same_id, is_upd = ob.derive_subscriber_id("Sofia R.", "sofia.ramirez@example.com", updated_cfg["subscribers"])
+        self.assertEqual(same_id, "sofia")
+        self.assertTrue(is_upd)
+        other_lucas_id, is_upd2 = ob.derive_subscriber_id("Lucas Morales", "lucas.morales@example.com", updated_cfg["subscribers"])
+        self.assertEqual(other_lucas_id, "lucas_morales")
+        self.assertFalse(is_upd2)
+
+        # 6. Verify Sofia immediately starts receiving her Remote-Mexico matches (and NOT Jalisco on-site roles!) on the next refresh
+        fj.http_json = fake_http()
+        mock_server.reset_mock()
+        with patch.dict(os.environ, {"GMAIL_USER": "sender@gmail.com", "GMAIL_APP_PASSWORD": "app-secret-password"}):
+            os.environ.pop("GEMINI_API_KEY", None)
+            code = fj.refresh(updated_cfg, COMPANIES, root=self.root, today=date(2026, 11, 5), send_email=True, subscriber_id="sofia")
+        self.assertEqual(code, 0)
+        self.assertEqual(mock_server.send_message.call_count, 1)
+        sofia_match_msg = mock_server.send_message.call_args_list[0][0][0]
+        self.assertEqual(sofia_match_msg["To"], "sofia.ramirez@example.com")
+        sofia_plain = sofia_match_msg.get_body(preferencelist=("plain",)).get_content()
+        # Gamma a1 is 'Director, Platform' in 'Remote - Mexico' -> matches Sofia!
+        # Acme 1 is 'Director, Engineering' in 'Guadalajara, Mexico' (on-site Jalisco) -> excluded because Sofia chose Remote-Mexico only!
+        self.assertIn("Director, Platform at Gamma", sofia_plain)
+        self.assertNotIn("Director, Engineering at Acme", sofia_plain)
+        self.assertTrue((self.root / "docs" / "onboard.html").exists())
 
 
 if __name__ == "__main__":
     unittest.main()
+
