@@ -225,6 +225,28 @@ SENIORITY_BY_ID = {o["id"]: o for o in SENIORITY_OPTIONS}
 DOMAIN_BY_ID = {o["id"]: o for o in DOMAIN_OPTIONS}
 LOCATION_BY_ID = {o["id"]: o for o in LOCATION_OPTIONS}
 
+# Short pill text for the onboarding page. The full `label` stays the source of truth for prompts,
+# the confirmation email and the pill tooltip, so the page can stay quiet without losing meaning.
+OPTION_SHORT_LABELS = {
+    "specialist": "Specialist",
+    "senior": "Senior / Lead",
+    "manager": "Manager",
+    "director": "Director / Head",
+    "executive": "VP / C-Level",
+    "operations": "Operations",
+    "technology": "Engineering & Data",
+    "project_product": "Project & Product",
+    "sales_customer": "Sales & Customer",
+    "strategy_process": "Strategy & Process",
+    "finance_legal": "Finance & Legal",
+    "people_hr": "People & HR",
+    "marketing": "Marketing & Design",
+    "other": "Other",
+    "jalisco": "Jalisco, on-site or hybrid",
+    "remote_mx": "Remote in Mexico",
+    "mx_country": "Mexico, city not listed",
+}
+
 # Backward-compatible aliases so earlier packets / workflow defaults map seamlessly
 LEGACY_LEVEL_ALIASES = {
     "c_exec": "executive",
@@ -1071,258 +1093,230 @@ ONBOARD_PAGE_TEMPLATE = r"""<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>Join Jobs Sentinel · Lucy Private AI Talent Radar</title>
+<title>Lucy · Set up your job radar</title>
 <style>
-:root{--bg:#fafaf9;--card:#ffffff;--ink:#09090b;--body:#27272a;--mute:#71717a;--line:#e4e4e7;--accent:#059669;--accent-ink:#065f46;--accent-bg:#ecfdf5;--obsidian:#09090b;--danger:#dc2626;--danger-bg:#fef2f2}
-@media (prefers-color-scheme:dark){:root{--bg:#0c0c0d;--card:#18181b;--ink:#fafafa;--body:#e4e4e7;--mute:#a1a1aa;--line:#27272a;--accent:#10b981;--accent-ink:#6ee7b7;--accent-bg:#064e3b;--obsidian:#18181b;--danger:#f87171;--danger-bg:#450a0a}}
+:root{color-scheme:light dark;--bg:#ffffff;--ink:#18181b;--body:#3f3f46;--mute:#71717a;--line:#e4e4e7;--accent:#0f766e;--danger:#b91c1c}
+@media (prefers-color-scheme:dark){:root{--bg:#111113;--ink:#fafafa;--body:#d4d4d8;--mute:#a1a1aa;--line:#2e2e33;--accent:#5eead4;--danger:#fca5a5}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--body);font:15.5px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
-main{max-width:760px;margin:0 auto;padding:26px 16px 64px}
-.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;font-size:.82rem}
-.brand{font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:var(--accent)}
-.back{color:var(--mute);text-decoration:none;font-weight:600}
-.back:hover{color:var(--accent)}
-.hero{background:#09090b;color:#fafafa;border-radius:16px;padding:24px 24px 22px;margin-bottom:20px;border:1px solid #27272a}
-.hero .eyebrow{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1.4px;color:#34d399;margin-bottom:6px}
-.hero h1{margin:0 0 8px;font-size:1.6rem;font-weight:800;letter-spacing:-.4px;color:#fff;line-height:1.22}
-.hero p{margin:0;color:#d4d4d8;font-size:.92rem;line-height:1.55}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin-bottom:14px}
-.card.highlight{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent-bg)}
-.sec-title{font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--ink);margin:0 0 3px}
-.sec-sub{font-size:.85rem;color:var(--mute);margin:0 0 13px;line-height:1.45}
-.grid2{display:grid;gap:12px;grid-template-columns:1fr}
-@media (min-width:600px){.grid2{grid-template-columns:1fr 1fr}}
-label.field{display:block;font-size:.85rem;font-weight:700;color:var(--ink);margin-bottom:10px}
-label.field span.req{color:var(--accent)}
-input[type=text],input[type=email],input[type=password],select,textarea{width:100%;margin-top:5px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:inherit;transition:border-color .15s}
-input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
-.dropzone{border:1.5px dashed var(--line);border-radius:12px;padding:16px;text-align:center;background:var(--bg);cursor:pointer;transition:border-color .15s,background .15s;margin-bottom:10px}
-.dropzone:hover,.dropzone.drag{border-color:var(--accent);background:var(--accent-bg)}
-.dropzone strong{color:var(--ink);display:block;font-size:.93rem;margin-bottom:2px}
-.dropzone small{color:var(--mute);font-size:.8rem}
-.cv-meta{display:flex;justify-content:space-between;align-items:center;font-size:.79rem;color:var(--mute);margin:4px 0}
-.checks{display:grid;gap:8px;grid-template-columns:1fr}
-@media (min-width:580px){.checks.two{grid-template-columns:1fr 1fr}.checks.three{grid-template-columns:1fr 1fr 1fr}}
-.chk{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);cursor:pointer;transition:border-color .15s,background .15s}
-.chk:hover{border-color:var(--accent)}
-.chk.active{border-color:var(--accent);background:var(--accent-bg)}
-.chk input{margin-top:2px;accent-color:var(--accent);width:16px;height:16px;flex-shrink:0}
-.chk .clabel{font-weight:700;font-size:.87rem;color:var(--ink);display:block;line-height:1.28}
-.chk .chint{font-size:.76rem;color:var(--mute);display:block;margin-top:2px;line-height:1.32}
-.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px}
-.chip{background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:4px 10px;font:600 .76rem/1.3 inherit;cursor:pointer;transition:border-color .15s,color .15s}
-.chip:hover{border-color:var(--accent);color:var(--accent)}
-.submit-bar{display:flex;flex-direction:column;gap:10px;margin-top:16px}
-button.primary{background:var(--accent);color:#fff;border:none;border-radius:11px;padding:14px 22px;font:700 1rem/1.2 inherit;cursor:pointer;transition:opacity .15s}
-button.primary:hover{opacity:.92}
-button.primary:disabled{opacity:.55;cursor:not-allowed}
-button.secondary{background:transparent;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 16px;font:600 .88rem/1.2 inherit;cursor:pointer}
-.banner{border-radius:12px;padding:16px 18px;margin-top:14px;font-size:.9rem;line-height:1.5;display:none}
-.banner.ok{display:block;background:var(--accent-bg);color:var(--accent-ink);border:1px solid var(--accent)}
-.banner.err{display:block;background:var(--danger-bg);color:var(--danger);border:1px solid var(--danger)}
-.foot{text-align:center;font-size:.78rem;color:var(--mute);margin-top:22px}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--body);font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+main{max-width:560px;margin:0 auto;padding:40px 20px 72px}
+.top{display:flex;justify-content:space-between;align-items:baseline;font-size:.8125rem;color:var(--mute)}
+.brand{color:var(--ink);font-weight:600}
+.top a{color:inherit;text-decoration:none}
+.top a:hover{color:var(--ink)}
+h1{margin:48px 0 10px;font-size:1.75rem;font-weight:700;letter-spacing:-.5px;line-height:1.2;color:var(--ink)}
+.lede{margin:0;color:var(--mute);font-size:.9375rem}
+section{margin-top:34px}
+.label{display:block;margin:0 0 8px;font-size:.875rem;font-weight:600;color:var(--ink)}
+.label small{margin-left:6px;font-weight:400;font-size:.8125rem;color:var(--mute)}
+.row{display:grid;gap:16px;grid-template-columns:1fr}
+@media (min-width:520px){.row{grid-template-columns:1fr 1fr}}
+input[type=text],input[type=email],input[type=password],select,textarea{display:block;width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--ink);font:inherit;font-size:.9375rem}
+select,#inviteCode{max-width:240px}
+#inviteField{display:block}
+textarea{resize:vertical;line-height:1.5}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--ink)}
+::placeholder{color:var(--mute);opacity:.8}
+.pills{display:flex;flex-wrap:wrap;gap:8px}
+.pill{position:relative;display:inline-flex;align-items:center;padding:7px 14px;border:1px solid var(--line);border-radius:999px;font-size:.875rem;line-height:1.3;color:var(--body);cursor:pointer;user-select:none;transition:background .12s,border-color .12s,color .12s}
+.pill:hover{border-color:var(--ink)}
+.pill input{position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none}
+.pill.on{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.pill:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.split{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin:0 0 8px}
+.split .label{margin:0}
+.link{padding:0;border:0;background:none;font:inherit;font-size:.8125rem;color:var(--mute);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.link:hover{color:var(--ink)}
+.count{margin:6px 0 0;font-size:.75rem;color:var(--mute);text-align:right}
+.starters{display:flex;flex-wrap:wrap;gap:6px 16px;margin:0 0 8px}
+.more{margin-top:14px}
+.go{display:block;width:100%;margin-top:40px;padding:13px 18px;border:0;border-radius:8px;background:var(--ink);color:var(--bg);font:inherit;font-weight:600;cursor:pointer}
+.go:hover{opacity:.9}
+.go:disabled{opacity:.5;cursor:default}
+.status{display:none;margin:16px 0 0;font-size:.875rem;line-height:1.55}
+.status.ok{display:block;color:var(--accent)}
+.status.err{display:block;color:var(--danger)}
+.foot{margin:48px 0 0;font-size:.75rem;color:var(--mute)}
+[hidden]{display:none !important}
 </style>
 </head>
 <body>
 <main>
-  <div class="topbar">
-    <span class="brand">&#10022; Lucy &middot; Jobs Sentinel</span>
-    <a class="back" href="index.html">&larr; View Live Job Board</a>
+  <div class="top">
+    <span class="brand">Lucy</span>
+    <a href="index.html">Job board</a>
   </div>
 
-  <section class="hero">
-    <div class="eyebrow">&#9889; AI Job Radar Onboarding</div>
-    <h1>Set Up Your Personal AI Job Radar</h1>
-    <p>Share your CV, pick a few quick filters, and tell the AI in plain words what kind of job you want next. Every morning Lucy scans <strong>109 verified companies</strong>, filters out weak matches with Gemini AI, explains why each match fits you, and attaches <strong>tailored Word (.docx) CVs</strong>.</p>
-  </section>
+  <h1>Set up your job radar</h1>
+  <p class="lede">Share your CV and what you want next. Each morning Lucy checks more than 100 employers in Jalisco and remote Mexico and emails you only the roles that fit, with the reason why.</p>
 
   <form id="onboardForm" novalidate>
-    <section class="card">
-      <h2 class="sec-title">1. Your Details</h2>
-      <p class="sec-sub">Where Lucy will send your confirmation email and daily job matches.</p>
-      <div class="grid2">
-        <label class="field">Full Name <span class="req">*</span>
-          <input id="fullName" type="text" required maxlength="80" placeholder="e.g. Sofia Ramirez" autocomplete="name">
+    <section class="row">
+      <label><span class="label">Name</span>
+        <input id="fullName" type="text" required maxlength="80" autocomplete="name">
+      </label>
+      <label><span class="label">Email</span>
+        <input id="email" type="email" required maxlength="180" autocomplete="email">
+      </label>
+    </section>
+
+    <section>
+      <div class="split">
+        <label class="label" for="cvText">CV <small>plain text</small></label>
+        <button type="button" class="link" id="uploadBtn">Upload .txt or .md</button>
+      </div>
+      <input id="cvFile" type="file" accept=".txt,.md,.markdown,text/plain,text/markdown" hidden>
+      <textarea id="cvText" rows="7" maxlength="45000" required placeholder="Paste your CV here"></textarea>
+      <p class="count" id="charCount">0 / 45,000</p>
+    </section>
+
+    <section>
+      <span class="label" id="levelLabel">Role level</span>
+      <div class="pills" id="levelChecks" role="group" aria-labelledby="levelLabel"></div>
+    </section>
+
+    <section>
+      <span class="label" id="domainLabel">Job area <small>optional</small></span>
+      <div class="pills" id="domainChecks" role="group" aria-labelledby="domainLabel"></div>
+    </section>
+
+    <section>
+      <span class="label" id="locationLabel">Location</span>
+      <div class="pills" id="locationChecks" role="group" aria-labelledby="locationLabel"></div>
+    </section>
+
+    <section>
+      <label class="label" for="freeText">What are you looking for?</label>
+      <div class="starters" id="promptChips">
+        <button type="button" class="link" data-snippet="Roles I want next: ">+ Roles I want</button>
+        <button type="button" class="link" data-snippet="Industries or company types I like: ">+ Industries I like</button>
+        <button type="button" class="link" data-snippet="Roles or areas to avoid: ">+ Roles to avoid</button>
+      </div>
+      <textarea id="freeText" rows="4" maxlength="4000" placeholder="In your own words: the roles you want, the industries you like and anything to skip."></textarea>
+    </section>
+
+    <section>
+      <label class="label" for="language">Email language</label>
+      <select id="language">
+        <option value="English" selected>English</option>
+        <option value="Spanish">Espa&ntilde;ol</option>
+        <option value="Portuguese">Portugu&ecirc;s</option>
+      </select>
+      <div class="more">
+        <button type="button" class="link" id="inviteToggle">Have an invite code?</button>
+        <label id="inviteField" hidden><span class="label">Invite code</span>
+          <input id="inviteCode" type="password" maxlength="80" autocomplete="off">
         </label>
-        <label class="field">Email Address <span class="req">*</span>
-          <input id="email" type="email" required maxlength="180" placeholder="sofia@example.com" autocomplete="email">
-        </label>
-      </div>
-      <div class="grid2">
-        <label class="field">Daily Briefing Language
-          <select id="language">
-            <option value="English" selected>English</option>
-            <option value="Spanish">Spanish (Espa&ntilde;ol)</option>
-            <option value="Portuguese">Portuguese (Portugu&ecirc;s)</option>
-          </select>
-        </label>
-        <label class="field" id="inviteWrap">Team Invite Code <span id="inviteHint" style="font-weight:400;color:var(--mute);">(optional)</span>
-          <input id="inviteCode" type="password" maxlength="80" placeholder="Enter invite code if provided" autocomplete="off">
-        </label>
       </div>
     </section>
 
-    <section class="card">
-      <h2 class="sec-title">2. Your CV in Text Format <span style="color:var(--accent);">*</span></h2>
-      <p class="sec-sub">Upload a <code>.txt</code> or <code>.md</code> file, or simply copy and paste the text from your resume below.</p>
-      <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload plain-text CV file">
-        <strong id="dropLabel">&#128196; Upload .txt / .md CV file (or drag &amp; drop here)</strong>
-        <small>Plain text &middot; up to 45,000 characters</small>
-        <input id="cvFile" type="file" accept=".txt,.md,.markdown,text/plain,text/markdown" style="display:none">
-      </div>
-      <div class="cv-meta">
-        <span id="fileStatus">Or paste your resume text directly:</span>
-        <span id="charCount">0 / 45,000 chars</span>
-      </div>
-      <textarea id="cvText" rows="8" maxlength="45000" required placeholder="Paste your resume text here (experience, companies, skills, education, languages)..."></textarea>
-    </section>
-
-    <section class="card">
-      <h2 class="sec-title">3. Role Level <span style="color:var(--accent);">*</span></h2>
-      <p class="sec-sub">Pick one or more seniority levels you are open to.</p>
-      <div class="checks two" id="levelChecks"></div>
-    </section>
-
-    <section class="card">
-      <h2 class="sec-title">4. Broad Job Area <span style="font-weight:400;color:var(--mute);text-transform:none;letter-spacing:0;">(pick all that fit, or leave open)</span></h2>
-      <p class="sec-sub">High-level category to help orient the AI — you&rsquo;ll specify your exact role wishes in Step 6.</p>
-      <div class="checks two" id="domainChecks"></div>
-    </section>
-
-    <section class="card">
-      <h2 class="sec-title">5. Work Location <span style="color:var(--accent);">*</span></h2>
-      <p class="sec-sub">Where are you open to working?</p>
-      <div class="checks three" id="locationChecks"></div>
-    </section>
-
-    <section class="card highlight">
-      <h2 class="sec-title">6. Tell the AI What You Are Looking For <span style="color:var(--accent);">*</span></h2>
-      <p class="sec-sub">Write freely in your own words — Gemini uses this directly alongside your CV to decide which jobs truly match you and which ones to skip.</p>
-      <div class="chips" id="promptChips">
-        <button type="button" class="chip" data-snippet="Roles I want next: ">+ Roles I want</button>
-        <button type="button" class="chip" data-snippet="Industries / company types I like: ">+ Industries I like</button>
-        <button type="button" class="chip" data-snippet="Roles or areas to avoid: ">+ Roles to avoid</button>
-      </div>
-      <textarea id="freeText" rows="5" maxlength="4000" placeholder="Example: I want to move into a Senior or Manager role in Project Management, Operations, or Data Analytics at a tech or international company. I want roles where I lead cross-functional initiatives. Please skip sales, accounting, or night-shift support roles."></textarea>
-    </section>
-
-    <div class="submit-bar">
-      <button type="submit" class="primary" id="submitBtn">&#10022; Activate My Job Radar</button>
-      <button type="button" class="secondary" id="downloadFallbackBtn" style="display:none;">Download Onboarding Packet (.json) for CLI Import</button>
-    </div>
-
-    <div id="statusBanner" class="banner" role="status" aria-live="polite"></div>
+    <button type="submit" class="go" id="submitBtn">Activate my job radar</button>
+    <div id="statusBanner" class="status" role="status" aria-live="polite"></div>
+    <button type="button" class="link more" id="downloadFallbackBtn" hidden>Download my details (.json)</button>
   </form>
 
-  <p class="foot">Powered by Jobs Sentinel &middot; Gemini 4 Hydrogen Match Gate &middot; Only genuine matches delivered</p>
+  <p class="foot">You will get a confirmation email. To update your profile later, submit again with the same email.</p>
 </main>
 <script>
 const CONFIG = __ONBOARD_CONFIG__;
 const $ = id => document.getElementById(id);
+const SUBMIT_LABEL = "Activate my job radar";
 
-function syncCardState(lbl, inp) {
-  if (inp.checked) lbl.classList.add("active");
-  else lbl.classList.remove("active");
-}
-
-function buildCheckboxes(containerId, items, defaultIds) {
+// Options render as pill toggles: a short label on the pill, the full name and examples in its tooltip.
+function buildPills(containerId, items) {
   const wrap = $(containerId);
   items.forEach(item => {
-    const lbl = document.createElement("label");
-    lbl.className = "chk";
-    const inp = document.createElement("input");
-    inp.type = "checkbox";
-    inp.value = item.id;
-    inp.checked = Boolean(item.default || (defaultIds && defaultIds.includes(item.id)));
-    syncCardState(lbl, inp);
-    inp.addEventListener("change", () => syncCardState(lbl, inp));
-    const textWrap = document.createElement("div");
-    const title = document.createElement("span");
-    title.className = "clabel";
-    title.textContent = item.label;
-    const hint = document.createElement("span");
-    hint.className = "chint";
-    hint.textContent = item.hint;
-    textWrap.append(title, hint);
-    lbl.append(inp, textWrap);
-    wrap.appendChild(lbl);
+    const pill = document.createElement("label");
+    pill.className = "pill";
+    pill.title = item.hint ? item.label + ": " + item.hint : item.label;
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.value = item.id;
+    box.checked = Boolean(item.default);
+    const text = document.createElement("span");
+    text.textContent = item.short || item.label;
+    const sync = () => pill.classList.toggle("on", box.checked);
+    box.addEventListener("change", sync);
+    sync();
+    pill.append(box, text);
+    wrap.appendChild(pill);
   });
 }
+buildPills("levelChecks", CONFIG.levels);
+buildPills("domainChecks", CONFIG.domains);
+buildPills("locationChecks", CONFIG.locations);
 
-buildCheckboxes("levelChecks", CONFIG.levels, ["senior", "manager"]);
-buildCheckboxes("domainChecks", CONFIG.domains, []);
-buildCheckboxes("locationChecks", CONFIG.locations, ["jalisco", "remote_mx", "mx_country"]);
-
+// The invite code stays out of the way unless the admin requires it.
+const inviteCode = $("inviteCode");
+function showInvite() {
+  $("inviteField").hidden = false;
+  $("inviteToggle").hidden = true;
+}
 if (CONFIG.require_invite_code) {
-  $("inviteHint").textContent = "* required";
-  $("inviteHint").style.color = "var(--accent)";
-  $("inviteCode").required = true;
+  showInvite();
+  inviteCode.required = true;
+} else {
+  $("inviteToggle").addEventListener("click", () => { showInvite(); inviteCode.focus(); });
 }
 
-document.querySelectorAll("#promptChips .chip").forEach(btn => {
+document.querySelectorAll("#promptChips button").forEach(btn => {
   btn.addEventListener("click", () => {
     const box = $("freeText");
     const snippet = btn.getAttribute("data-snippet") || "";
-    const prefix = box.value && !box.value.endsWith("\n") ? "\n" : "";
-    box.value = box.value + prefix + snippet;
+    box.value = box.value + (box.value && !box.value.endsWith("\n") ? "\n" : "") + snippet;
     box.focus();
   });
 });
 
+function setStatus(kind, message) {
+  const el = $("statusBanner");
+  el.className = kind ? "status " + kind : "status";
+  el.textContent = message || "";
+}
+
 const cvText = $("cvText");
 const cvFile = $("cvFile");
-const dropzone = $("dropzone");
 
-function updateCounter() {
-  $("charCount").textContent = cvText.value.length.toLocaleString() + " / 45,000 chars";
+function updateCount() {
+  $("charCount").textContent = cvText.value.length.toLocaleString() + " / 45,000";
 }
-cvText.addEventListener("input", updateCounter);
+cvText.addEventListener("input", updateCount);
 
 function loadTextFile(file) {
   if (!file) return;
   if (file.size > 512000) {
-    showStatus("err", "File is too large. Please upload a plain-text (.txt or .md) resume under 500 KB.");
+    setStatus("err", "That file is too large. Please use a plain-text (.txt or .md) CV under 500 KB.");
     return;
   }
   const nameLow = (file.name || "").toLowerCase();
   if (nameLow.endsWith(".pdf") || nameLow.endsWith(".docx") || nameLow.endsWith(".doc")) {
-    showStatus("err", "Please upload your CV in plain-text (.txt or .md) format, or copy and paste the text from your PDF/Word resume into the box below.");
+    setStatus("err", "Please use a plain-text (.txt or .md) file, or copy the text from your PDF or Word CV and paste it in the box.");
     return;
   }
   const reader = new FileReader();
   reader.onload = () => {
-    const raw = String(reader.result || "").slice(0, 45000);
-    cvText.value = raw;
-    $("fileStatus").textContent = "Loaded file: " + file.name;
-    updateCounter();
-    hideStatus();
+    cvText.value = String(reader.result || "").slice(0, 45000);
+    $("uploadBtn").textContent = "Loaded " + file.name;
+    updateCount();
+    setStatus("", "");
   };
-  reader.onerror = () => showStatus("err", "Could not read file. Please paste your CV text directly.");
+  reader.onerror = () => setStatus("err", "Could not read that file. Please paste your CV text instead.");
   reader.readAsText(file, "utf-8");
 }
 
-dropzone.addEventListener("click", () => cvFile.click());
-dropzone.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); cvFile.click(); } });
+$("uploadBtn").addEventListener("click", () => cvFile.click());
 cvFile.addEventListener("change", () => { if (cvFile.files && cvFile.files[0]) loadTextFile(cvFile.files[0]); });
-["dragenter", "dragover"].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add("drag"); }));
-["dragleave", "drop"].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.remove("drag"); }));
-dropzone.addEventListener("drop", e => {
-  if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) loadTextFile(e.dataTransfer.files[0]);
+cvText.addEventListener("dragover", e => {
+  if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files")) e.preventDefault();
+});
+cvText.addEventListener("drop", e => {
+  const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (file) { e.preventDefault(); loadTextFile(file); }
 });
 
 function checkedValues(containerId) {
   return [...$(containerId).querySelectorAll("input[type=checkbox]:checked")].map(el => el.value);
-}
-
-function showStatus(kind, message) {
-  const b = $("statusBanner");
-  b.className = "banner " + kind;
-  b.textContent = message;
-}
-function hideStatus() {
-  const b = $("statusBanner");
-  b.className = "banner";
-  b.textContent = "";
 }
 
 function collectPayload() {
@@ -1333,21 +1327,21 @@ function collectPayload() {
   const domains = checkedValues("domainChecks");
   const locations = checkedValues("locationChecks");
   const freeTxt = $("freeText").value.trim().slice(0, 4000);
-  if (!name) throw new Error("Please enter your full name.");
+  if (!name) throw new Error("Please add your name.");
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new Error("Please enter a valid email address.");
-  if (cv.length < 60) throw new Error("Please upload a .txt/.md CV file or paste your resume text (at least 60 characters).");
-  if (!levels.length) throw new Error("Please select at least one Role Level.");
-  if (!locations.length) throw new Error("Please select at least one Work Location.");
+  if (cv.length < 60) throw new Error("Please paste your CV or upload a .txt or .md file (at least 60 characters).");
+  if (!levels.length) throw new Error("Please pick at least one role level.");
+  if (!locations.length) throw new Error("Please pick at least one location.");
   if (!domains.length && freeTxt.length < 10) {
-    throw new Error("Please either select a Broad Job Area or describe what you are looking for in Step 6.");
+    throw new Error("Please pick a job area or describe what you are looking for.");
   }
-  if (CONFIG.require_invite_code && !$("inviteCode").value.trim()) {
-    throw new Error("Please enter your Team Invite Code.");
+  if (CONFIG.require_invite_code && !inviteCode.value.trim()) {
+    throw new Error("Please enter your invite code.");
   }
   return {
     name: name,
     email: email,
-    invite_code: $("inviteCode").value.trim(),
+    invite_code: inviteCode.value.trim(),
     cv_text: cv.slice(0, 45000),
     levels: levels,
     domains: domains.length ? domains : ["other"],
@@ -1371,19 +1365,19 @@ $("downloadFallbackBtn").addEventListener("click", () => {
     a.click();
     a.remove();
   } catch (err) {
-    showStatus("err", err.message || String(err));
+    setStatus("err", err.message || String(err));
   }
 });
 
 $("onboardForm").addEventListener("submit", async e => {
   e.preventDefault();
-  hideStatus();
+  setStatus("", "");
   let payload;
   try {
     payload = collectPayload();
     lastPacket = payload;
   } catch (err) {
-    showStatus("err", err.message || String(err));
+    setStatus("err", err.message || String(err));
     return;
   }
 
@@ -1391,17 +1385,17 @@ $("onboardForm").addEventListener("submit", async e => {
   const endpoint = isLocalServer ? "/api/onboard" : (CONFIG.webhook_url || "").trim();
 
   if (!endpoint) {
-    $("downloadFallbackBtn").style.display = "inline-block";
-    showStatus(
+    $("downloadFallbackBtn").hidden = false;
+    setStatus(
       "err",
-      "Cloud webhook URL is not configured in config.json yet (see onboarding/README.md for 2-minute Google Apps Script setup, or run `python3 onboard_subscriber.py --serve` locally). Click 'Download Onboarding Packet (.json)' above to import right away via `python3 onboard_subscriber.py --from-file <packet.json>`."
+      "This form is not connected yet: no webhook URL is set in config.json (see onboarding/README.md). You can download your details below and import them with `python3 onboard_subscriber.py --from-file <file.json>`."
     );
     return;
   }
 
   const btn = $("submitBtn");
   btn.disabled = true;
-  btn.textContent = "Calibrating your radar with Lucy...";
+  btn.textContent = "Setting up\u2026";
 
   try {
     const res = await fetch(endpoint, {
@@ -1414,22 +1408,36 @@ $("onboardForm").addEventListener("submit", async e => {
     if (!res.ok || data.ok === false) {
       throw new Error(data.error || data.message || ("Submission failed with HTTP " + res.status));
     }
-    showStatus(
+    setStatus(
       "ok",
-      data.message || ("Welcome aboard, " + payload.name + "! Your profile is being added to the Jobs Sentinel codebase right now, and Lucy is sending a confirmation email to " + payload.email + ".")
+      data.message || ("Welcome aboard, " + payload.name + ". Your profile is being set up now and a confirmation email is on its way to " + payload.email + ".")
     );
-    btn.textContent = "Radar Activated — Check Your Inbox!";
+    btn.textContent = "Done. Check your inbox.";
   } catch (err) {
     btn.disabled = false;
-    btn.textContent = "\u2726 Activate My Job Radar";
-    $("downloadFallbackBtn").style.display = "inline-block";
-    showStatus("err", (err.message || String(err)) + " (You can also download your onboarding packet above if offline.)");
+    btn.textContent = SUBMIT_LABEL;
+    $("downloadFallbackBtn").hidden = false;
+    setStatus("err", (err.message || String(err)) + " You can also download your details below.");
   }
 });
 </script>
 </body>
 </html>
 """
+
+
+def _ui_options(options):
+    """Project an option catalog into the fields the onboarding page needs."""
+    return [
+        {
+            "id": o["id"],
+            "label": o["label"],
+            "short": OPTION_SHORT_LABELS.get(o["id"], o["label"]),
+            "hint": o["hint"],
+            "default": bool(o.get("default")),
+        }
+        for o in options
+    ]
 
 
 def render_onboard_page(cfg=None, local_server=False):
@@ -1444,9 +1452,9 @@ def render_onboard_page(cfg=None, local_server=False):
         "webhook_url": webhook_url,
         "require_invite_code": require_invite,
         "local_server": bool(local_server),
-        "levels": [{"id": o["id"], "label": o["label"], "hint": o["hint"], "default": bool(o.get("default"))} for o in SENIORITY_OPTIONS],
-        "domains": [{"id": o["id"], "label": o["label"], "hint": o["hint"], "default": bool(o.get("default"))} for o in DOMAIN_OPTIONS],
-        "locations": [{"id": o["id"], "label": o["label"], "hint": o["hint"], "default": bool(o.get("default"))} for o in LOCATION_OPTIONS],
+        "levels": _ui_options(SENIORITY_OPTIONS),
+        "domains": _ui_options(DOMAIN_OPTIONS),
+        "locations": _ui_options(LOCATION_OPTIONS),
     }
     safe_json = json.dumps(ui_cfg, ensure_ascii=False).replace("</", "<\\/").replace("<!--", "<\\!--")
     return ONBOARD_PAGE_TEMPLATE.replace("__ONBOARD_CONFIG__", safe_json)
