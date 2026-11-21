@@ -233,7 +233,7 @@
    },
    "initialized": true,
    "relationship": {
-    "edition": 16,
+    "edition": 17,
     "streak_days": 14,
     "last_briefing_date": "2026-11-21",
     "total_roles_surfaced": 17,
@@ -254,7 +254,8 @@
      17,
      19,
      21,
-     22
+     22,
+     23
     ],
     "recent_headlines": [
      "Turn Ambition Into Pipeline Today.",
@@ -272,10 +273,10 @@
      "A Quiet Board Is Still a Swept Board.",
      "Quiet Market, Sharp Partner.",
      "Real Security Is Knowing Your Own Market Value.",
-     "A silent radar still maps the whole board."
+     "A silent radar still maps the whole board.",
+     "A silent grid still feeds our momentum."
     ],
     "recent_story_beats": [
-     "Ed. #5 (2026-11-11): Quiet day: Lucy sent no roles, kept the streak honest and asked Lucas for one pipeline-hygiene move.",
      "Ed. #6 (2026-11-12): Quiet day: Lucy sent no roles, kept the streak honest and asked Lucas for one pipeline-hygiene move.",
      "Ed. #7 (2026-11-13): Quiet day: Lucy sent no roles, kept the streak honest and asked Lucas for one pipeline-hygiene move.",
      "Ed. #8 (2026-11-14): Lucy framed 'Six Seconds, One Decision' around Flex (Director, Design, Molding & Engineering) and asked Lucas for one 60-second application.",
@@ -286,9 +287,10 @@
      "Ed. #13 (2026-11-19): Quiet day: Lucy sent no roles, kept the streak honest and asked Lucas for one pipeline-hygiene move.",
      "Ed. #14 (2026-11-20): Quiet day: Lucy sent no roles, kept the streak honest and asked Lucas for one pipeline-hygiene move.",
      "Ed. #15 (2026-11-21): Edition fifteen embraced a quiet market day, keeping the fourteen-day streak alive and focusing Lucas on LinkedIn profile hygiene.",
-     "Ed. #16 (2026-11-21): Edition sixteen navigated a quiet Saturday market, maintaining the fourteen-day streak and focusing on profile hygiene."
+     "Ed. #16 (2026-11-21): Edition sixteen navigated a quiet Saturday market, maintaining the fourteen-day streak and focusing on profile hygiene.",
+     "Ed. #17 (2026-11-21): Edition seventeen maintained our fourteen-day streak through a quiet Saturday sweep, keeping Lucas focused on pipeline hygiene."
     ],
-    "last_micro_challenge": "Open your LinkedIn profile right now and sharpen your executive headline to highlight your process intelligence leadership.",
+    "last_micro_challenge": "Open your master tracking sheet and review one pending application metric to keep your pipeline posture razor-sharp.",
     "last_spotlight_company": "Paystand",
     "last_briefing_source": "gemini",
     "recent_spotlight_keys": []
