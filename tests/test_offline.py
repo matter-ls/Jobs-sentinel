@@ -1819,7 +1819,7 @@ class EndToEnd(unittest.TestCase):
         shutil.copy2(Path(fj.ROOT) / "config.json", self.root / "config.json")
         shutil.copytree(Path(fj.ROOT) / "cvs", self.root / "cvs")
 
-        # 1. Verify rendered onboarding webpage contains email, .txt/.md CV upload, checkboxes & free-text
+        # 1. Verify rendered onboarding webpage contains clean, agnostic options, .txt/.md CV upload & free-text chips
         onboard_html = ob.render_onboard_page({"onboard_webhook_url": "https://script.google.com/macros/s/test/exec"})
         self.assertIn('type="email"', onboard_html)
         self.assertIn('accept=".txt,.md', onboard_html)
@@ -1827,7 +1827,25 @@ class EndToEnd(unittest.TestCase):
         self.assertIn("domainChecks", onboard_html)
         self.assertIn("locationChecks", onboard_html)
         self.assertIn("freeText", onboard_html)
+        self.assertIn("promptChips", onboard_html)
+        self.assertIn("Specialist / Individual Contributor", onboard_html)
+        self.assertIn("Operations & Supply Chain", onboard_html)
+        self.assertIn("Other / Open (Guided by Free Text)", onboard_html)
+        self.assertNotIn("Celonis", onboard_html)  # UI options stay 100% role-agnostic & jargon-free
         self.assertNotIn("</script><script>", onboard_html)
+
+        # Verify candidate can leave domain checkboxes empty and rely purely on Role Level + Free Text
+        minimal_val = ob.validate_onboarding_payload({
+            "name": "Carlos Mendez",
+            "email": "carlos@example.com",
+            "cv_text": "Carlos Mendez | Guadalajara | 8 years leading brand marketing, product launches, and growth campaigns across LATAM.",
+            "levels": ["senior", "manager"],
+            "domains": [],
+            "locations": ["jalisco", "remote_mx"],
+            "free_text": "Looking for Marketing Manager or Growth Lead roles in consumer or tech companies; skip sales cold-calling.",
+        })
+        self.assertEqual(minimal_val["domains"], ["other"])
+        self.assertEqual(minimal_val["levels"], ["senior", "manager"])
 
         # 2. Simulate candidate submitting web form via GitHub repository_dispatch event JSON
         event_file = self.root / "event.json"
@@ -1845,8 +1863,8 @@ class EndToEnd(unittest.TestCase):
                 "name": "Sofia Ramirez",
                 "email": "sofia.ramirez@example.com",
                 "cv_text": raw_uploaded_cv,
-                "levels": ["director", "sr_manager"],
-                "domains": ["gbs_process", "automation_ai"],
+                "levels": ["director", "manager"],
+                "domains": ["strategy_process", "technology"],
                 "locations": ["remote_mx"],  # Opted into Remote Mexico ONLY (unchecked Jalisco!)
                 "language": "Spanish",
                 "free_text": "Looking for Director or Senior Manager roles in Process Mining, GBS Transformation, or Intelligent Automation. Exclude pure accounting, tax, or factory maintenance roles.",
