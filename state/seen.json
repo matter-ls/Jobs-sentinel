@@ -233,7 +233,7 @@
    },
    "initialized": true,
    "relationship": {
-    "edition": 15,
+    "edition": 16,
     "streak_days": 14,
     "last_briefing_date": "2026-11-21",
     "total_roles_surfaced": 17,
@@ -253,7 +253,8 @@
      15,
      17,
      19,
-     21
+     21,
+     22
     ],
     "recent_headlines": [
      "Turn Ambition Into Pipeline Today.",
@@ -270,10 +271,10 @@
      "Quiet Market, Sharp Partner.",
      "A Quiet Board Is Still a Swept Board.",
      "Quiet Market, Sharp Partner.",
-     "Real Security Is Knowing Your Own Market Value."
+     "Real Security Is Knowing Your Own Market Value.",
+     "A silent radar still maps the whole board."
     ],
     "recent_story_beats": [
-     "Ed. #4 (2026-11-10): Quiet day: Lucy sent no roles, kept the streak honest and asked Lucas for one pipeline-hygiene move.",
      "Ed. #5 (2026-11-11): Quiet day: Lucy sent no roles, kept the streak honest and asked Lucas for one pipeline-hygiene move.",
      "Ed. #6 (2026-11-12): Quiet day: Lucy sent no roles, kept the streak honest and asked Lucas for one pipeline-hygiene move.",
      "Ed. #7 (2026-11-13): Quiet day: Lucy sent no roles, kept the streak honest and asked Lucas for one pipeline-hygiene move.",
@@ -284,9 +285,10 @@
      "Ed. #12 (2026-11-18): Quiet day: Lucy sent no roles, kept the streak honest and asked Lucas for one pipeline-hygiene move.",
      "Ed. #13 (2026-11-19): Quiet day: Lucy sent no roles, kept the streak honest and asked Lucas for one pipeline-hygiene move.",
      "Ed. #14 (2026-11-20): Quiet day: Lucy sent no roles, kept the streak honest and asked Lucas for one pipeline-hygiene move.",
-     "Ed. #15 (2026-11-21): Edition fifteen embraced a quiet market day, keeping the fourteen-day streak alive and focusing Lucas on LinkedIn profile hygiene."
+     "Ed. #15 (2026-11-21): Edition fifteen embraced a quiet market day, keeping the fourteen-day streak alive and focusing Lucas on LinkedIn profile hygiene.",
+     "Ed. #16 (2026-11-21): Edition sixteen navigated a quiet Saturday market, maintaining the fourteen-day streak and focusing on profile hygiene."
     ],
-    "last_micro_challenge": "Open your LinkedIn profile, review your executive headline today, and ensure your process intelligence impact is front and center.",
+    "last_micro_challenge": "Open your LinkedIn profile right now and sharpen your executive headline to highlight your process intelligence leadership.",
     "last_spotlight_company": "Paystand",
     "last_briefing_source": "gemini",
     "recent_spotlight_keys": []
@@ -456,17 +458,17 @@
     "workday:Flex:WD230517": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD232022": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD231224": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD228021": {
      "first_seen": "2026-11-08",
@@ -476,17 +478,17 @@
     "workday:Flex:WD230318": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD229836": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD229837": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD229814": {
      "first_seen": "2026-11-08",
@@ -496,12 +498,12 @@
     "workday:Flex:WD224772": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Jabil:J2467745": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Jabil:J2464258": {
      "first_seen": "2026-11-08",
@@ -511,7 +513,7 @@
     "workday:Jabil:J2467574": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Jabil:J2467589": {
      "first_seen": "2026-11-08",
@@ -521,17 +523,17 @@
     "workday:Plexus:R043187": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Plexus:R043298": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Plexus:R043297": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Plexus:R043299": {
      "first_seen": "2026-11-08",
@@ -541,17 +543,17 @@
     "workday:Plexus:R043314": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Avnet:JR-024815": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Avnet:JR-024304": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Avnet:JR-024235": {
      "first_seen": "2026-11-08",
@@ -561,72 +563,72 @@
     "workday:HP Inc.:3164137": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3168031": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3169771": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3170316": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3170314": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3165014": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3168723": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3167363": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Hewlett Packard Enterprise:1212456": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Hewlett Packard Enterprise:1216400": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Hewlett Packard Enterprise:1218212": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "greenhouse:Toshiba Global Commerce Solutions:5285456007": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "greenhouse:Toshiba Global Commerce Solutions:5277588007": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "greenhouse:Wizeline:7614922": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "greenhouse:Wizeline:7905176": {
      "first_seen": "2026-11-08",
@@ -636,7 +638,7 @@
     "greenhouse:Clara:5219531007": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "greenhouse:Backbase:8225999": {
      "first_seen": "2026-11-08",
@@ -646,7 +648,7 @@
     "lever:Arrive Logistics:89f8c295-f687-4b32-9970-d6f9e3107303": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Plexus:R043517": {
      "first_seen": "2026-11-09",
@@ -656,12 +658,12 @@
     "workday:HP Inc.:3170313": {
      "first_seen": "2026-11-10",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "smartrecruiters:Bosch:744000160925391": {
      "first_seen": "2026-11-10",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD234045": {
      "first_seen": "2026-11-11",
@@ -676,7 +678,7 @@
     "workday:Flex:WD234065": {
      "first_seen": "2026-11-13",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Hewlett Packard Enterprise:1213010": {
      "first_seen": "2026-11-13",
@@ -686,24 +688,24 @@
     "eightfold:Mercado Libre:45520687": {
      "first_seen": "2026-11-14",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3170343": {
      "first_seen": "2026-11-17",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Jabil:J2472689": {
      "first_seen": "2026-11-20",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     }
    },
    "initialized": true,
    "relationship": {
-    "edition": 14,
-    "streak_days": 13,
-    "last_briefing_date": "2026-11-20",
+    "edition": 15,
+    "streak_days": 14,
+    "last_briefing_date": "2026-11-21",
     "total_roles_surfaced": 39,
     "total_cvs_tailored": 16,
     "recent_angle_ids": [
@@ -720,7 +722,8 @@
      25,
      27,
      29,
-     31
+     31,
+     1
     ],
     "recent_headlines": [
      "One Surgical Shot Beats A Year of 'Someday'.",
@@ -736,10 +739,10 @@
      "Never Self-Select Out of a Stretch Seat.",
      "Quiet Market, Sharp Partner.",
      "A Quiet Board Is Still a Swept Board.",
-     "Write Your Own Promotion Slip."
+     "Write Your Own Promotion Slip.",
+     "A silent board today builds our Monday leverage."
     ],
     "recent_story_beats": [
-     "Ed. #3 (2026-11-09): Lucy framed 'We Did The Boring 90 Percent' around Backbase (Senior Project Manager) and asked Mónica for one 60-second application.",
      "Ed. #4 (2026-11-10): Lucy framed 'Pipeline Beats Anxiety' around HP Inc. (Responsible Sourcing Project Manager) and asked Mónica for one 60-second application.",
      "Ed. #5 (2026-11-11): Quiet day: Lucy sent no roles, kept the streak honest and asked Mónica for one pipeline-hygiene move.",
      "Ed. #6 (2026-11-12): Lucy framed 'Comfort Is Crowded' around Jabil (Senior Information Technology Project Manager - SAP experience required) and asked Mónica for one 60-second application.",
@@ -750,13 +753,15 @@
      "Ed. #11 (2026-11-17): Lucy framed 'Signal Over Noise' around HP Inc. (Engineering Project Manager) and asked Mónica for one 60-second application.",
      "Ed. #12 (2026-11-18): Quiet day: Lucy sent no roles, kept the streak honest and asked Mónica for one pipeline-hygiene move.",
      "Ed. #13 (2026-11-19): Quiet day: Lucy sent no roles, kept the streak honest and asked Mónica for one pipeline-hygiene move.",
-     "Ed. #14 (2026-11-20): Lucy framed 'Write Your Own Promotion Slip' around Jabil (Sr. Project Manager - Finance) and asked Mónica for one 60-second application."
+     "Ed. #14 (2026-11-20): Lucy framed 'Write Your Own Promotion Slip' around Jabil (Sr. Project Manager - Finance) and asked Mónica for one 60-second application.",
+     "Ed. #15 (2026-11-21): Edition 15 handled a quiet Saturday market by reviewing our 31 open board positions and sharpening Mónica's pipeline posture."
     ],
-    "last_micro_challenge": "Beat 95% of procrastinating candidates today—pick 1 Career Upgrade Move above and submit your pre-armed CV before opening Slack or Teams.",
+    "last_micro_challenge": "Take sixty seconds today to polish your LinkedIn headline with our change enablement keywords while the weekend market rests.",
     "last_spotlight_company": "Jabil",
-    "last_briefing_source": "vault",
+    "last_briefing_source": "gemini",
     "recent_spotlight_keys": []
-   }
+   },
+   "rejected_matches": {}
   },
   "ewerson": {
    "emailed": {
@@ -879,13 +884,21 @@
     "eightfold:Mercado Libre:45601302": {
      "date": "2026-11-19",
      "sig": "mercado libre|ejecutivo comercial de campo fintech|fintech"
+    },
+    "workday:Hewlett Packard Enterprise:1218483": {
+     "date": "2026-11-21",
+     "sig": "hewlett packard enterprise|digital sales colombia rep|"
+    },
+    "greenhouse:GitLab:8931337002": {
+     "date": "2026-11-21",
+     "sig": "gitlab|customer success latam|"
     }
    },
    "jobs": {
     "workday:Flex:WD231224": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Avnet:JR-024300": {
      "first_seen": "2026-11-08",
@@ -905,12 +918,12 @@
     "oracle_hcm:Oracle:349534": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3167766": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Hewlett Packard Enterprise:1215541": {
      "first_seen": "2026-11-08",
@@ -920,7 +933,7 @@
     "workday:Hewlett Packard Enterprise:1216218": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Hewlett Packard Enterprise:1202638": {
      "first_seen": "2026-11-08",
@@ -930,12 +943,12 @@
     "workday:Hewlett Packard Enterprise:1215915": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Hewlett Packard Enterprise:1210324": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "lever:Bluelight Consulting:09cb455d-8096-4219-ad46-8b688830dade": {
      "first_seen": "2026-11-08",
@@ -1040,102 +1053,102 @@
     "lever:Bluelight Consulting:03debffb-8c6a-424e-8861-f4e28c3fd619": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "lever:Bluelight Consulting:323dc8b5-b242-4e78-b454-dc3ae1537be7": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "lever:Bluelight Consulting:3b4a0dd4-151e-4223-8f9e-6c85ea793ed1": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "lever:Bluelight Consulting:7078f0d4-d4aa-4868-9e53-dccf60f735b8": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "lever:Bluelight Consulting:709d8704-765e-401e-8d0f-460748dbf572": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "lever:Bluelight Consulting:79257f3c-3f68-4910-b073-035502c0c499": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "lever:Bluelight Consulting:90361d78-de56-412d-8efe-dbf1620427ff": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "lever:Bluelight Consulting:95a5fb79-21f7-4903-94c8-0c6df004a85e": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "lever:Bluelight Consulting:9ac78392-bf9e-4f4b-aa7b-bf8d0ee460a8": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "lever:Bluelight Consulting:a068cf17-9437-42f7-8cc0-99eca0852ee0": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "lever:Bluelight Consulting:a1e40789-e77a-46f5-a75b-09600f578b9c": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "lever:Bluelight Consulting:a3b079ed-b918-43bb-927f-360a358d5ab0": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "lever:Bluelight Consulting:aa67ca8f-59da-40e2-b951-c3974490d7db": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "lever:Bluelight Consulting:ae6af482-2dbe-4e61-908d-e7127a01c69d": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "lever:Bluelight Consulting:b0aa6b76-2198-430f-8f0a-e07cca702510": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "lever:Bluelight Consulting:c4266080-b67a-4a44-aa2c-c3b0eb6ce2a9": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "lever:Bluelight Consulting:dffe0f79-92a6-4e24-9c0f-93b61a94db31": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "lever:Bluelight Consulting:f6ee9870-f0da-4743-90b2-4f8bf16a1af7": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "lever:Bluelight Consulting:fb27c5d4-ad79-4fb9-949d-e6a361723794": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "lever:Bluelight Consulting:feeb453c-0f4c-4c5e-bcbb-22202c1cf75e": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "oracle_hcm:Honeywell:160672": {
      "first_seen": "2026-11-08",
@@ -1150,27 +1163,27 @@
     "greenhouse:Clara:5219531007": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "greenhouse:Clara:5147317007": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "greenhouse:Paystand:8165060003": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "greenhouse:Stripe:8096790": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Citi:24717412": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD230837": {
      "first_seen": "2026-11-18",
@@ -1185,32 +1198,32 @@
     "workday:Jabil:J2471371": {
      "first_seen": "2026-11-18",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Avnet:JR-024304": {
      "first_seen": "2026-11-18",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3170187": {
      "first_seen": "2026-11-18",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3168886": {
      "first_seen": "2026-11-18",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3168493": {
      "first_seen": "2026-11-18",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Hewlett Packard Enterprise:1216388": {
      "first_seen": "2026-11-18",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "greenhouse:Rapido Solutions Group:4050314006": {
      "first_seen": "2026-11-18",
@@ -1220,21 +1233,36 @@
     "lever:Arrive Logistics:b3c0e55c-d0f7-43aa-92c7-31fea0a5f249": {
      "first_seen": "2026-11-18",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "eightfold:Mercado Libre:45601302": {
      "first_seen": "2026-11-19",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
+    },
+    "workday:Avnet:JR-025049": {
+     "first_seen": "2026-11-21",
+     "baseline": false,
+     "last_seen": "2026-11-21"
+    },
+    "workday:Hewlett Packard Enterprise:1218483": {
+     "first_seen": "2026-11-21",
+     "baseline": false,
+     "last_seen": "2026-11-21"
+    },
+    "greenhouse:GitLab:8931337002": {
+     "first_seen": "2026-11-21",
+     "baseline": false,
+     "last_seen": "2026-11-21"
     }
    },
    "initialized": true,
    "relationship": {
-    "edition": 14,
-    "streak_days": 13,
-    "last_briefing_date": "2026-11-20",
-    "total_roles_surfaced": 30,
-    "total_cvs_tailored": 10,
+    "edition": 15,
+    "streak_days": 14,
+    "last_briefing_date": "2026-11-21",
+    "total_roles_surfaced": 32,
+    "total_cvs_tailored": 12,
     "recent_angle_ids": [
      29,
      31,
@@ -1249,7 +1277,8 @@
      16,
      18,
      20,
-     22
+     22,
+     24
     ],
     "recent_headlines": [
      "Play Asymmetric Offense.",
@@ -1265,10 +1294,10 @@
      "Quiet Market, Sharp Partner.",
      "Small Morning Boldness, Massive Multi-Year ROI.",
      "Scarcity Belongs to Proven Builders.",
-     "A Quiet Board Is Still a Swept Board."
+     "A Quiet Board Is Still a Swept Board.",
+     "Competing Hiring Managers Reveal Your True Worth."
     ],
     "recent_story_beats": [
-     "Ed. #3 (2026-11-09): Quiet day: Lucy sent no roles, kept the streak honest and asked Ewerson for one pipeline-hygiene move.",
      "Ed. #4 (2026-11-10): Quiet day: Lucy sent no roles, kept the streak honest and asked Ewerson for one pipeline-hygiene move.",
      "Ed. #5 (2026-11-11): Quiet day: Lucy sent no roles, kept the streak honest and asked Ewerson for one pipeline-hygiene move.",
      "Ed. #6 (2026-11-12): Quiet day: Lucy sent no roles, kept the streak honest and asked Ewerson for one pipeline-hygiene move.",
@@ -1279,13 +1308,15 @@
      "Ed. #11 (2026-11-17): Quiet day: Lucy sent no roles, kept the streak honest and asked Ewerson for one pipeline-hygiene move.",
      "Ed. #12 (2026-11-18): Lucy framed 'One Shot, Asymmetric Upside' around Avnet (Customer Operations Manager) and asked Ewerson for one 60-second application.",
      "Ed. #13 (2026-11-19): Lucy framed 'Momentum Before Nine AM' around Mercado Libre (Ejecutivo Comercial de Campo - Fintech) and asked Ewerson for one 60-second application.",
-     "Ed. #14 (2026-11-20): Quiet day: Lucy sent no roles, kept the streak honest and asked Ewerson for one pipeline-hygiene move."
+     "Ed. #14 (2026-11-20): Quiet day: Lucy sent no roles, kept the streak honest and asked Ewerson for one pipeline-hygiene move.",
+     "Ed. #15 (2026-11-21): Ewerson reviewed the Hewlett Packard Enterprise Digital Sales role on Saturday morning, leveraging edition fifteen to land at the top of the Monday stack."
     ],
-    "last_micro_challenge": "Open the last application you submitted and send the hiring manager or recruiter a two-line follow-up note today.",
-    "last_spotlight_company": "Mercado Libre",
-    "last_briefing_source": "vault",
+    "last_micro_challenge": "Open the attached cv_ewerson_lira_hewlett_packard_enterprise_digital_sales_col.docx file, review the tailored formatting for Hewlett Packard Enterprise, and drop it into their portal.",
+    "last_spotlight_company": "Hewlett Packard Enterprise",
+    "last_briefing_source": "gemini",
     "recent_spotlight_keys": []
-   }
+   },
+   "rejected_matches": {}
   },
   "luis": {
    "emailed": {
@@ -1582,7 +1613,7 @@
     "workday:Flex:WD230517": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD229240": {
      "first_seen": "2026-11-09",
@@ -1602,27 +1633,27 @@
     "workday:Flex:WD232022": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD233350": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD232315": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD232378": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD232381": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD232617": {
      "first_seen": "2026-11-09",
@@ -1632,17 +1663,17 @@
     "workday:Flex:WD230250": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD230251": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD230252": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD228572": {
      "first_seen": "2026-11-09",
@@ -1652,17 +1683,17 @@
     "workday:Flex:WD231537": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD231538": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD231224": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD228021": {
      "first_seen": "2026-11-09",
@@ -1672,17 +1703,17 @@
     "workday:Flex:WD230318": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD229836": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD229837": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD229814": {
      "first_seen": "2026-11-09",
@@ -1692,17 +1723,17 @@
     "workday:Flex:WD224772": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Jabil:J2467745": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Jabil:J2470798": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Jabil:J2464258": {
      "first_seen": "2026-11-09",
@@ -1712,12 +1743,12 @@
     "workday:Jabil:J2469140": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Jabil:J2467574": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Jabil:J2466768": {
      "first_seen": "2026-11-09",
@@ -1727,7 +1758,7 @@
     "workday:Jabil:J2467030": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Jabil:J2467028": {
      "first_seen": "2026-11-09",
@@ -1737,42 +1768,42 @@
     "workday:Jabil:J2467026": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Jabil:J2465480": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Jabil:J2463976": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Jabil:J2463973": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Jabil:J2461594": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Plexus:R043187": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Plexus:R043298": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Plexus:R043297": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Plexus:R043299": {
      "first_seen": "2026-11-09",
@@ -1782,7 +1813,7 @@
     "workday:Plexus:R043314": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Plexus:R043517": {
      "first_seen": "2026-11-09",
@@ -1797,7 +1828,7 @@
     "workday:Micron:JR114201": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Micron:JR110477": {
      "first_seen": "2026-11-09",
@@ -1807,12 +1838,12 @@
     "workday:Micron:JR104802": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3170287": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3169324": {
      "first_seen": "2026-11-09",
@@ -1822,77 +1853,77 @@
     "workday:HP Inc.:3164137": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3168031": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3169771": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3169719": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3170316": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3170076": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3170314": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3169367": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3165014": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3168886": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3165250": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3169264": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3168493": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3168723": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3167363": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Hewlett Packard Enterprise:1212304": {
      "first_seen": "2026-11-09",
@@ -1902,17 +1933,17 @@
     "workday:Hewlett Packard Enterprise:1215663": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Hewlett Packard Enterprise:1216388": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Hewlett Packard Enterprise:1216400": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Hewlett Packard Enterprise:1217234": {
      "first_seen": "2026-11-09",
@@ -1922,32 +1953,32 @@
     "workday:Hewlett Packard Enterprise:1218212": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "greenhouse:Toshiba Global Commerce Solutions:5285456007": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "greenhouse:Toshiba Global Commerce Solutions:5277588007": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Kyndryl:R-69264": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Ciena:R031786": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "greenhouse:Wizeline:7614922": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "greenhouse:Wizeline:7905176": {
      "first_seen": "2026-11-09",
@@ -1957,22 +1988,22 @@
     "smartrecruiters:Bosch:744000159934670": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Brown-Forman (Casa Herradura):JR-00010525": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Brown-Forman (Casa Herradura):JR-00010460": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Mondelēz International:R-180617": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "greenhouse:Backbase:8225999": {
      "first_seen": "2026-11-09",
@@ -1982,17 +2013,17 @@
     "workday:HP Inc.:3170313": {
      "first_seen": "2026-11-10",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "smartrecruiters:Bosch:744000160925391": {
      "first_seen": "2026-11-10",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "smartrecruiters:Continental:744000160884904": {
      "first_seen": "2026-11-10",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD234045": {
      "first_seen": "2026-11-11",
@@ -2007,17 +2038,17 @@
     "workday:Flex:WD234065": {
      "first_seen": "2026-11-13",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Plexus:R043675": {
      "first_seen": "2026-11-13",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD233176": {
      "first_seen": "2026-11-14",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Micron:JR116850": {
      "first_seen": "2026-11-14",
@@ -2027,49 +2058,54 @@
     "eightfold:Mercado Libre:45520687": {
      "first_seen": "2026-11-14",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Avnet:JR-024968": {
      "first_seen": "2026-11-17",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3170343": {
      "first_seen": "2026-11-17",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3168461": {
      "first_seen": "2026-11-17",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD234177": {
      "first_seen": "2026-11-18",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:HP Inc.:3170704": {
      "first_seen": "2026-11-19",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Flex:WD234495": {
      "first_seen": "2026-11-20",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
     },
     "workday:Jabil:J2472689": {
      "first_seen": "2026-11-20",
      "baseline": false,
-     "last_seen": "2026-11-20"
+     "last_seen": "2026-11-21"
+    },
+    "workday:Citi:261009273": {
+     "first_seen": "2026-11-21",
+     "baseline": false,
+     "last_seen": "2026-11-21"
     }
    },
    "initialized": true,
    "relationship": {
-    "edition": 13,
-    "streak_days": 12,
-    "last_briefing_date": "2026-11-20",
+    "edition": 14,
+    "streak_days": 13,
+    "last_briefing_date": "2026-11-21",
     "total_roles_surfaced": 72,
     "total_cvs_tailored": 26,
     "recent_angle_ids": [
@@ -2085,7 +2121,8 @@
      7,
      9,
      11,
-     13
+     13,
+     15
     ],
     "recent_headlines": [
      "Beat the Crowd While They Procrastinate.",
@@ -2100,10 +2137,10 @@
      "Act Like the CEO of 'Me, Inc.' Today.",
      "Outgrow the Room Before It Shrinks You.",
      "Optionality Changes How You Walk Into Every Meeting.",
-     "Another Team's Bottleneck Is Your Promotion."
+     "Another Team's Bottleneck Is Your Promotion.",
+     "Stretch seats have less competition because most people self-reject."
     ],
     "recent_story_beats": [
-     "Ed. #2 (2026-11-09): Lucy framed 'The Reorg Will Not Wait' around Toshiba Global Commerce Solutions (Operations Program Manager - Manufacturing & Service Center) and asked Luis for one 60-second application.",
      "Ed. #3 (2026-11-10): Lucy framed 'Signal Over Noise' around HP Inc. (Responsible Sourcing Project Manager) and asked Luis for one 60-second application.",
      "Ed. #4 (2026-11-11): Lucy framed 'Posture Changes Outcomes' around HP Inc. (ITAD Business Analyst) and asked Luis for one 60-second application.",
      "Ed. #5 (2026-11-12): Lucy framed 'Their Filter, Our Front Door' around Jabil (Senior Information Technology Project Manager - SAP experience required) and asked Luis for one 60-second application.",
@@ -2114,11 +2151,186 @@
      "Ed. #10 (2026-11-17): Lucy framed 'Six Seconds, One Decision' around HP Inc. (Engineering Project Manager) and asked Luis for one 60-second application.",
      "Ed. #11 (2026-11-18): Lucy framed 'We Did The Boring 90 Percent' around Flex (Business Excellence Leader) and asked Luis for one 60-second application.",
      "Ed. #12 (2026-11-19): Lucy framed 'Pipeline Beats Anxiety' around HP Inc. (IT Asset Management Process & Capability Lead) and asked Luis for one 60-second application.",
-     "Ed. #13 (2026-11-20): Lucy framed 'The First Fifteen Applicants' around Jabil (Sr. Project Manager - Finance) and asked Luis for one 60-second application."
+     "Ed. #13 (2026-11-20): Lucy framed 'The First Fifteen Applicants' around Jabil (Sr. Project Manager - Finance) and asked Luis for one 60-second application.",
+     "Ed. #14 (2026-11-21): Lucy delivered briefing fourteen on a quiet Saturday, reminding Luis that stretch seats require no self-rejection and keeping the radar primed for Monday."
     ],
-    "last_micro_challenge": "Don't bookmark—execute: pick the single role below that stretches you most, attach your tailored Word CV, and hit send while your coffee is warm.",
+    "last_micro_challenge": "Do a quick Saturday pipeline check: review your pending applications and refresh your portfolio notes while your coffee is warm.",
     "last_spotlight_company": "Jabil",
-    "last_briefing_source": "vault",
+    "last_briefing_source": "gemini",
+    "recent_spotlight_keys": []
+   },
+   "rejected_matches": {
+    "workday:Citi:261009273": {
+     "date": "2026-11-21",
+     "sig": "citi|banamex analista de procesos e infraestructura banca comercial|",
+     "score": 45
+    }
+   }
+  },
+  "test": {
+   "emailed": {
+    "workday:Flex:WD229135": {
+     "date": "2026-11-21",
+     "sig": "flex|director facilities|"
+    },
+    "workday:Flex:WD231552": {
+     "date": "2026-11-21",
+     "sig": "flex|sr quality director|"
+    },
+    "workday:Flex:WD234211": {
+     "date": "2026-11-21",
+     "sig": "flex|director design molding engineering|"
+    },
+    "workday:Flex:WD228976": {
+     "date": "2026-11-21",
+     "sig": "flex|director operations npi background|"
+    },
+    "workday:Flex:WD230884": {
+     "date": "2026-11-21",
+     "sig": "flex|director global account management|"
+    },
+    "workday:Jabil:J2465779": {
+     "date": "2026-11-21",
+     "sig": "jabil|lean six sigma sr manager|"
+    },
+    "workday:Citi:26996393": {
+     "date": "2026-11-21",
+     "sig": "citi|banamex director banca corporativa guadalajara|"
+    },
+    "oracle_hcm:JPMorgan Chase:210802450": {
+     "date": "2026-11-21",
+     "sig": "jpmorgan chase|global financial crimes compliance payments latin america canada vice president|ccor lob/cf/country coverage"
+    },
+    "oracle_hcm:Oracle:337826": {
+     "date": "2026-11-21",
+     "sig": "oracle|erp senior principal consultant netsuite|"
+    },
+    "workday:Jabil:J2465480": {
+     "date": "2026-11-21",
+     "sig": "jabil|application administrator blue prism enterprise administrator|"
+    },
+    "workday:HP Inc.:3169719": {
+     "date": "2026-11-21",
+     "sig": "hp inc.|hr automation power platform specialist|"
+    },
+    "workday:Flex:WD234495": {
+     "date": "2026-11-21",
+     "sig": "flex|business excellence leader|"
+    }
+   },
+   "rejected_matches": {
+    "greenhouse:Paystand:7830346003": {
+     "date": "2026-11-21",
+     "sig": "paystand|vice president of product|",
+     "score": 40
+    },
+    "ashby:Kueski:e1261953-7bcc-45db-a54e-fc2e0bdfbc89": {
+     "date": "2026-11-21",
+     "sig": "kueski|director of product management customer products platform|product",
+     "score": 45
+    }
+   },
+   "jobs": {
+    "workday:Flex:WD234495": {
+     "first_seen": "2026-11-21",
+     "baseline": true,
+     "last_seen": "2026-11-21"
+    },
+    "workday:Flex:WD234177": {
+     "first_seen": "2026-11-21",
+     "baseline": true,
+     "last_seen": "2026-11-21"
+    },
+    "workday:Flex:WD234211": {
+     "first_seen": "2026-11-21",
+     "baseline": true,
+     "last_seen": "2026-11-21"
+    },
+    "workday:Flex:WD228976": {
+     "first_seen": "2026-11-21",
+     "baseline": true,
+     "last_seen": "2026-11-21"
+    },
+    "workday:Flex:WD230884": {
+     "first_seen": "2026-11-21",
+     "baseline": true,
+     "last_seen": "2026-11-21"
+    },
+    "workday:Flex:WD231552": {
+     "first_seen": "2026-11-21",
+     "baseline": true,
+     "last_seen": "2026-11-21"
+    },
+    "workday:Flex:WD229135": {
+     "first_seen": "2026-11-21",
+     "baseline": true,
+     "last_seen": "2026-11-21"
+    },
+    "workday:Jabil:J2465779": {
+     "first_seen": "2026-11-21",
+     "baseline": true,
+     "last_seen": "2026-11-21"
+    },
+    "workday:Jabil:J2465480": {
+     "first_seen": "2026-11-21",
+     "baseline": true,
+     "last_seen": "2026-11-21"
+    },
+    "oracle_hcm:Oracle:337826": {
+     "first_seen": "2026-11-21",
+     "baseline": true,
+     "last_seen": "2026-11-21"
+    },
+    "workday:HP Inc.:3169719": {
+     "first_seen": "2026-11-21",
+     "baseline": true,
+     "last_seen": "2026-11-21"
+    },
+    "ashby:Kueski:e1261953-7bcc-45db-a54e-fc2e0bdfbc89": {
+     "first_seen": "2026-11-21",
+     "baseline": true,
+     "last_seen": "2026-11-21"
+    },
+    "greenhouse:Paystand:7830346003": {
+     "first_seen": "2026-11-21",
+     "baseline": true,
+     "last_seen": "2026-11-21"
+    },
+    "eightfold:Mercado Libre:45520687": {
+     "first_seen": "2026-11-21",
+     "baseline": true,
+     "last_seen": "2026-11-21"
+    },
+    "workday:Citi:26996393": {
+     "first_seen": "2026-11-21",
+     "baseline": true,
+     "last_seen": "2026-11-21"
+    },
+    "oracle_hcm:JPMorgan Chase:210802450": {
+     "first_seen": "2026-11-21",
+     "baseline": true,
+     "last_seen": "2026-11-21"
+    }
+   },
+   "initialized": true,
+   "relationship": {
+    "edition": 1,
+    "streak_days": 1,
+    "last_briefing_date": "2026-11-21",
+    "total_roles_surfaced": 12,
+    "total_cvs_tailored": 3,
+    "recent_angle_ids": [
+     12
+    ],
+    "recent_headlines": [
+     "Tu trayectoria merece dejar de ser filtrada por robots"
+    ],
+    "recent_story_beats": [
+     "Ed. #1 (2026-11-21): Primer contacto establecido, arrancando con el análisis de la vacante en Flex y el despliegue del primer documento adaptado."
+    ],
+    "last_micro_challenge": "Abre el documento adaptado para Flex y repasa los tres puntos clave de operaciones antes de enviar.",
+    "last_spotlight_company": "Flex",
+    "last_briefing_source": "gemini",
     "recent_spotlight_keys": []
    }
   }
