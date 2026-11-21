@@ -18,14 +18,14 @@ on:
         required: true
         type: string
       levels:
-        description: "Comma-separated seniority IDs (c_exec,director,sr_manager,manager,senior_ic)"
+        description: "Comma-separated role levels (specialist,senior,manager,director,executive)"
         required: false
-        default: "director,sr_manager"
+        default: "senior,manager"
         type: string
       domains:
-        description: "Comma-separated domain IDs (ops_supply_chain,gbs_process,automation_ai,engineering_cloud,tpm_pmo,sales_commercial,change_cx,finance_hr_strategy)"
+        description: "Comma-separated broad job areas (operations,technology,project_product,sales_customer,strategy_process,finance_legal,people_hr,marketing,other)"
         required: false
-        default: "gbs_process,automation_ai"
+        default: "other"
         type: string
       locations:
         description: "Comma-separated location IDs (jalisco,remote_mx,mx_country)"
