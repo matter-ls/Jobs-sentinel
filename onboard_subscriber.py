@@ -39,14 +39,62 @@ MAX_FREE_TEXT_CHARS = 4_000
 STRICT_EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,180}\.[A-Za-z]{2,24}$")
 
 # --------------------------------------------------------------------------
-# Structured Onboarding Checkbox Catalogs (Single Source of Truth)
+# Agnostic, Standard Onboarding Options (Broad Signals + Free-Text Model Feedback)
 # --------------------------------------------------------------------------
 
 SENIORITY_OPTIONS = [
     {
-        "id": "c_exec",
-        "label": "VP / GM / C-Level / Country Head",
-        "hint": "VP, SVP, General Manager, Managing Director, Country Lead",
+        "id": "specialist",
+        "label": "Specialist / Individual Contributor",
+        "hint": "Analyst, Engineer, Representative, Associate, Coordinator",
+        "inc": [
+            r"\b(analyst|analista|specialist|especialista|engineer|ingenier[oa]|associate|representative|representante|coordinator|coordinador(a)?|developer|designer)\b",
+        ],
+        "up": [
+            r"\b(senior|sr\.?|lead|lider|manager|gerente|principal|architect)\b",
+        ],
+    },
+    {
+        "id": "senior",
+        "label": "Senior / Lead",
+        "hint": "Senior, Lead, Principal, Staff, Consultant, Architect",
+        "default": True,
+        "inc": [
+            r"\b(senior|sr\.?|lead|l[ií]der|principal|staff|consultant|consultor(a)?|architect|arquitect[oa]|strategist|advisor|asesor(a)?)\b",
+        ],
+        "up": [
+            r"\b(manager|gerente|senior manager|sr\.? manager|team lead|principal|architect|director(a)?|head of)\b",
+        ],
+    },
+    {
+        "id": "manager",
+        "label": "Manager",
+        "hint": "Manager, Senior Manager, Team Lead, Program Manager",
+        "default": True,
+        "inc": [
+            r"\b(manager|gerente|senior manager|sr\.? manager|gerente (senior|sr\.?)|team lead|delivery lead|supervisor(a)?)\b",
+        ],
+        "up": [
+            r"\b(senior manager|sr\.? manager|gerente (senior|sr\.?)|director(a)?|head of|vp|vice[- ]?president(e|a)?)\b",
+        ],
+    },
+    {
+        "id": "director",
+        "label": "Director / Head",
+        "hint": "Director, Senior Director, Head of Area",
+        "inc": [
+            r"\bdirector(a)?\b",
+            r"\bhead of\b",
+        ],
+        "up": [
+            r"\b(senior director|sr\.? director|executive director|vp|vice[- ]?president(e|a)?|head of)\b",
+            r"\bdirector(a)?\b",
+        ],
+    },
+    {
+        "id": "executive",
+        "label": "VP / C-Level / GM",
+        "hint": "VP, SVP, General Manager, Country Manager, Chief Officer",
         "inc": [
             r"\b(vp|svp|evp|vice[- ]?president(e|a)?)\b",
             r"\b(general manager|gerente general|managing director)\b",
@@ -58,161 +106,115 @@ SENIORITY_OPTIONS = [
             r"\b(vp|vice[- ]?president(e|a)?)\b",
         ],
     },
-    {
-        "id": "director",
-        "label": "Director / Head of Function",
-        "hint": "Director, Senior Director, Directora, Head of Department",
-        "inc": [
-            r"\bdirector(a)?\b",
-            r"\bhead of\b",
-        ],
-        "up": [
-            r"\b(senior director|sr\.? director|executive director|vp|vice[- ]?president(e|a)?|head of)\b",
-            r"\bdirector(a)?\b",
-        ],
-    },
-    {
-        "id": "sr_manager",
-        "label": "Senior Manager / Principal / Practice or CoE Lead",
-        "hint": "Sr. Manager, Principal, Solution Architect, Global/Regional/CoE Lead",
-        "inc": [
-            r"\b(senior manager|sr\.? manager|gerente (senior|sr\.?))\b",
-            r"\b(principal|coe lead|practice lead|global lead|regional lead|latam lead)\b",
-        ],
-        "up": [
-            r"\b(director(a)?|head of|vp|vice[- ]?president(e|a)?)\b",
-            r"\b(senior manager|sr\.? manager|principal|coe lead|practice lead|global lead)\b",
-        ],
-    },
-    {
-        "id": "manager",
-        "label": "Manager / Program Manager / Team or Delivery Lead",
-        "hint": "Manager, Gerente, Program/Project Lead, Team Lead, Agile Delivery Lead",
-        "inc": [
-            r"\b(manager|gerente|team lead|delivery lead|program manager|project manager)\b",
-        ],
-        "up": [
-            r"\b(director(a)?|head of|senior manager|sr\.? manager|gerente (senior|sr\.?)|principal|coe lead)\b",
-        ],
-    },
-    {
-        "id": "senior_ic",
-        "label": "Senior Specialist / Consultant / Account Executive / IC",
-        "hint": "Senior Analyst, Consultant, Architect, Account Executive, KAM, Specialist",
-        "inc": [
-            r"\b(senior|sr\.?|lead|staff|specialist|consultant|architect|strategist|advisor)\b",
-        ],
-        "up": [
-            r"\b(manager|gerente|senior manager|sr\.? manager|team lead|lead|principal|architect|director(a)?|head of)\b",
-        ],
-    },
 ]
 
 DOMAIN_OPTIONS = [
     {
-        "id": "ops_supply_chain",
-        "label": "Operations, Supply Chain, Manufacturing & Quality",
-        "hint": "Site/Plant Ops, Logistics, Procurement, Supply Chain, Operational Quality",
-        "keywords_re": r"(operations|operaciones|supply chain|cadena de suministro|logistics|logistica|manufacturing|manufactura|plant|fab\b|quality|calidad|procurement|compras|sourcing|planning|fulfillment)",
+        "id": "operations",
+        "label": "Operations & Supply Chain",
+        "hint": "Operations, Logistics, Manufacturing, Procurement, Quality",
+        "keywords_re": r"(operations|operaciones|supply chain|cadena de suministro|logistics|logistica|manufacturing|manufactura|plant|quality|calidad|procurement|compras|sourcing|planning|fulfillment)",
         "standalone_inc": [
-            r"\b(head|director(a)?|vp|general manager|senior manager|sr\.? manager|manager|gerente|lead|lider)\b.*\b(operations|operaciones|supply chain|logistics|logistica|manufacturing|plant|quality|procurement|compras)\b",
-            r"\b(operations|supply chain|logistics|manufacturing|quality|procurement)\b.*\b(director(a)?|manager|lead|leader|head|specialist|strategist)\b",
+            r"\b(operations|operaciones|supply chain|logistics|logistica|manufacturing|quality|procurement|compras)\b.*\b(director(a)?|head|vp|manager|gerente|lead|l[ií]der|specialist|analyst|coordinator|planner)\b",
+            r"\b(director(a)?|head|vp|general manager|manager|gerente|lead|l[ií]der)\b.*\b(operations|operaciones|supply chain|logistics|logistica|manufacturing|plant|quality|procurement|compras)\b",
         ],
     },
     {
-        "id": "gbs_process",
-        "label": "GBS / Shared Services, Process Mining & Continuous Improvement",
-        "hint": "GBS, Process Intelligence (Celonis), Operational Excellence, Lean Six Sigma, BPI",
-        "keywords_re": r"(gbs|shared services|global business services|process mining|celonis|signavio|process intelligence|process excellence|operational excellence|continuous improvement|mejora continua|lean|six sigma|\bbpi\b|\bbpm\b|business process|procesos)",
+        "id": "technology",
+        "label": "Engineering, Data & IT",
+        "hint": "Software, Data & Analytics, Cloud, IT, AI & Automation",
+        "keywords_re": r"(engineering|ingenieria|software|platform|cloud|data|analytics|business intelligence|\bbi\b|devops|sre|infrastructure|architecture|cybersecurity|security|\bai\b|machine learning|automation|automatizacion|rpa|low[- ]code|\bit\b|sistemas)",
         "standalone_inc": [
-            r"\b(process mining|celonis|signavio|process intelligence)\b",
-            r"\b(operational|operations|business|process) excellence\b",
-            r"\b(continuous improvement|mejora continua|lean six sigma|\bbpi\b)\b",
-            r"\b(gbs|shared services|global business services|business process)\b.*\b(director(a)?|head|vp|senior manager|sr\.? manager|manager|gerente|lead|leader|architect|consultant|specialist|analyst)\b",
+            r"\b(software|backend|frontend|full[- ]stack|cloud|data|analytics|devops|sre|platform|security|cybersecurity|machine learning|\bai\b|automation|rpa|systems)\b.*\b(engineer|developer|architect|scientist|analyst|manager|lead|director(a)?|head|vp|specialist|consultant)\b",
+            r"\b(director(a)?|head|vp|manager|gerente|lead|principal|staff|architect)\b.*\b(engineering|ingenieria|software|platform|cloud|data|analytics|infrastructure|security|\bit\b|technology|tecnologia|automation)\b",
         ],
     },
     {
-        "id": "automation_ai",
-        "label": "Intelligent Automation (RPA / Low-Code), AI & Digital Transformation",
-        "hint": "RPA, Power Platform, Hyperautomation, AI Enablement, Digital Transformation",
-        "keywords_re": r"(automation|automatizacion|rpa|hyperautomation|power platform|power apps|power automate|low[- ]code|uipath|automation anywhere|blue prism|digital transformation|transformacion digital|\bai\b|artificial intelligence|genai)",
+        "id": "project_product",
+        "label": "Project, Program & Product",
+        "hint": "Project/Program Management, Product, PMO, Agile, Transformation",
+        "keywords_re": r"(project|proyecto|proyectos|program|programa|portfolio|portafolio|\bpmo\b|product|producto|agile|scrum|delivery|transformation|transformacion)",
         "standalone_inc": [
-            r"\b(rpa|robotic process automation|intelligent automation|hyperautomation|process automation|business automation)\b",
-            r"\b(power platform|power apps|power automate|low[- ]code|uipath|automation anywhere|blue prism)\b",
-            r"\b(digital transformation|transformacion digital|business transformation)\b",
-            r"\bautomation\b.*\b(director(a)?|head|manager|lead|leader|architect|consultant|specialist|strategist|program)\b",
+            r"\b(project|program|portfolio|product|technical program|delivery)\b.*\b(manager|lead|leader|director(a)?|head|vp|owner|coordinator|specialist|coach)\b",
+            r"\b(gerente|l[ií]der|director(a)?|coordinador(a)?)\b.*\b(proyecto|proyectos|programa|portafolio|producto|transformaci[oó]n)\b",
+            r"\b(\bpmo\b|scrum master|agile coach|agile delivery|digital transformation|business transformation)\b",
         ],
     },
     {
-        "id": "engineering_cloud",
-        "label": "Software Engineering, Cloud, Data & Analytics Platforms",
-        "hint": "Engineering Leadership, Cloud/DevOps/SRE, Data Engineering, BI & Analytics",
-        "keywords_re": r"(engineering|ingenieria|software|platform|cloud|data|analytics|business intelligence|\bbi\b|devops|sre|infrastructure|architecture|cybersecurity|security|machine learning)",
+        "id": "sales_customer",
+        "label": "Sales & Customer Success",
+        "hint": "Sales, Account Management, Business Development, Customer Success / CX",
+        "keywords_re": r"(sales|ventas|comercial|commercial|account executive|account manager|\bkam\b|business development|\bbdr\b|\bsdr\b|customer success|\bcsm\b|customer experience|\bcx\b|renewals?|retention|revenue|channel|partner|alliances?)",
         "standalone_inc": [
-            r"\b(director(a)?|head|vp|senior manager|sr\.? manager|manager|lead|principal|staff|architect)\b.*\b(engineering|software|platform|cloud|data|analytics|business intelligence|infrastructure|devops|sre|security)\b",
-            r"\b(engineering|software|platform|cloud|data|analytics)\b.*\b(director(a)?|head|vp|manager|lead|architect|principal)\b",
+            r"\b(account executive|sales executive|commercial executive|key account manager|\bkam\b|account manager|client partner|customer success manager|\bcsm\b)\b",
+            r"\b(sales|business development|commercial|customer success|client success|customer experience|\bcx\b|renewals?|partner|channel)\b.*\b(representative|specialist|executive|manager|lead|director(a)?|head|vp|consultant|coordinator)\b",
+            r"\b(ejecutiv[oa]|gerente|director(a)?|l[ií]der|representante|especialista)\b.*\b(ventas|comercial|cuentas|desarrollo de negocios|[eé]xito del cliente|experiencia del cliente)\b",
         ],
     },
     {
-        "id": "tpm_pmo",
-        "label": "Technical Program Management (TPM), PMO & Agile Delivery",
-        "hint": "TPM, Program/Portfolio Management, Enterprise PMO, Scrum/Agile Delivery",
-        "keywords_re": r"(technical program|program|programa|portfolio|portafolio|\bpmo\b|project|proyecto|proyectos|agile|scrum|delivery)",
+        "id": "strategy_process",
+        "label": "Strategy, Consulting & Process",
+        "hint": "Business Strategy, Process Improvement, Shared Services / GBS, Change",
+        "keywords_re": r"(strategy|estrategia|business operations|bizops|consulting|consultoria|process|procesos|continuous improvement|mejora continua|operational excellence|\bgbs\b|shared services|change management|gestion del cambio|enablement)",
         "standalone_inc": [
-            r"\b(technical program manager|program manager|portfolio manager|\bpmo\b)\b",
-            r"\b(director(a)?|head|senior manager|sr\.? manager|manager|gerente|lead|lider|principal|staff)\b.*\b(program|programa|portfolio|portafolio|\bpmo\b|delivery|agile|proyectos)\b",
+            r"\b(strategy|estrategia|business operations|bizops|process improvement|process excellence|operational excellence|continuous improvement|mejora continua|process mining|change management|gesti[oó]n del cambio|\bgbs\b|shared services)\b",
+            r"\b(business|process|management|strategy|transformation|operations)\b.*\b(consultant|consultor(a)?|strategist|analyst|analista|partner|manager|gerente|lead|director(a)?|head)\b",
         ],
     },
     {
-        "id": "sales_commercial",
-        "label": "B2B Enterprise Sales, Account Management (AE / KAM) & Customer Success",
-        "hint": "Account Executive, KAM, Sales Leadership, BDR/SDR, Customer Success (CSM), Renewals",
-        "keywords_re": r"(sales|ventas|comercial|commercial|account executive|account manager|\bkam\b|business development|\bbdr\b|\bsdr\b|customer success|\bcsm\b|renewals?|retention|revenue|channel|partner|alliances?)",
+        "id": "finance_legal",
+        "label": "Finance, Accounting & Legal",
+        "hint": "Finance, FP&A, Accounting, Audit, Tax, Treasury, Legal & Compliance",
+        "keywords_re": r"(finance|finanzas|financial|\bfp&a\b|accounting|contabilidad|controller|contralor|audit|auditoria|tax|impuestos|treasury|tesoreria|legal|counsel|abogad[oa]|compliance|cumplimiento)",
         "standalone_inc": [
-            r"\b(account executive|sales executive|commercial executive|key account manager|\bkam\b|account manager|client partner)\b",
-            r"\b(ejecutiv[oa]|gerente|director(a)?|l[ií]der|head)\b.*\b(ventas|comercial|cuentas|cuentas clave|desarrollo de negocios|[eé]xito del cliente)\b",
-            r"\b(enterprise|inside|digital|b2b|regional|territory|channel|partner|latam|cloud|saas) sales\b",
-            r"\b(customer success|client success|partner success|business development|renewals?|sales)\b.*\b(manager|director(a)?|head|lead|executive|specialist|representative)\b",
+            r"\b(finance|finanzas|financial|\bfp&a\b|accounting|controller|audit|tax|treasury|legal|compliance)\b.*\b(analyst|specialist|manager|gerente|lead|director(a)?|head|vp|counsel|partner|officer)\b",
+            r"\b(director(a)?|head|vp|manager|gerente|lead|analista|especialista|contralor)\b.*\b(finanzas|finance|contabilidad|auditor[ií]a|impuestos|tesorer[ií]a|legal|cumplimiento)\b",
         ],
     },
     {
-        "id": "change_cx",
-        "label": "Organizational Change Management (OCM), CX & Enablement",
-        "hint": "Change Management, Digital Adoption, Customer/Partner Experience (CX), Enablement",
-        "keywords_re": r"(organizational change|change management|change enablement|gestion del cambio|digital adoption|customer experience|partner experience|\bcx\b|enablement|onboarding)",
+        "id": "people_hr",
+        "label": "People, HR & Talent",
+        "hint": "Human Resources, Talent Acquisition, People Operations, Learning & Development",
+        "keywords_re": r"(human resources|recursos humanos|\bhr\b|\bhrbp\b|people|talent|talento|recruiting|recruitment|reclutamiento|compensation|total rewards|learning|training|capacitacion)",
         "standalone_inc": [
-            r"\b(organizational change|change management|change enablement|gestion del cambio|digital adoption)\b",
-            r"\b(customer experience|partner experience|\bcx\b|sales enablement|partner enablement|partner onboarding)\b.*\b(director(a)?|head|manager|lead|leader|specialist|strategist|consultant|program)\b",
+            r"\b(human resources|recursos humanos|\bhr\b|\bhrbp\b|people|talent acquisition|talent management|recruiting|total rewards|learning)\b.*\b(specialist|partner|generalist|recruiter|manager|gerente|lead|director(a)?|head|vp|coordinator)\b",
         ],
     },
     {
-        "id": "finance_hr_strategy",
-        "label": "Finance / FP&A, People / HR Leadership & Corporate Strategy",
-        "hint": "Finance Director/Manager, FP&A, HRBP / Talent Leadership, Strategy & BizOps",
-        "keywords_re": r"(finance|finanzas|\bfp&a\b|financial planning|treasury|people|human resources|recursos humanos|\bhr\b|talent|strategy|estrategia|business operations|bizops|corporate development)",
+        "id": "marketing",
+        "label": "Marketing, Comms & Design",
+        "hint": "Marketing, Growth, Brand, Communications, Content, UX / Product Design",
+        "keywords_re": r"(marketing|mercadotecnia|growth|brand|marca|communications|comunicacion|public relations|demand generation|content|design|dise[nñ]o|\bux\b|\bui\b|creative)",
         "standalone_inc": [
-            r"\b(director(a)?|head|vp|senior manager|sr\.? manager|manager|gerente|lead|business partner)\b.*\b(finance|finanzas|fp&a|financial|people|human resources|recursos humanos|talent|strategy|estrategia|bizops|business operations)\b",
+            r"\b(marketing|mercadotecnia|growth|brand|communications|comunicaci[oó]n|content|product design|\bux\b|\bui\b|creative)\b.*\b(specialist|strategist|designer|manager|gerente|lead|director(a)?|head|vp|coordinator)\b",
         ],
+    },
+    {
+        "id": "other",
+        "label": "Other / Open (Guided by Free Text)",
+        "hint": "Let the AI infer exact target roles from my CV and free-text description below",
+        "keywords_re": r"",
+        "standalone_inc": [],
     },
 ]
 
 LOCATION_OPTIONS = [
     {
         "id": "jalisco",
-        "label": "Guadalajara Metro / Jalisco (On-site or Hybrid)",
-        "hint": "Guadalajara, Zapopan, Tlaquepaque, Tlajomulco, El Salto & regional Jalisco hubs",
+        "label": "On-Site / Hybrid in Jalisco",
+        "hint": "Guadalajara, Zapopan, Tlaquepaque, Tlajomulco & El Salto",
         "default": True,
     },
     {
         "id": "remote_mx",
         "label": "Remote in Mexico",
-        "hint": "Roles tagged Remote - Mexico across global SaaS, fintech & enterprise hubs",
+        "hint": "Work remotely from anywhere in Mexico",
         "default": True,
     },
     {
         "id": "mx_country",
-        "label": "Mexico (City Unspecified)",
-        "hint": "Country-wide Mexico postings where no non-Jalisco city restriction is listed",
+        "label": "Mexico-Wide (Flexible City)",
+        "hint": "Country-wide Mexico roles with no city restriction",
         "default": True,
     },
 ]
@@ -222,6 +224,24 @@ LANGUAGE_OPTIONS = ("English", "Spanish", "Portuguese")
 SENIORITY_BY_ID = {o["id"]: o for o in SENIORITY_OPTIONS}
 DOMAIN_BY_ID = {o["id"]: o for o in DOMAIN_OPTIONS}
 LOCATION_BY_ID = {o["id"]: o for o in LOCATION_OPTIONS}
+
+# Backward-compatible aliases so earlier packets / workflow defaults map seamlessly
+LEGACY_LEVEL_ALIASES = {
+    "c_exec": "executive",
+    "sr_manager": "manager",
+    "senior_ic": "senior",
+    "ic": "specialist",
+}
+LEGACY_DOMAIN_ALIASES = {
+    "ops_supply_chain": "operations",
+    "gbs_process": "strategy_process",
+    "automation_ai": "technology",
+    "engineering_cloud": "technology",
+    "tpm_pmo": "project_product",
+    "sales_commercial": "sales_customer",
+    "change_cx": "strategy_process",
+    "finance_hr_strategy": "finance_legal",
+}
 
 BASE_TITLE_EXCLUDES = [
     r"\bassistant to\b",
@@ -269,21 +289,23 @@ Return ONLY valid JSON matching this exact schema:
   ]
 }"""
 
-ONBOARD_PROFILE_SYSTEM_PROMPT = """You are Lucy, an elite headhunter calibrating a new subscriber's daily job radar across 109 employer boards in Jalisco and Remote Mexico.
-Given:
-1. The candidate's selected target seniority checkboxes, functional domain checkboxes, and location preferences
-2. Their free-text description of what they are looking for (and what to avoid)
-3. Their real CV experience
+ONBOARD_PROFILE_SYSTEM_PROMPT = """You are Lucy, an AI talent headhunter calibrating a new subscriber's personalized daily job radar across 109 employer boards in Jalisco and Remote Mexico.
+
+IMPORTANT CONTEXT:
+The onboarding form checkboxes (Role Level, General Area, Location) are intentionally broad, industry-agnostic signals.
+Treat the candidate's **FREE-TEXT DESCRIPTION** (`CANDIDATE FREE-TEXT FEEDBACK`) together with their **CV** as your PRIMARY source of truth for understanding exact job titles, specialties, career goals, preferred industries, and roles they want to skip!
 
 Produce:
-1. `career_goal`: A rich, crisp 2-4 sentence Career North Star paragraph describing the exact target levels, functional roles, domain strengths from their CV, preferred industry environments, and explicit role types to exclude. (This paragraph is fed directly into the daily Gemini Candidate-Job Match Gate to filter out non-matches!)
-2. `extra_title_include`: Up to 8 Python case-insensitive regex patterns (using `\\b` word boundaries, English/Spanish role title keywords) capturing specific role titles mentioned in their free-text or CV that complement their checkboxes. Never output wildcard-only patterns like `.*`.
-3. `extra_title_exclude`: Up to 6 Python case-insensitive regex patterns (using `\\b` word boundaries) for role types the candidate explicitly wants to avoid based on their free-text notes or profile mismatch.
+1. `career_goal`: A rich, specific 2-4 sentence Career North Star paragraph synthesizing what the candidate wrote in free text + their real CV background + target seniority + explicit role types/industries to exclude. (This paragraph is fed directly into the daily Gemini Candidate-Job Match Gate prompt to evaluate every single job opening and reject weak matches!)
+2. `extra_title_include`: Up to 12 Python case-insensitive regex patterns (using `\\b` word boundaries, covering both English and Spanish title variations where relevant) that capture the specific job titles, roles, and specialties described in their free-text feedback and CV. Never output wildcard-only patterns like `.*`.
+3. `extra_upgrade_include`: Up to 6 Python case-insensitive regex patterns (using `\\b` word boundaries) representing ambitious step-up / promotion titles for this candidate.
+4. `extra_title_exclude`: Up to 10 Python case-insensitive regex patterns (using `\\b` word boundaries) for roles the candidate asked to avoid in free text OR common false-positive titles unrelated to their craft.
 
 Return ONLY valid JSON:
 {
   "career_goal": "2-4 sentence north-star career target and exclusions...",
-  "extra_title_include": ["\\\\bexample role\\\\b"],
+  "extra_title_include": ["\\\\bexample target role\\\\b"],
+  "extra_upgrade_include": ["\\\\bstep up role\\\\b"],
   "extra_title_exclude": ["\\\\bunwanted role\\\\b"]
 }"""
 
@@ -297,7 +319,8 @@ def _clean_line(val, max_len=300):
     return re.sub(r"\s+", " ", s)[:max_len]
 
 
-def _normalize_list_field(raw_val, allowed_map):
+def _normalize_list_field(raw_val, allowed_map, aliases=None):
+    aliases = aliases or {}
     if isinstance(raw_val, str):
         items = [x.strip() for x in re.split(r"[,;|]", raw_val) if x.strip()]
     elif isinstance(raw_val, (list, tuple, set)):
@@ -306,7 +329,7 @@ def _normalize_list_field(raw_val, allowed_map):
         items = []
     out = []
     for item in items:
-        key = item.lower()
+        key = aliases.get(item.lower(), item.lower())
         if key in allowed_map and key not in out:
             out.append(key)
     return out
@@ -343,11 +366,14 @@ def validate_onboarding_payload(payload):
             local = raw_email.split("@", 1)[0]
             raw_name = re.sub(r"[._+-]+", " ", local).title()[:60] or "Candidate"
 
-    levels = _normalize_list_field(payload.get("levels"), SENIORITY_BY_ID)
+    levels = _normalize_list_field(payload.get("levels"), SENIORITY_BY_ID, aliases=LEGACY_LEVEL_ALIASES)
     if not levels:
-        levels = ["director", "sr_manager", "manager"]
+        levels = ["senior", "manager", "director"]
 
-    domains = _normalize_list_field(payload.get("domains"), DOMAIN_BY_ID)
+    domains = _normalize_list_field(payload.get("domains"), DOMAIN_BY_ID, aliases=LEGACY_DOMAIN_ALIASES)
+    if not domains:
+        domains = ["other"]
+
     locations = _normalize_list_field(payload.get("locations"), LOCATION_BY_ID)
     if not locations:
         locations = ["jalisco", "remote_mx", "mx_country"]
@@ -636,7 +662,7 @@ def structure_master_cv_markdown(raw_cv_text, name, email, api_key=None, model=f
 
 def synthesize_subscriber_profile(validated, structured_cv_md, api_key=None, model=fj.DEFAULT_LLM_MODEL):
     """Build `career_goal`, `title_include`, `upgrade_title_include`, `title_exclude`, and location
-    settings from checkbox selections + free-text input + structured CV."""
+    settings from broad agnostic checkbox signals + primary free-text feedback + structured CV."""
     levels = validated["levels"]
     domains = validated["domains"]
     locations = validated["locations"]
@@ -652,69 +678,62 @@ def synthesize_subscriber_profile(validated, structured_cv_md, api_key=None, mod
             if valid and valid not in target_list:
                 target_list.append(valid)
 
-    # 1. Build deterministic title_include & upgrade_title_include from checkboxes
+    specific_domains = [d for d in domains if d in DOMAIN_BY_ID and d != "other"]
+
+    # 1. Broad deterministic guardrails from selected levels + general areas
     for lv_id in levels:
         lv = SENIORITY_BY_ID[lv_id]
         _add_unique(upgrade_include, lv["up"])
-        if lv_id in ("c_exec", "director"):
-            # Executive / Director checkboxes can match broad leadership titles or domain-scoped ones
-            if not domains or lv_id == "c_exec":
-                _add_unique(title_include, lv["inc"])
-            else:
-                _add_unique(title_include, lv["inc"])
-        elif not domains:
+        if lv_id in ("executive", "director") or not specific_domains:
             _add_unique(title_include, lv["inc"])
 
-    for dom_id in domains:
+    for dom_id in specific_domains:
         dom = DOMAIN_BY_ID[dom_id]
         _add_unique(title_include, dom["standalone_inc"])
         kw = dom["keywords_re"]
-        if any(l in levels for l in ("sr_manager", "manager", "senior_ic")):
+        if kw and any(l in levels for l in ("manager", "senior", "specialist")):
             _add_unique(title_include, [
-                rf"\b(senior manager|sr\.? manager|manager|gerente|lead|leader|lider|principal|architect|specialist|consultant)\b.*\b{kw}\b",
-                rf"\b{kw}\b.*\b(senior manager|sr\.? manager|manager|gerente|lead|leader|lider|principal|architect|specialist|consultant)\b",
+                rf"\b(senior manager|sr\.? manager|manager|gerente|lead|l[ií]der|principal|architect|specialist|especialista|consultant|analyst|analista)\b.*\b{kw}\b",
+                rf"\b{kw}\b.*\b(senior manager|sr\.? manager|manager|gerente|lead|l[ií]der|principal|architect|specialist|especialista|consultant|analyst|analista)\b",
             ])
 
     if not title_include:
         for lv_id in levels:
             _add_unique(title_include, SENIORITY_BY_ID[lv_id]["inc"])
 
-    # Domain-aware noise exclusions
-    if "engineering_cloud" not in domains:
-        _add_unique(title_exclude, [
-            r"\b(qa|quality assurance|sdet)\b.*\b(tester|automation engineer)\b",
-        ])
-    if "sales_commercial" not in domains:
+    # Agnostic baseline noise exclusions
+    if "sales_customer" not in specific_domains:
         _add_unique(title_exclude, [
             r"\b(call center agent|telemarketing|retail store|cashier|promotor de cambaceo)\b",
         ])
-    if "senior_ic" not in levels and "manager" not in levels:
-        _add_unique(title_exclude, [r"\b(junior|jr\.?|entry[- ]level|analyst i|specialist i)\b"])
+    if "specialist" not in levels:
+        _add_unique(title_exclude, [r"\b(junior|jr\.?|entry[- ]level|trainee)\b"])
 
-    # 2. Build deterministic baseline career_goal
+    # 2. Baseline career_goal combining broad selections + candidate's exact free-text feedback
     level_labels = [SENIORITY_BY_ID[k]["label"] for k in levels if k in SENIORITY_BY_ID]
-    domain_labels = [DOMAIN_BY_ID[k]["label"] for k in domains if k in DOMAIN_BY_ID]
+    domain_labels = [DOMAIN_BY_ID[k]["label"] for k in specific_domains if k in DOMAIN_BY_ID]
     loc_labels = [LOCATION_BY_ID[k]["label"] for k in locations if k in LOCATION_BY_ID]
 
     goal_parts = [
         f"Targeting {', '.join(level_labels)} roles"
-        + (f" across {', '.join(domain_labels)}" if domain_labels else "")
+        + (f" in {', '.join(domain_labels)}" if domain_labels else "")
         + f" ({', '.join(loc_labels)})."
     ]
     if free_text:
-        goal_parts.append(f"Candidate priorities & preferences: {fj.sanitize_ats_text(free_text)}")
+        goal_parts.append(f"Candidate goal & preferences: {fj.sanitize_ats_text(free_text)}")
     career_goal = " ".join(goal_parts)[:1200]
 
-    # 3. Refine career_goal + custom regexes with Gemini when GEMINI_API_KEY is available
+    # 3. Primary AI Calibration: Gemini turns candidate's free-text + CV into bespoke rules & Match Gate prompt
     api_key = (api_key if api_key is not None else os.environ.get("GEMINI_API_KEY") or "").strip()
     rule_source = "deterministic"
     if api_key:
         prompt = (
             f"CANDIDATE NAME: {validated['name']}\n"
-            f"SELECTED SENIORITY CHECKBOXES: {', '.join(level_labels)}\n"
-            f"SELECTED FUNCTIONAL DOMAIN CHECKBOXES: {', '.join(domain_labels) or 'General Leadership'}\n"
-            f"SELECTED LOCATIONS: {', '.join(loc_labels)}\n"
-            f"CANDIDATE FREE-TEXT PREFERENCES / ROLES TO TARGET OR AVOID:\n{free_text or '(None provided)'}\n\n"
+            f"BROAD ROLE LEVEL SELECTION: {', '.join(level_labels)}\n"
+            f"BROAD FUNCTIONAL AREA SELECTION: {', '.join(domain_labels) or 'Open / Guided by Free Text & CV'}\n"
+            f"WORK LOCATION SELECTION: {', '.join(loc_labels)}\n\n"
+            f"CANDIDATE FREE-TEXT FEEDBACK (PRIMARY SIGNAL — WHAT THEY WANT & WHAT TO AVOID):\n"
+            f"{free_text or '(No extra text provided — infer target roles directly from CV and selected level/area)'}\n\n"
             f"---\nSTRUCTURED CANDIDATE CV:\n{structured_cv_md[:6000]}"
         )
         try:
@@ -734,6 +753,7 @@ def synthesize_subscriber_profile(validated, structured_cv_md, api_key=None, mod
                 if len(ai_goal) >= 40:
                     career_goal = ai_goal[:1400]
                 _add_unique(title_include, parsed.get("extra_title_include") or [])
+                _add_unique(upgrade_include, parsed.get("extra_upgrade_include") or [])
                 _add_unique(title_exclude, parsed.get("extra_title_exclude") or [])
                 rule_source = str(parsed.get("_llm_model") or model)
         except Exception as e:
@@ -1057,37 +1077,42 @@ ONBOARD_PAGE_TEMPLATE = r"""<!doctype html>
 @media (prefers-color-scheme:dark){:root{--bg:#0c0c0d;--card:#18181b;--ink:#fafafa;--body:#e4e4e7;--mute:#a1a1aa;--line:#27272a;--accent:#10b981;--accent-ink:#6ee7b7;--accent-bg:#064e3b;--obsidian:#18181b;--danger:#f87171;--danger-bg:#450a0a}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--body);font:15.5px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
-main{max-width:780px;margin:0 auto;padding:28px 16px 64px}
-.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;font-size:.82rem}
+main{max-width:760px;margin:0 auto;padding:26px 16px 64px}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;font-size:.82rem}
 .brand{font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:var(--accent)}
 .back{color:var(--mute);text-decoration:none;font-weight:600}
 .back:hover{color:var(--accent)}
-.hero{background:#09090b;color:#fafafa;border-radius:16px;padding:26px 26px 24px;margin-bottom:22px;border:1px solid #27272a}
+.hero{background:#09090b;color:#fafafa;border-radius:16px;padding:24px 24px 22px;margin-bottom:20px;border:1px solid #27272a}
 .hero .eyebrow{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1.4px;color:#34d399;margin-bottom:6px}
-.hero h1{margin:0 0 8px;font-size:1.65rem;font-weight:800;letter-spacing:-.4px;color:#fff;line-height:1.22}
-.hero p{margin:0;color:#d4d4d8;font-size:.93rem;line-height:1.55}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:16px}
-.sec-title{font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--ink);margin:0 0 4px}
-.sec-sub{font-size:.86rem;color:var(--mute);margin:0 0 14px}
+.hero h1{margin:0 0 8px;font-size:1.6rem;font-weight:800;letter-spacing:-.4px;color:#fff;line-height:1.22}
+.hero p{margin:0;color:#d4d4d8;font-size:.92rem;line-height:1.55}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin-bottom:14px}
+.card.highlight{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent-bg)}
+.sec-title{font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--ink);margin:0 0 3px}
+.sec-sub{font-size:.85rem;color:var(--mute);margin:0 0 13px;line-height:1.45}
 .grid2{display:grid;gap:12px;grid-template-columns:1fr}
 @media (min-width:600px){.grid2{grid-template-columns:1fr 1fr}}
-label.field{display:block;font-size:.85rem;font-weight:700;color:var(--ink);margin-bottom:12px}
+label.field{display:block;font-size:.85rem;font-weight:700;color:var(--ink);margin-bottom:10px}
 label.field span.req{color:var(--accent)}
 input[type=text],input[type=email],input[type=password],select,textarea{width:100%;margin-top:5px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:inherit;transition:border-color .15s}
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
-.dropzone{border:1.5px dashed var(--line);border-radius:12px;padding:18px;text-align:center;background:var(--bg);cursor:pointer;transition:border-color .15s,background .15s;margin-bottom:12px}
+.dropzone{border:1.5px dashed var(--line);border-radius:12px;padding:16px;text-align:center;background:var(--bg);cursor:pointer;transition:border-color .15s,background .15s;margin-bottom:10px}
 .dropzone:hover,.dropzone.drag{border-color:var(--accent);background:var(--accent-bg)}
-.dropzone strong{color:var(--ink);display:block;font-size:.95rem;margin-bottom:3px}
-.dropzone small{color:var(--mute);font-size:.82rem}
-.cv-meta{display:flex;justify-content:space-between;align-items:center;font-size:.8rem;color:var(--mute);margin:6px 0 4px}
-.checks{display:grid;gap:9px;grid-template-columns:1fr}
-@media (min-width:620px){.checks.two{grid-template-columns:1fr 1fr}}
-.chk{display:flex;gap:10px;align-items:flex-start;padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:var(--bg);cursor:pointer;transition:border-color .15s,background .15s}
+.dropzone strong{color:var(--ink);display:block;font-size:.93rem;margin-bottom:2px}
+.dropzone small{color:var(--mute);font-size:.8rem}
+.cv-meta{display:flex;justify-content:space-between;align-items:center;font-size:.79rem;color:var(--mute);margin:4px 0}
+.checks{display:grid;gap:8px;grid-template-columns:1fr}
+@media (min-width:580px){.checks.two{grid-template-columns:1fr 1fr}.checks.three{grid-template-columns:1fr 1fr 1fr}}
+.chk{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);cursor:pointer;transition:border-color .15s,background .15s}
 .chk:hover{border-color:var(--accent)}
-.chk input{margin-top:3px;accent-color:var(--accent);width:16px;height:16px;flex-shrink:0}
-.chk .clabel{font-weight:700;font-size:.88rem;color:var(--ink);display:block;line-height:1.3}
-.chk .chint{font-size:.78rem;color:var(--mute);display:block;margin-top:2px;line-height:1.35}
-.submit-bar{display:flex;flex-direction:column;gap:10px;margin-top:18px}
+.chk.active{border-color:var(--accent);background:var(--accent-bg)}
+.chk input{margin-top:2px;accent-color:var(--accent);width:16px;height:16px;flex-shrink:0}
+.chk .clabel{font-weight:700;font-size:.87rem;color:var(--ink);display:block;line-height:1.28}
+.chk .chint{font-size:.76rem;color:var(--mute);display:block;margin-top:2px;line-height:1.32}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px}
+.chip{background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:4px 10px;font:600 .76rem/1.3 inherit;cursor:pointer;transition:border-color .15s,color .15s}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
+.submit-bar{display:flex;flex-direction:column;gap:10px;margin-top:16px}
 button.primary{background:var(--accent);color:#fff;border:none;border-radius:11px;padding:14px 22px;font:700 1rem/1.2 inherit;cursor:pointer;transition:opacity .15s}
 button.primary:hover{opacity:.92}
 button.primary:disabled{opacity:.55;cursor:not-allowed}
@@ -1095,7 +1120,7 @@ button.secondary{background:transparent;color:var(--ink);border:1px solid var(--
 .banner{border-radius:12px;padding:16px 18px;margin-top:14px;font-size:.9rem;line-height:1.5;display:none}
 .banner.ok{display:block;background:var(--accent-bg);color:var(--accent-ink);border:1px solid var(--accent)}
 .banner.err{display:block;background:var(--danger-bg);color:var(--danger);border:1px solid var(--danger)}
-.foot{text-align:center;font-size:.78rem;color:var(--mute);margin-top:24px}
+.foot{text-align:center;font-size:.78rem;color:var(--mute);margin-top:22px}
 </style>
 </head>
 <body>
@@ -1106,15 +1131,15 @@ button.secondary{background:transparent;color:var(--ink);border:1px solid var(--
   </div>
 
   <section class="hero">
-    <div class="eyebrow">&#9889; Candidate Self-Service Onboarding</div>
-    <h1>Get Your Own Private AI Headhunter</h1>
-    <p>Upload your plain-text CV and tell Lucy what you&rsquo;re aiming for next. Every morning she sweeps <strong>109 verified employer career boards</strong> across Jalisco &amp; Remote Mexico, filters out weak matches with Gemini AI, explains why each role fits your trajectory, and attaches <strong>ATS-ready Word (.docx) CVs</strong> built from your real experience.</p>
+    <div class="eyebrow">&#9889; AI Job Radar Onboarding</div>
+    <h1>Set Up Your Personal AI Job Radar</h1>
+    <p>Share your CV, pick a few quick filters, and tell the AI in plain words what kind of job you want next. Every morning Lucy scans <strong>109 verified companies</strong>, filters out weak matches with Gemini AI, explains why each match fits you, and attaches <strong>tailored Word (.docx) CVs</strong>.</p>
   </section>
 
   <form id="onboardForm" novalidate>
     <section class="card">
-      <h2 class="sec-title">1. Your Contact Details</h2>
-      <p class="sec-sub">Where Lucy will send your onboarding confirmation and daily match briefings.</p>
+      <h2 class="sec-title">1. Your Details</h2>
+      <p class="sec-sub">Where Lucy will send your confirmation email and daily job matches.</p>
       <div class="grid2">
         <label class="field">Full Name <span class="req">*</span>
           <input id="fullName" type="text" required maxlength="80" placeholder="e.g. Sofia Ramirez" autocomplete="name">
@@ -1124,71 +1149,81 @@ button.secondary{background:transparent;color:var(--ink);border:1px solid var(--
         </label>
       </div>
       <div class="grid2">
-        <label class="field">Preferred Daily Briefing Language
+        <label class="field">Daily Briefing Language
           <select id="language">
             <option value="English" selected>English</option>
             <option value="Spanish">Spanish (Espa&ntilde;ol)</option>
             <option value="Portuguese">Portuguese (Portugu&ecirc;s)</option>
           </select>
         </label>
-        <label class="field" id="inviteWrap">Team Invite Code <span id="inviteHint" style="font-weight:400;color:var(--mute);">(if provided by admin)</span>
-          <input id="inviteCode" type="password" maxlength="80" placeholder="Optional invite code" autocomplete="off">
+        <label class="field" id="inviteWrap">Team Invite Code <span id="inviteHint" style="font-weight:400;color:var(--mute);">(optional)</span>
+          <input id="inviteCode" type="password" maxlength="80" placeholder="Enter invite code if provided" autocomplete="off">
         </label>
       </div>
     </section>
 
     <section class="card">
-      <h2 class="sec-title">2. Upload Your CV (Plain Text / Markdown) <span style="color:var(--accent);">*</span></h2>
-      <p class="sec-sub">Upload a <code>.txt</code> or <code>.md</code> resume file, or paste the plain text from your current CV / LinkedIn profile below. Lucy will automatically enrich each past employer with company &amp; industry context.</p>
+      <h2 class="sec-title">2. Your CV in Text Format <span style="color:var(--accent);">*</span></h2>
+      <p class="sec-sub">Upload a <code>.txt</code> or <code>.md</code> file, or simply copy and paste the text from your resume below.</p>
       <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload plain-text CV file">
-        <strong id="dropLabel">&#128196; Click to choose a .txt or .md CV file (or drag &amp; drop here)</strong>
-        <small>Plain text only &middot; up to 45,000 characters &middot; 100% private to this repository</small>
+        <strong id="dropLabel">&#128196; Upload .txt / .md CV file (or drag &amp; drop here)</strong>
+        <small>Plain text &middot; up to 45,000 characters</small>
         <input id="cvFile" type="file" accept=".txt,.md,.markdown,text/plain,text/markdown" style="display:none">
       </div>
       <div class="cv-meta">
-        <span id="fileStatus">Or paste / edit your CV text directly below:</span>
+        <span id="fileStatus">Or paste your resume text directly:</span>
         <span id="charCount">0 / 45,000 chars</span>
       </div>
-      <textarea id="cvText" rows="9" maxlength="45000" required placeholder="Paste your full resume text here (Summary, Skills, Work Experience with companies/dates/achievements, Education, Languages)..."></textarea>
+      <textarea id="cvText" rows="8" maxlength="45000" required placeholder="Paste your resume text here (experience, companies, skills, education, languages)..."></textarea>
     </section>
 
     <section class="card">
-      <h2 class="sec-title">3. Target Seniority Level <span style="color:var(--accent);">*</span></h2>
-      <p class="sec-sub">Check every level you want Lucy to include on your radar.</p>
+      <h2 class="sec-title">3. Role Level <span style="color:var(--accent);">*</span></h2>
+      <p class="sec-sub">Pick one or more seniority levels you are open to.</p>
       <div class="checks two" id="levelChecks"></div>
     </section>
 
     <section class="card">
-      <h2 class="sec-title">4. Functional Domains &amp; Career Tracks <span style="color:var(--accent);">*</span></h2>
-      <p class="sec-sub">Select the areas that match your background and where you want to grow next.</p>
+      <h2 class="sec-title">4. Broad Job Area <span style="font-weight:400;color:var(--mute);text-transform:none;letter-spacing:0;">(pick all that fit, or leave open)</span></h2>
+      <p class="sec-sub">High-level category to help orient the AI — you&rsquo;ll specify your exact role wishes in Step 6.</p>
       <div class="checks two" id="domainChecks"></div>
     </section>
 
     <section class="card">
-      <h2 class="sec-title">5. Location &amp; Work Modality <span style="color:var(--accent);">*</span></h2>
-      <p class="sec-sub">Choose which geographic scopes should trigger matches for you.</p>
-      <div class="checks" id="locationChecks"></div>
+      <h2 class="sec-title">5. Work Location <span style="color:var(--accent);">*</span></h2>
+      <p class="sec-sub">Where are you open to working?</p>
+      <div class="checks three" id="locationChecks"></div>
     </section>
 
-    <section class="card">
-      <h2 class="sec-title">6. Describe What You Are Looking For Next (Free Text)</h2>
-      <p class="sec-sub">Tell Lucy in your own words: dream roles, target industries, strengths you want to highlight, and specific job types you want her AI Match Gate to <strong>exclude</strong>.</p>
-      <textarea id="freeText" rows="4" maxlength="4000" placeholder="Example: Looking to step up into a Senior Manager or Director role in Process Excellence, GBS Transformation, or Digital Automation at a global tech, pharma, or fintech company. Please exclude pure accounting/tax, QA software testing, or factory-floor maintenance roles."></textarea>
+    <section class="card highlight">
+      <h2 class="sec-title">6. Tell the AI What You Are Looking For <span style="color:var(--accent);">*</span></h2>
+      <p class="sec-sub">Write freely in your own words — Gemini uses this directly alongside your CV to decide which jobs truly match you and which ones to skip.</p>
+      <div class="chips" id="promptChips">
+        <button type="button" class="chip" data-snippet="Roles I want next: ">+ Roles I want</button>
+        <button type="button" class="chip" data-snippet="Industries / company types I like: ">+ Industries I like</button>
+        <button type="button" class="chip" data-snippet="Roles or areas to avoid: ">+ Roles to avoid</button>
+      </div>
+      <textarea id="freeText" rows="5" maxlength="4000" placeholder="Example: I want to move into a Senior or Manager role in Project Management, Operations, or Data Analytics at a tech or international company. I want roles where I lead cross-functional initiatives. Please skip sales, accounting, or night-shift support roles."></textarea>
     </section>
 
     <div class="submit-bar">
-      <button type="submit" class="primary" id="submitBtn">&#10022; Activate My AI Job Radar with Lucy</button>
+      <button type="submit" class="primary" id="submitBtn">&#10022; Activate My Job Radar</button>
       <button type="button" class="secondary" id="downloadFallbackBtn" style="display:none;">Download Onboarding Packet (.json) for CLI Import</button>
     </div>
 
     <div id="statusBanner" class="banner" role="status" aria-live="polite"></div>
   </form>
 
-  <p class="foot">Powered by Jobs Sentinel &middot; Gemini 4 Hydrogen Match Gate &middot; Zero-noise daily briefings</p>
+  <p class="foot">Powered by Jobs Sentinel &middot; Gemini 4 Hydrogen Match Gate &middot; Only genuine matches delivered</p>
 </main>
 <script>
 const CONFIG = __ONBOARD_CONFIG__;
 const $ = id => document.getElementById(id);
+
+function syncCardState(lbl, inp) {
+  if (inp.checked) lbl.classList.add("active");
+  else lbl.classList.remove("active");
+}
 
 function buildCheckboxes(containerId, items, defaultIds) {
   const wrap = $(containerId);
@@ -1199,6 +1234,8 @@ function buildCheckboxes(containerId, items, defaultIds) {
     inp.type = "checkbox";
     inp.value = item.id;
     inp.checked = Boolean(item.default || (defaultIds && defaultIds.includes(item.id)));
+    syncCardState(lbl, inp);
+    inp.addEventListener("change", () => syncCardState(lbl, inp));
     const textWrap = document.createElement("div");
     const title = document.createElement("span");
     title.className = "clabel";
@@ -1212,7 +1249,7 @@ function buildCheckboxes(containerId, items, defaultIds) {
   });
 }
 
-buildCheckboxes("levelChecks", CONFIG.levels, ["director", "sr_manager"]);
+buildCheckboxes("levelChecks", CONFIG.levels, ["senior", "manager"]);
 buildCheckboxes("domainChecks", CONFIG.domains, []);
 buildCheckboxes("locationChecks", CONFIG.locations, ["jalisco", "remote_mx", "mx_country"]);
 
@@ -1221,6 +1258,16 @@ if (CONFIG.require_invite_code) {
   $("inviteHint").style.color = "var(--accent)";
   $("inviteCode").required = true;
 }
+
+document.querySelectorAll("#promptChips .chip").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const box = $("freeText");
+    const snippet = btn.getAttribute("data-snippet") || "";
+    const prefix = box.value && !box.value.endsWith("\n") ? "\n" : "";
+    box.value = box.value + prefix + snippet;
+    box.focus();
+  });
+});
 
 const cvText = $("cvText");
 const cvFile = $("cvFile");
@@ -1285,12 +1332,15 @@ function collectPayload() {
   const levels = checkedValues("levelChecks");
   const domains = checkedValues("domainChecks");
   const locations = checkedValues("locationChecks");
+  const freeTxt = $("freeText").value.trim().slice(0, 4000);
   if (!name) throw new Error("Please enter your full name.");
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new Error("Please enter a valid email address.");
   if (cv.length < 60) throw new Error("Please upload a .txt/.md CV file or paste your resume text (at least 60 characters).");
-  if (!levels.length) throw new Error("Please check at least one Target Seniority Level.");
-  if (!domains.length) throw new Error("Please check at least one Functional Domain.");
-  if (!locations.length) throw new Error("Please check at least one Location preference.");
+  if (!levels.length) throw new Error("Please select at least one Role Level.");
+  if (!locations.length) throw new Error("Please select at least one Work Location.");
+  if (!domains.length && freeTxt.length < 10) {
+    throw new Error("Please either select a Broad Job Area or describe what you are looking for in Step 6.");
+  }
   if (CONFIG.require_invite_code && !$("inviteCode").value.trim()) {
     throw new Error("Please enter your Team Invite Code.");
   }
@@ -1300,10 +1350,10 @@ function collectPayload() {
     invite_code: $("inviteCode").value.trim(),
     cv_text: cv.slice(0, 45000),
     levels: levels,
-    domains: domains,
+    domains: domains.length ? domains : ["other"],
     locations: locations,
     language: $("language").value,
-    free_text: $("freeText").value.trim().slice(0, 4000)
+    free_text: freeTxt
   };
 }
 
@@ -1371,7 +1421,7 @@ $("onboardForm").addEventListener("submit", async e => {
     btn.textContent = "Radar Activated — Check Your Inbox!";
   } catch (err) {
     btn.disabled = false;
-    btn.textContent = "\u2726 Activate My AI Job Radar with Lucy";
+    btn.textContent = "\u2726 Activate My Job Radar";
     $("downloadFallbackBtn").style.display = "inline-block";
     showStatus("err", (err.message || String(err)) + " (You can also download your onboarding packet above if offline.)");
   }
@@ -1394,9 +1444,9 @@ def render_onboard_page(cfg=None, local_server=False):
         "webhook_url": webhook_url,
         "require_invite_code": require_invite,
         "local_server": bool(local_server),
-        "levels": [{"id": o["id"], "label": o["label"], "hint": o["hint"]} for o in SENIORITY_OPTIONS],
-        "domains": [{"id": o["id"], "label": o["label"], "hint": o["hint"]} for o in DOMAIN_OPTIONS],
-        "locations": [{"id": o["id"], "label": o["label"], "hint": o["hint"], "default": o["default"]} for o in LOCATION_OPTIONS],
+        "levels": [{"id": o["id"], "label": o["label"], "hint": o["hint"], "default": bool(o.get("default"))} for o in SENIORITY_OPTIONS],
+        "domains": [{"id": o["id"], "label": o["label"], "hint": o["hint"], "default": bool(o.get("default"))} for o in DOMAIN_OPTIONS],
+        "locations": [{"id": o["id"], "label": o["label"], "hint": o["hint"], "default": bool(o.get("default"))} for o in LOCATION_OPTIONS],
     }
     safe_json = json.dumps(ui_cfg, ensure_ascii=False).replace("</", "<\\/").replace("<!--", "<\\!--")
     return ONBOARD_PAGE_TEMPLATE.replace("__ONBOARD_CONFIG__", safe_json)
@@ -1418,8 +1468,8 @@ def extract_payload_from_github_event(event_path):
             "name": inp.get("name", ""),
             "email": inp.get("email", ""),
             "cv_text": inp.get("cv_text", ""),
-            "levels": inp.get("levels", "director,sr_manager"),
-            "domains": inp.get("domains", ""),
+            "levels": inp.get("levels", "senior,manager,director"),
+            "domains": inp.get("domains", "other"),
             "locations": inp.get("locations", "jalisco,remote_mx,mx_country"),
             "language": inp.get("language", "English"),
             "free_text": inp.get("free_text", ""),
