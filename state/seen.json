@@ -3,22 +3,22 @@
   "workday:Flex:WD228976": {
    "first_seen": "2026-11-08",
    "baseline": true,
-   "last_seen": "2026-11-21"
+   "last_seen": "2026-11-22"
   },
   "workday:Flex:WD230884": {
    "first_seen": "2026-11-08",
    "baseline": true,
-   "last_seen": "2026-11-21"
+   "last_seen": "2026-11-22"
   },
   "workday:Flex:WD231552": {
    "first_seen": "2026-11-08",
    "baseline": true,
-   "last_seen": "2026-11-21"
+   "last_seen": "2026-11-22"
   },
   "workday:Flex:WD229135": {
    "first_seen": "2026-11-08",
    "baseline": true,
-   "last_seen": "2026-11-21"
+   "last_seen": "2026-11-22"
   },
   "workday:Jabil:J2470435": {
    "first_seen": "2026-11-08",
@@ -28,7 +28,7 @@
   "workday:Avnet:JR-023909": {
    "first_seen": "2026-11-08",
    "baseline": true,
-   "last_seen": "2026-11-21"
+   "last_seen": "2026-11-22"
   },
   "workday:HP Inc.:3165460": {
    "first_seen": "2026-11-08",
@@ -43,32 +43,32 @@
   "ashby:Kueski:e1261953-7bcc-45db-a54e-fc2e0bdfbc89": {
    "first_seen": "2026-11-08",
    "baseline": true,
-   "last_seen": "2026-11-21"
+   "last_seen": "2026-11-22"
   },
   "workday:Citi:26996393": {
    "first_seen": "2026-11-08",
    "baseline": true,
-   "last_seen": "2026-11-21"
+   "last_seen": "2026-11-22"
   },
   "oracle_hcm:JPMorgan Chase:210802450": {
    "first_seen": "2026-11-08",
    "baseline": true,
-   "last_seen": "2026-11-21"
+   "last_seen": "2026-11-22"
   },
   "greenhouse:Flexport:7651413": {
    "first_seen": "2026-11-08",
    "baseline": true,
-   "last_seen": "2026-11-21"
+   "last_seen": "2026-11-22"
   },
   "workday:Flex:WD234211": {
    "first_seen": "2026-11-14",
    "baseline": false,
-   "last_seen": "2026-11-21"
+   "last_seen": "2026-11-22"
   },
   "greenhouse:Paystand:7830346003": {
    "first_seen": "2026-11-17",
    "baseline": false,
-   "last_seen": "2026-11-21"
+   "last_seen": "2026-11-22"
   }
  },
  "initialized": true,
@@ -2230,107 +2230,115 @@
      "date": "2026-11-21",
      "sig": "kueski|director of product management customer products platform|product",
      "score": 45
+    },
+    "eightfold:Mercado Libre:45520687": {
+     "date": "2026-11-22",
+     "sig": "mercado libre|ingeniero sr de mejora continua cedis operaciones|shipping",
+     "score": 42
     }
    },
    "jobs": {
     "workday:Flex:WD234495": {
      "first_seen": "2026-11-21",
      "baseline": true,
-     "last_seen": "2026-11-21"
+     "last_seen": "2026-11-22"
     },
     "workday:Flex:WD234177": {
      "first_seen": "2026-11-21",
      "baseline": true,
-     "last_seen": "2026-11-21"
+     "last_seen": "2026-11-22"
     },
     "workday:Flex:WD234211": {
      "first_seen": "2026-11-21",
      "baseline": true,
-     "last_seen": "2026-11-21"
+     "last_seen": "2026-11-22"
     },
     "workday:Flex:WD228976": {
      "first_seen": "2026-11-21",
      "baseline": true,
-     "last_seen": "2026-11-21"
+     "last_seen": "2026-11-22"
     },
     "workday:Flex:WD230884": {
      "first_seen": "2026-11-21",
      "baseline": true,
-     "last_seen": "2026-11-21"
+     "last_seen": "2026-11-22"
     },
     "workday:Flex:WD231552": {
      "first_seen": "2026-11-21",
      "baseline": true,
-     "last_seen": "2026-11-21"
+     "last_seen": "2026-11-22"
     },
     "workday:Flex:WD229135": {
      "first_seen": "2026-11-21",
      "baseline": true,
-     "last_seen": "2026-11-21"
+     "last_seen": "2026-11-22"
     },
     "workday:Jabil:J2465779": {
      "first_seen": "2026-11-21",
      "baseline": true,
-     "last_seen": "2026-11-21"
+     "last_seen": "2026-11-22"
     },
     "workday:Jabil:J2465480": {
      "first_seen": "2026-11-21",
      "baseline": true,
-     "last_seen": "2026-11-21"
+     "last_seen": "2026-11-22"
     },
     "oracle_hcm:Oracle:337826": {
      "first_seen": "2026-11-21",
      "baseline": true,
-     "last_seen": "2026-11-21"
+     "last_seen": "2026-11-22"
     },
     "workday:HP Inc.:3169719": {
      "first_seen": "2026-11-21",
      "baseline": true,
-     "last_seen": "2026-11-21"
+     "last_seen": "2026-11-22"
     },
     "ashby:Kueski:e1261953-7bcc-45db-a54e-fc2e0bdfbc89": {
      "first_seen": "2026-11-21",
      "baseline": true,
-     "last_seen": "2026-11-21"
+     "last_seen": "2026-11-22"
     },
     "greenhouse:Paystand:7830346003": {
      "first_seen": "2026-11-21",
      "baseline": true,
-     "last_seen": "2026-11-21"
+     "last_seen": "2026-11-22"
     },
     "eightfold:Mercado Libre:45520687": {
      "first_seen": "2026-11-21",
      "baseline": true,
-     "last_seen": "2026-11-21"
+     "last_seen": "2026-11-22"
     },
     "workday:Citi:26996393": {
      "first_seen": "2026-11-21",
      "baseline": true,
-     "last_seen": "2026-11-21"
+     "last_seen": "2026-11-22"
     },
     "oracle_hcm:JPMorgan Chase:210802450": {
      "first_seen": "2026-11-21",
      "baseline": true,
-     "last_seen": "2026-11-21"
+     "last_seen": "2026-11-22"
     }
    },
    "initialized": true,
    "relationship": {
-    "edition": 1,
-    "streak_days": 1,
-    "last_briefing_date": "2026-11-21",
+    "edition": 2,
+    "streak_days": 2,
+    "last_briefing_date": "2026-11-22",
     "total_roles_surfaced": 12,
     "total_cvs_tailored": 3,
     "recent_angle_ids": [
-     12
+     12,
+     14
     ],
     "recent_headlines": [
-     "Tu trayectoria merece dejar de ser filtrada por robots"
+     "Tu trayectoria merece dejar de ser filtrada por robots",
+     "Barrer cien portales mientras el mercado descansa"
     ],
     "recent_story_beats": [
-     "Ed. #1 (2026-11-21): Primer contacto establecido, arrancando con el análisis de la vacante en Flex y el despliegue del primer documento adaptado."
+     "Ed. #1 (2026-11-21): Primer contacto establecido, arrancando con el análisis de la vacante en Flex y el despliegue del primer documento adaptado.",
+     "Ed. #2 (2026-11-22): Edicion dos con cero vacantes nuevas pero con el radar operando al cien por ciento y enfoque en optimizar la red de contactos."
     ],
-    "last_micro_challenge": "Abre el documento adaptado para Flex y repasa los tres puntos clave de operaciones antes de enviar.",
+    "last_micro_challenge": "Aprovecha la calma de hoy para revisar tu titular en LinkedIn y afinar el posicionamiento estratégico de tu perfil directivo.",
     "last_spotlight_company": "Flex",
     "last_briefing_source": "gemini",
     "recent_spotlight_keys": []
