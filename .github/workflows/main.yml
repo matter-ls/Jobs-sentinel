@@ -13,7 +13,7 @@ on:
         default: false
         type: boolean
       subscriber:
-        description: "Target subscriber id (leave 'all' for everyone, or enter any id in config.json e.g. lucas, luis, ewerson, monica)"
+        description: "Target subscriber id (leave 'all' for everyone, or enter any id from config.json or the subscribers/ folder, e.g. lucas)"
         required: false
         default: "all"
         type: string
@@ -85,6 +85,10 @@ jobs:
           GEMINI_MATCH_MODEL: ${{ vars.GEMINI_MATCH_MODEL || secrets.GEMINI_MATCH_MODEL }}
           MIN_MATCH_SCORE: ${{ vars.MIN_MATCH_SCORE || secrets.MIN_MATCH_SCORE }}
           ONBOARD_WEBHOOK_URL: ${{ vars.ONBOARD_WEBHOOK_URL || secrets.ONBOARD_WEBHOOK_URL }}
+          # Optional "Like this role" settings; all three may be left undefined.
+          LUCY_FEEDBACK_SECRET: ${{ secrets.LUCY_FEEDBACK_SECRET }}
+          LUCY_FEEDBACK_MAILBOX: ${{ vars.LUCY_FEEDBACK_MAILBOX }}
+          IMAP_HOST: ${{ vars.IMAP_HOST }}
           INPUT_EMAIL_ALL: ${{ inputs.email_all }}
           INPUT_SUBSCRIBER: ${{ inputs.subscriber }}
           INPUT_GEMINI_MODEL: ${{ inputs.gemini_model }}

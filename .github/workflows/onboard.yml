@@ -47,18 +47,24 @@ on:
         default: ""
         type: string
       send_initial_matches:
-        description: "Also run an immediate first job-match briefing right after confirmation"
+        description: "Also start the daily workflow for this subscriber right after the confirmation email"
         required: false
         default: false
         type: boolean
 
-# Share concurrency group with daily refresh so git pushes never race each other.
+# Sign-ups have their own concurrency group, one per email address, separate from the daily
+# refresh. GitHub keeps a single pending run per group, so when sign-ups shared the daily group
+# a new sign-up could silently replace a waiting daily run or another waiting sign-up.
+# Each sign-up writes only its own two files, so different people can be registered in parallel;
+# two submissions for the same address still run one after the other.
 concurrency:
-  group: jobs-sentinel-${{ github.ref }}
+  group: lucy-onboard-${{ github.event.client_payload.email || inputs.email || github.run_id }}
   cancel-in-progress: false
 
 permissions:
   contents: write
+  # Only used to start the daily workflow when "send_initial_matches" is ticked.
+  actions: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -78,80 +84,68 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Structure CV & register subscriber in codebase
+      - name: Register subscriber, run tests, commit & push
         id: register
         env:
           PYTHONUNBUFFERED: "1"
+          BRANCH: ${{ github.ref_name }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL || secrets.GEMINI_MODEL }}
-          ONBOARD_WEBHOOK_URL: ${{ vars.ONBOARD_WEBHOOK_URL || secrets.ONBOARD_WEBHOOK_URL }}
-        run: |
-          RESULT_JSON="${RUNNER_TEMP:-/tmp}/onboard_result.json"
-          python3 onboard_subscriber.py \
-            --from-event "$GITHUB_EVENT_PATH" \
-            --no-email \
-            --result-out "$RESULT_JSON"
-          SUB_ID=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["subscriber_id"])' "$RESULT_JSON")
-          echo "subscriber_id=$SUB_ID" >> "$GITHUB_OUTPUT"
-          echo "result_json=$RESULT_JSON" >> "$GITHUB_OUTPUT"
-
-      - name: Verify codebase & ATS integrity tests
-        run: python3 -W error::SyntaxWarning -m unittest discover -s tests -b -v
-
-      - name: Commit new subscriber & CV to repository
-        env:
-          BRANCH: ${{ github.ref_name }}
-          SUB_ID: ${{ steps.register.outputs.subscriber_id }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          mkdir -p cvs docs
+          RESULT_JSON="${RUNNER_TEMP:-/tmp}/onboard_result.json"
+          echo "result_json=$RESULT_JSON" >> "$GITHUB_OUTPUT"
 
-          SNAP_DIR="${RUNNER_TEMP:-/tmp}/onboard_snapshot"
-          rm -rf "$SNAP_DIR"
-          mkdir -p "$SNAP_DIR"
-          cp -a config.json "$SNAP_DIR/config.json"
-          cp -a cvs "$SNAP_DIR/cvs"
-          if [ -f docs/onboard.html ]; then
-            cp -a docs/onboard.html "$SNAP_DIR/onboard.html"
-          fi
-
+          done_as=""
           for attempt in 1 2 3 4; do
             if [ "$attempt" -gt 1 ]; then
               echo "Syncing with origin/$BRANCH before retry #$attempt..."
-              git rebase --abort 2>/dev/null || true
-              git merge --abort 2>/dev/null || true
               git fetch origin "$BRANCH"
               git reset --hard "origin/$BRANCH"
-              cp -a "$SNAP_DIR/config.json" config.json
-              cp -a "$SNAP_DIR/cvs/." cvs/
-              if [ -f "$SNAP_DIR/onboard.html" ]; then
-                mkdir -p docs
-                cp -a "$SNAP_DIR/onboard.html" docs/onboard.html
-              fi
+              git clean -fdq -- subscribers cvs
             fi
 
-            git add -- config.json "cvs/${SUB_ID}.md"
-            if [ -f docs/onboard.html ]; then
-              git add -- docs/onboard.html
-            fi
+            # The registration runs again on every attempt, on the freshly synced checkout, so
+            # the subscriber id is always derived from what is really on the branch. Nothing is
+            # ever copied back from an earlier attempt.
+            python3 onboard_subscriber.py \
+              --from-event "$GITHUB_EVENT_PATH" \
+              --no-email \
+              --result-out "$RESULT_JSON"
+            SUB_ID=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["subscriber_id"])' "$RESULT_JSON")
+
+            # The same tests gate every daily run, so a profile that fails them is never committed.
+            # They are offline tests and expect no Gemini key, so it is removed from their environment.
+            env -u GEMINI_API_KEY -u GEMINI_MODEL \
+              python3 -W error::SyntaxWarning -m unittest discover -s tests -b -v
+
+            # Only this subscriber's own two files are committed.
+            git add -- "subscribers/${SUB_ID}.json" "cvs/${SUB_ID}.md"
             if git diff --staged --quiet; then
               echo "Subscriber profile unchanged in repository."
-              exit 0
+              done_as="unchanged"
+              break
             fi
 
             git commit -m "feat(onboard): register subscriber ${SUB_ID} in Jobs Sentinel"
             if git push origin "HEAD:$BRANCH"; then
               echo "Subscriber ${SUB_ID} committed & pushed cleanly on attempt #$attempt."
-              exit 0
+              done_as="pushed"
+              break
             fi
 
             echo "Push attempt #$attempt failed, retrying in $((attempt * 5))s..."
             sleep $((attempt * 5))
           done
 
-          echo "::error::Could not push onboarded subscriber after 4 attempts."
-          exit 1
+          if [ -z "$done_as" ]; then
+            echo "::error::Could not push onboarded subscriber after 4 attempts."
+            exit 1
+          fi
+          # Written once, after the last attempt, so later steps see the id that was really committed
+          # (a retry can change it when another sign-up took the same id in the meantime).
+          echo "subscriber_id=$SUB_ID" >> "$GITHUB_OUTPUT"
 
       - name: Send professional confirmation email from Lucy
         env:
@@ -164,20 +158,12 @@ jobs:
       - name: Optional immediate first match briefing
         if: ${{ inputs.send_initial_matches == true || github.event.client_payload.send_initial_matches == true }}
         env:
-          PYTHONUNBUFFERED: "1"
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           BRANCH: ${{ github.ref_name }}
           SUB_ID: ${{ steps.register.outputs.subscriber_id }}
-          GMAIL_USER: ${{ secrets.GMAIL_USER }}
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || secrets.GEMINI_MODEL }}
-          GEMINI_MATCH_MODEL: ${{ vars.GEMINI_MATCH_MODEL || secrets.GEMINI_MATCH_MODEL }}
-          MIN_MATCH_SCORE: ${{ vars.MIN_MATCH_SCORE || secrets.MIN_MATCH_SCORE }}
-          ONBOARD_WEBHOOK_URL: ${{ vars.ONBOARD_WEBHOOK_URL || secrets.ONBOARD_WEBHOOK_URL }}
         run: |
-          python3 fetch_jobs.py --subscriber "$SUB_ID"
-          git add -A -- state docs
-          if ! git diff --staged --quiet; then
-            git commit -m "chore: update job radar state after onboarding ${SUB_ID} [skip ci]"
-            git push origin "HEAD:$BRANCH" || true
-          fi
+          # Start the normal daily workflow for this one subscriber instead of fetching here.
+          # That run sits in the daily concurrency group and uses its own commit step, so the
+          # shared state file is only ever written from one place.
+          gh workflow run main.yml --ref "$BRANCH" -f subscriber="$SUB_ID"
