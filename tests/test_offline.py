@@ -3,8 +3,11 @@ Run from the project folder:  python3 -m unittest discover -s tests -v
 """
 import json
 import os
+import re
+import ssl
 import sys
 import tempfile
+import time
 import unittest
 from datetime import date
 from pathlib import Path
@@ -13,6 +16,17 @@ from urllib import error
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import fetch_jobs as fj  # noqa: E402
+
+# These tests are offline by design. Credentials and overrides that may be exported in the shell or
+# in a CI step are removed for the duration of the test run, so no test can reach a real service
+# or change behaviour by accident. Each test sets what it needs with patch.dict(os.environ, ...).
+for _var in (
+    "GEMINI_API_KEY", "GEMINI_MODEL", "GEMINI_MATCH_MODEL", "MIN_MATCH_SCORE",
+    "GMAIL_USER", "GMAIL_APP_PASSWORD", "SMTP_USER", "SMTP_PASSWORD", "SMTP_HOST", "SMTP_PORT",
+    "IMAP_HOST", "IMAP_PORT", "LUCY_FEEDBACK_SECRET", "LUCY_FEEDBACK_MAILBOX",
+    "ONBOARD_WEBHOOK_URL", "ONBOARD_INVITE_CODE",
+):
+    os.environ.pop(_var, None)
 
 CFG = fj.load_config()
 RULES = fj.build_rules(CFG)
@@ -112,7 +126,7 @@ class TitleAndLocation(unittest.TestCase):
             is_up, _ = fj.is_career_upgrade_heuristic({"title": t, "company": "Acme"}, luis_cfg)
             self.assertFalse(is_up, t)
 
-        # Minimalist email prioritizes Career Upgrade Moves at the top
+        # The email lists Career Upgrade Moves first
         sample_jobs = [
             {"key": "k1", "title": "RPA Developer", "company": "Beta", "location": "Guadalajara", "loc_class": "jalisco", "url": "https://example.com/1", "posted_at": "2026-11-05"},
             {"key": "k2", "title": "Senior Manager, Process Automation", "company": "Acme", "location": "Zapopan", "loc_class": "jalisco", "url": "https://example.com/2", "posted_at": "2026-11-01"},
@@ -365,6 +379,60 @@ COMPANIES = [
 ]
 
 
+def approve_all_gate(prompt_text, **kwargs):
+    """Stand-in for the Gemini match gate: approves every job listed in the prompt (score 90)."""
+    return {
+        "_llm_model": "gemini-4-hydrogen",
+        "assessments": [
+            {
+                "id": int(m.group(1)),
+                "is_good_match": True,
+                "match_score": 90,
+                "is_career_upgrade": True,
+                "match_rationale": "Approved by the test gate.",
+                "industry_synergy": "",
+                "matched_keywords": [],
+                "upgrade_reason": "",
+            }
+            for m in re.finditer(r"\[JOB id=(\d+)\]", prompt_text)
+        ],
+    }
+
+
+def make_subscriber(sub_id="quentin", **overrides):
+    """A self-contained subscriber (inline CV, own rules) for tests that must not depend on the
+    people listed in the real config.json or on the files in cvs/."""
+    subscriber = {
+        "id": sub_id,
+        "name": f"{sub_id.title()} Tester",
+        "recipient_email": f"{sub_id}@example.com",
+        "enabled": True,
+        "cv_text": (
+            f"# {sub_id.upper()} TESTER\n{sub_id}@example.com\n\n"
+            "## PROFESSIONAL SUMMARY\nProcess mining and automation leader.\n\n"
+            "## CORE COMPETENCIES\n- **Core:** Process Mining, Intelligent Automation, Platform Operations\n"
+        ),
+        "career_goal": "Process mining and intelligent automation leadership.",
+        "title_include": [r"\b(director(a)?|head of|vp|general manager)\b"],
+        "title_exclude": [r"\bassistant\b"],
+        "max_tailored_cvs": 0,
+    }
+    subscriber.update(overrides)
+    return subscriber
+
+
+def make_cfg(*subscribers, **overrides):
+    """A complete config around the given synthetic subscriber(s), or one default subscriber."""
+    return {
+        **fj.CFG_DEFAULTS,
+        "title_include": [r"\bdirector\b"],
+        "title_exclude": [],
+        "jalisco_locations": ["guadalajara", "zapopan", "jalisco", "tlaquepaque"],
+        "subscribers": list(subscribers) or [make_subscriber()],
+        **overrides,
+    }
+
+
 def fake_http(overrides=None):
     table = {"greenhouse.io": GH, "lever.co": LEVER, "ashbyhq.com": ASHBY,
              "workable.com": WORKABLE, "smartrecruiters.com": SR, "myworkdayjobs.com": workday}
@@ -556,11 +624,13 @@ class EndToEnd(unittest.TestCase):
         }
 
         fj.http_json = fake_http()
+        # The match gate fails closed, so a role is only emailed (and gets a tailored CV) after
+        # the gate approved it. Approve everything here; this test is about CV tailoring.
         with patch.dict(os.environ, {
             "GMAIL_USER": "sender@gmail.com",
             "GMAIL_APP_PASSWORD": "app-secret-password",
             "GEMINI_API_KEY": "fake-gemini-key",
-        }):
+        }), patch("fetch_jobs.call_gemini_job_matches", side_effect=approve_all_gate):
             code = fj.refresh(CFG, COMPANIES, root=self.root, today=date(2026, 11, 5), send_email=True, subscriber_id="lucas")
             self.assertEqual(code, 0)
             self.assertTrue(mock_gemini.called)
@@ -583,24 +653,30 @@ class EndToEnd(unittest.TestCase):
             self.assertIn("Lucas Scholl Matter", att_text)
             self.assertIn("Target Role Direction:", att_text)
             self.assertIn("Director of Engineering | Cloud & AI Platform Leadership", att_text)
-            self.assertEqual(len(list((self.root / "docs" / "cvs" / "lucas").glob("*.docx"))), 3)
-            self.assertEqual(len(list((self.root / "docs" / "cvs" / "lucas").glob("*.pdf"))), 3)
-            html_cvs = list((self.root / "docs" / "cvs" / "lucas").glob("*.html"))
+            # Tailored CVs are kept as run artifacts only; nothing is written to the published docs/ folder
+            cv_dir = self.root / "out" / "cvs"
+            self.assertEqual(len(list(cv_dir.glob("*.docx"))), 3)
+            self.assertEqual(len(list(cv_dir.glob("*.pdf"))), 3)
+            html_cvs = list(cv_dir.glob("*.html"))
             self.assertEqual(len(html_cvs), 3)
             self.assertIn("Gemini AI &middot; gemini-3.8-flash", html_cvs[0].read_text(encoding="utf-8"))
+            self.assertFalse((self.root / "docs" / "cvs").exists())
 
     @patch("fetch_jobs._invoke_gemini_json", side_effect=RuntimeError("gemini 429 quota"))
     @patch("smtplib.SMTP_SSL")
     def test_llm_fallback_still_sends_tailored_cvs(self, mock_smtp_ssl, _mock_gemini):
-        """Even if Gemini throws (429/503/JSON error), deterministic fallback still builds & attaches 3 CVs."""
+        """Even if Gemini throws (429/503/JSON error) while tailoring, the deterministic fallback still
+        builds & attaches 3 CVs for roles the match gate approved."""
         mock_server = MagicMock()
         mock_smtp_ssl.return_value.__enter__.return_value = mock_server
         fj.http_json = fake_http()
+        # The gate itself answers here (it fails closed otherwise, see the outage test below);
+        # every other Gemini call (CV tailoring, briefing) raises.
         with patch.dict(os.environ, {
             "GMAIL_USER": "sender@gmail.com",
             "GMAIL_APP_PASSWORD": "app-secret-password",
             "GEMINI_API_KEY": "fake-gemini-key",
-        }):
+        }), patch("fetch_jobs.call_gemini_job_matches", side_effect=approve_all_gate):
             code = fj.refresh(CFG, COMPANIES, root=self.root, today=date(2026, 11, 5), send_email=True, subscriber_id="lucas")
             self.assertEqual(code, 0)
             sent_msg = mock_server.send_message.call_args_list[0][0][0]
@@ -612,10 +688,11 @@ class EndToEnd(unittest.TestCase):
             self.assertIn("Target Role Direction:", att_text)
             self.assertIn("Google", att_text)
             self.assertIn("AstraZeneca", att_text)
-            pdf_files = list((self.root / "docs" / "cvs" / "lucas").glob("*.pdf"))
+            pdf_files = list((self.root / "out" / "cvs").glob("*.pdf"))
             self.assertTrue(pdf_files[0].read_bytes().startswith(b"%PDF-1.4"))
-            html_cvs = list((self.root / "docs" / "cvs" / "lucas").glob("*.html"))
+            html_cvs = list((self.root / "out" / "cvs").glob("*.html"))
             self.assertIn("Deterministic ATS Fallback", html_cvs[0].read_text(encoding="utf-8"))
+            self.assertFalse((self.root / "docs" / "cvs").exists())
 
     def test_workday_dates(self):
         t = date(2026, 11, 5)
@@ -731,7 +808,8 @@ class EndToEnd(unittest.TestCase):
         """Lucy's daily briefing is AI-first: the prompt is grounded in real overnight facts, the
         spotlight employer's ATS, the candidate's real craft and the story so far; every draft passes
         a quality gate (forbidden dishonest vocabulary, placeholders, near-duplicate headlines) with
-        exactly one revision retry; the email renders chapter, intel and sign-off; memory persists."""
+        exactly one revision retry; the email renders the chapter, the inspiration and the 60-second
+        play; memory persists."""
         sub_luis = next(s for s in fj.get_subscribers(CFG) if s["id"] == "luis")
         top_job = {
             "key": "workday:Flex:JR1", "ats": "workday", "title": "Automation Program Lead", "company": "Flex",
@@ -816,17 +894,25 @@ class EndToEnd(unittest.TestCase):
         self.assertEqual(pack["partner_signoff"], "Shoulder to shoulder. Lucy")
         self.assertEqual(pack["spotlight_company"], "Flex")
 
-        # 4. The email renders chapter, Their-AI-vs-Our-AI intel and the sign-off (HTML + plain text)
+        # 4. The email shows two things from the pack, the inspiration (headline + message) and the
+        #    60-second play, under the chapter label. The intel, Lucy's connection note and the
+        #    sign-off are still written into the pack but are not shown (HTML + plain text)
         with patch.dict(os.environ, {"GEMINI_API_KEY": "valid-key"}), patch("fetch_jobs._invoke_gemini_json", return_value=dict(good)):
             msg = fj.build_email_message([dict(top_job)], 3, sub_luis, date(2026, 11, 8), "sender@gmail.com", sub_state=sub_state, board_count=109)
         html_part = msg.get_body(preferencelist=("html",)).get_content()
         plain_part = msg.get_body(preferencelist=("plain",)).get_content()
         self.assertIn("Chapter 7: The Doorman Switches Sides", html_part)
-        self.assertIn("Their AI vs. Our AI:", html_part)
-        self.assertIn("Shoulder to shoulder. Lucy", html_part)
         self.assertIn("Flex Built A Gate. We Brought The Key.", html_part)
+        self.assertEqual(html_part.count(fj.html.escape(good["message"])), 2)      # hidden preheader + Lucy's card
+        self.assertIn("Today&rsquo;s 60-second play", html_part)
+        self.assertIn("Open the Flex posting, upload", html_part)
         self.assertIn("Us vs. Their Machine · Chapter 7", plain_part)
-        self.assertIn("Their AI vs. Our AI:", plain_part)
+        self.assertIn(good["message"], plain_part)
+        self.assertIn("Today's 60-second play: " + good["micro_challenge"], plain_part)
+        for part in (html_part, plain_part):
+            for dropped in ("Their AI vs. Our AI", "Corner:", "Shoulder to shoulder",
+                            good["their_ai_vs_our_ai"][:40], good["connection_ps"][:40]):
+                self.assertNotIn(dropped, part)
         self.assertIn("Flex Just Blinked", html_part)          # subject spark lives in the preheader
         self.assertIn("1 new role for you · Flex", msg["Subject"])
 
@@ -908,7 +994,8 @@ class EndToEnd(unittest.TestCase):
         html1 = msg1.get_body(preferencelist=("html",)).get_content()
         plain1 = msg1.get_body(preferencelist=("plain",)).get_content()
         self.assertIn("Briefing #1", html1)
-        self.assertIn("Lucy&rsquo;s Corner:", html1)
+        self.assertIn("Today&rsquo;s 60-second play", html1)      # Lucy's card: the inspiration plus one action...
+        self.assertNotIn("Corner:", html1)                         # ...and no separate "Lucy's Corner" note any more
         self.assertIn("Welcome to Your Unfair Advantage", html1)
         self.assertIn("- [CAREER UPGRADE MOVE]", plain1)
 
@@ -1796,19 +1883,23 @@ class EndToEnd(unittest.TestCase):
             sample_ctx_snippet = exp_with_ctx[0]["company_context"][:32]
 
             docx_txt = fj.extract_docx_text(fj.render_minimalist_cv_docx(det["cv"], sample_job))
-            pdf_raw = fj.render_minimalist_cv_pdf(det["cv"], sample_job).decode("latin-1", errors="replace")
+            pdf_txt = fj.extract_pdf_text(fj.render_minimalist_cv_pdf(det["cv"], sample_job))
             html_out = fj.render_minimalist_cv_html(det["cv"], sample_job)
 
             self.assertIn(sample_ctx_snippet, docx_txt)
-            self.assertIn(sample_ctx_snippet[:20], pdf_raw)
+            # Compared the way the PDF writes text (typographic punctuation mapped, string escapes
+            # undone), so a profile that starts with a dash or a parenthesis is not mistaken for a
+            # lost profile. The raw-bytes comparison used before failed for such sign-up CVs.
+            self.assertIn(fj.pdf_safe_text(sample_ctx_snippet[:20]), pdf_txt)
             self.assertIn(fj.html.escape(sample_ctx_snippet), html_out)
             self.assertIsNone(fj.ATS_ILLEGAL_CHARS_RE.search(docx_txt))
 
     @patch("smtplib.SMTP_SSL")
     def test_self_service_candidate_onboarding_flow_and_immediate_matching(self, mock_smtp_ssl):
         """Verify end-to-end onboarding: web form HTML generation, Gemini CV structuring with
-        company profiles, checkbox + free-text rule synthesis, config.json & cvs/<id>.md updates,
-        professional confirmation email, idempotent re-onboarding, and automatic daily match delivery."""
+        company profiles, checkbox + free-text rule synthesis, subscribers/<id>.json & cvs/<id>.md
+        files (config.json untouched), professional confirmation email, idempotent re-onboarding,
+        and automatic daily match delivery."""
         import onboard_subscriber as ob
         import shutil
 
@@ -1818,6 +1909,12 @@ class EndToEnd(unittest.TestCase):
         # Prepare isolated repo workspace with real config.json and cvs/
         shutil.copy2(Path(fj.ROOT) / "config.json", self.root / "config.json")
         shutil.copytree(Path(fj.ROOT) / "cvs", self.root / "cvs")
+        # Keep the real global settings but not the real people. The assertions below depend on
+        # which ids are already taken ("sofia" free, "lucas" taken); a real sign-up named Sofia in
+        # config.json used to fail this test, and with it the daily run for everybody.
+        isolated_cfg = json.loads((self.root / "config.json").read_text(encoding="utf-8"))
+        isolated_cfg["subscribers"] = [{"id": "lucas", "name": "Lucas", "recipient_email": "lucas@example.com", "enabled": False}]
+        (self.root / "config.json").write_text(json.dumps(isolated_cfg), encoding="utf-8")
 
         # 1. Verify rendered onboarding webpage contains clean, agnostic options, .txt/.md CV upload & free-text chips
         onboard_html = ob.render_onboard_page({"onboard_webhook_url": "https://script.google.com/macros/s/test/exec"})
@@ -1902,8 +1999,10 @@ class EndToEnd(unittest.TestCase):
                 return {
                     "_llm_model": "gemini-4-hydrogen",
                     "career_goal": "Targeting Director and Senior Manager roles in GBS Transformation, Process Mining (Celonis), and Intelligent Automation in Remote Mexico—excluding accounting, tax, and factory maintenance.",
-                    "extra_title_include": [r"\bprocess intelligence\b"],
-                    "extra_title_exclude": [r"\b(tax|accounting|maintenance)\b"],
+                    # The model returns plain phrases; patterns are built in code (never model-written regex)
+                    "target_titles": ["process intelligence lead"],
+                    "focus_keywords": ["process mining", "automation"],
+                    "avoid_titles": ["tax", "accounting", "maintenance"],
                 }
             return None
 
@@ -1914,6 +2013,7 @@ class EndToEnd(unittest.TestCase):
         }
         extracted = ob.extract_payload_from_github_event(event_file)
         validated = ob.validate_onboarding_payload(extracted)
+        config_before = (self.root / "config.json").read_bytes()
 
         with patch.dict(os.environ, env), patch("fetch_jobs._invoke_gemini_json", side_effect=fake_onboard_gemini):
             res = ob.register_subscriber_in_codebase(validated, root=self.root)
@@ -1922,6 +2022,16 @@ class EndToEnd(unittest.TestCase):
         self.assertTrue(sent_conf)
         self.assertEqual(res["subscriber_id"], "sofia")
         self.assertFalse(res["updated_existing"])
+
+        # The sign-up wrote only this person's two files; the shared config.json is byte-identical
+        self.assertEqual((self.root / "config.json").read_bytes(), config_before)
+        sofia_record = fj.load_json(self.root / "subscribers" / "sofia.json", {})
+        self.assertEqual(sofia_record["id"], "sofia")
+        self.assertEqual(sofia_record["cv_file"], "cvs/sofia.md")
+        self.assertEqual(sofia_record["rule_breadth"], "focused")
+        self.assertTrue(sofia_record["profile_updated_at"].endswith("Z"))
+        self.assertIn("process mining", sofia_record["interest_phrases"])
+        self.assertFalse((self.root / "docs" / "onboard.html").exists())    # rebuilt by the daily run, not by sign-ups
 
         # 3. Verify generated cvs/sofia.md is ATS-clean & contains *Company Profile: ...*
         sofia_cv_path = self.root / "cvs" / "sofia.md"
@@ -1943,7 +2053,7 @@ class EndToEnd(unittest.TestCase):
         self.assertIn("Remote in Mexico", conf_html)
 
         # 5. Verify idempotent re-onboarding (same email keeps ID 'sofia') & name collision disambiguation ('lucas' -> 'lucas_m')
-        updated_cfg = fj.load_json(self.root / "config.json", {})
+        updated_cfg = fj.load_config(self.root)      # config.json merged with subscribers/*.json
         same_id, is_upd = ob.derive_subscriber_id("Sofia R.", "sofia.ramirez@example.com", updated_cfg["subscribers"])
         self.assertEqual(same_id, "sofia")
         self.assertTrue(is_upd)
@@ -1968,46 +2078,71 @@ class EndToEnd(unittest.TestCase):
         self.assertNotIn("Director, Engineering at Acme", sofia_plain)
         self.assertTrue((self.root / "docs" / "onboard.html").exists())
 
-    def test_minimalist_email_and_onboarding_ui(self):
-        """The daily email and the onboarding page stay minimalist: no pictographs, boxes or colour
-        fills in the HTML email, each employer profile described once per email, job links limited
-        to http(s), and pill toggles plus a collapsed invite code on the onboarding page."""
-        import re
+    def test_briefing_email_design_and_onboarding_ui(self):
+        """The daily email is a short stack of cards. Lucy's card holds exactly two things, one
+        inspiration and one 60-second play; a role card shows only what helps decide (no employer
+        description, team, keyword list, file name or invented score); feed values are escaped,
+        job links are http(s)-only and over-long tokens can wrap on a phone. The onboarding page
+        keeps its pill toggles and collapsed invite code."""
         import onboard_subscriber as ob
 
         pictograph = re.compile(r"[\U0001F000-\U0001FAFF\u2600-\u27BF]|&#(?:9\d{3}|1\d{4,5});")
-        sub = next(s for s in fj.get_subscribers(CFG) if s["id"] == "lucas")
+        sub = make_subscriber()
+        employer = {"company": "Flex", "company_industry": "EMS & Hardware Manufacturing",
+                    "company_description": "Flex designs and builds products for the world's largest brands."}
         jobs = [
-            {"key": "k1", "title": "Director, Platform <Ops>", "company": "Flex", "location": "Zapopan, Jalisco",
-             "loc_class": "jalisco", "team": "Operations", "url": "https://example.com/1", "posted_at": "2026-11-07"},
-            {"key": "k2", "title": "Director, Supply Chain", "company": "Flex", "location": "Guadalajara, Jalisco",
-             "loc_class": "jalisco", "url": "javascript:alert(1)", "posted_at": "2026-10-20"},
+            {"key": "k1", "title": "Director, Platform <Ops>", "location": "Zapopan, Jalisco", "loc_class": "jalisco",
+             "team": "Ops Excellence Guild", "url": "https://example.com/1", "posted_at": "2026-11-07", **employer},
+            {"key": "k2", "title": "Director, Supply Chain", "location": "Guadalajara, Jalisco", "loc_class": "jalisco",
+             "url": "javascript:alert(1)", "posted_at": "2026-10-20", **employer},
         ]
-        with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("GEMINI_API_KEY", None)
-            msg = fj.build_email_message(jobs, 5, sub, date(2026, 11, 8), "sender@gmail.com")
+        msg, _, pack = fj.build_email_message(jobs, 5, sub, date(2026, 11, 8), "sender@gmail.com", return_meta=True)
         body = msg.get_body(preferencelist=("html",)).get_content()
         plain = msg.get_body(preferencelist=("plain",)).get_content()
 
-        # 1. Type-only hierarchy: no pictographs, rounded boxes, shadows or colour fills; one small palette
-        self.assertIsNone(pictograph.search(body))
-        self.assertIsNone(pictograph.search(plain))
-        for chrome in ("border-radius", "box-shadow"):
-            self.assertNotIn(chrome, body)
-        self.assertEqual(set(re.findall(r"background-color:(#[0-9a-fA-F]{6})", body)), {"#ffffff"})
-        self.assertLessEqual(len(set(re.findall(r"#[0-9a-fA-F]{6}\b", body))), 6)
+        # 1. A card-based look built from inline styles only: nothing remote, no script, no <style>
+        self.assertIn("border-radius", body)
+        self.assertIn(f"background-color:{fj.EMAIL_NIGHT}", body)                  # Lucy's dark card
+        for unwanted in ("<style", "<script", "<img", "<link", "url(", "@import"):
+            self.assertNotIn(unwanted, body)
+        self.assertIsNone(pictograph.search(plain))                                   # the text part stays plain
 
-        # 2. One summary line replaces the scoreboard tiles
-        self.assertIn("2 new for you", body)
-        self.assertIn("5 active matches", body)
-        self.assertNotIn("Ready CVs", body)
+        # 2. Lucy's card: one inspiration (headline + message) and one 60-second play, placed
+        #    before the roles. Nothing else from the briefing pack is shown, in either part.
+        self.assertEqual(pack["briefing_source"], "vault")
+        self.assertIn(fj.html.escape(pack["headline"]), body)
+        self.assertIn(fj.html.escape(pack["message"]), body)
+        self.assertEqual(body.count("Today&rsquo;s 60-second play"), 1)
+        self.assertIn(fj.html.escape(pack["micro_challenge"]), body)
+        self.assertLess(body.index("Today&rsquo;s 60-second play"), body.index("Director, Platform &lt;Ops&gt;"))
+        self.assertLess(plain.index("Today's 60-second play: "), plain.index("\n- "))
+        dropped = [pack["their_ai_vs_our_ai"], pack["connection_ps"], pack["partner_signoff"], pack["cadence_subline"],
+                   "Their AI vs. Our AI", "Corner:"]
+        for text in dropped:
+            self.assertNotIn(fj.html.escape(text), body)
+            self.assertNotIn(text, plain)
 
-        # 3. Two roles at the same employer: its profile is described once, each role keeps its own Apply link
-        flex_profile = fj.html.escape(next(c for c in fj.load_companies() if c["name"] == "Flex")["description"])
-        self.assertEqual(body.count(flex_profile), 1)
+        # 3. The four-number summary strip (the old "Ready CVs" and "active matches" counts are gone)
+        for label in ("New for you", "Career upgrades", "Hot Off the Press", "Tailored CVs"):
+            self.assertEqual(body.count(f">{label}</div>"), 1)
+        for old_label in ("Ready CVs", "active matches"):
+            self.assertNotIn(old_label, body)
+
+        # 4. Role cards: the industry but not the employer description, no team, one Apply button
+        #    each, and nothing invented: no score and no boilerplate step-up reason
+        self.assertEqual(body.count(fj.html.escape(employer["company_industry"])), 2)
+        for part in (body, plain):
+            self.assertNotIn("largest brands", part)
+            self.assertNotIn("Ops Excellence Guild", part)
+            self.assertNotIn("Step-up leadership", part)
         self.assertEqual(body.count("Apply &rarr;"), 2)
+        self.assertEqual(body.count("&uarr; Career Upgrade Move</span>"), 2)        # the badge still marks the upgrade
+        self.assertEqual(body.count(">Not AI-reviewed</span>"), 2)
+        self.assertNotIn("% CV Match", body)
+        # ...and with no CV attached, Lucy's two items do not point at one
+        self.assertIsNone(fj._TAILORED_CV_CLAIM_RE.search(" ".join(pack[k] for k in ("headline", "message", "micro_challenge"))))
 
-        # 4. Feed values are escaped and links are http(s)-only
+        # 5. Feed values are escaped and links are http(s)-only
         self.assertIn("Director, Platform &lt;Ops&gt;", body)
         self.assertNotIn("<Ops>", body)
         self.assertIn('href="https://example.com/1"', body)
@@ -2015,7 +2150,75 @@ class EndToEnd(unittest.TestCase):
         self.assertEqual(fj._safe_http_url("javascript:alert(1)"), "#")
         self.assertEqual(fj._safe_http_url(" HTTPS://jobs.example.com/x "), "HTTPS://jobs.example.com/x")
 
-        # 5. Onboarding page: pill toggles with short labels, no hero / cards / dropzone, invite code collapsed
+        # 6. A reviewed role with a tailored CV: its score, a CV badge, the step-up reason the review
+        #    wrote and one 'why' panel. Keywords, the CV headline and the file name are not shown
+        #    in the card; the file name stays in the text part and in the attachment list.
+        cv_name = "CV_Quentin_Tester_Flex_Senior_Director_Process_Intelligence.docx"
+        why = "Your process-mining record maps onto this remit."
+        reviewed = {
+            "key": "k3", "title": "Senior Director, Process Intelligence", "location": "Zapopan, Jalisco",
+            "loc_class": "jalisco", "url": "https://example.com/3", "posted_at": "2026-11-08", "cv_filename": cv_name,
+            "is_career_upgrade": True, "_upgrades_classified": True,
+            "upgrade_reason": f"{fj.HEURISTIC_UPGRADE_REASON_LEAD} (Senior Director, Process Intelligence) at Flex.",
+            "match_assessment": {
+                "is_good_match": True, "match_score": 91, "is_career_upgrade": True,
+                "upgrade_reason": "Moves you to multi-site scope.", "match_rationale": why,
+                "industry_synergy": "EMS scale mirrors your operations background.",
+                "matched_keywords": ["Celonis"], "match_source": "gemini",
+            },
+            "llm_analysis": {"match_score": 91, "lucy_why_it_fits": why, "matched_keywords": ["Celonis"],
+                             "cv": {"target_direction": "Head of Hyperautomation Programs"}},
+            **employer,
+        }
+        self.assertEqual(fj.written_upgrade_reason(reviewed), "Moves you to multi-site scope.")
+        cv_msg = fj.build_email_message([reviewed], 1, sub, date(2026, 11, 8), "sender@gmail.com",
+                                        attachments=[(cv_name, b"docx bytes")])
+        cv_body = cv_msg.get_body(preferencelist=("html",)).get_content()
+        cv_plain = cv_msg.get_body(preferencelist=("plain",)).get_content()
+        self.assertIn("&#9733; 91% CV Match", cv_body)
+        self.assertIn("&uarr; Moves you to multi-site scope.", cv_body)
+        self.assertEqual(cv_body.count("Lucy&rsquo;s Headhunter Take &amp; Tailored CV"), 1)
+        self.assertEqual(cv_body.count(fj.html.escape(why)), 1)
+        self.assertIn("Industry &amp; Company Fit:</span> EMS scale mirrors your operations background.", cv_body)
+        self.assertEqual(cv_body.count("&#128206; CV attached</span>"), 1)                # a badge on the card
+        for cut in ("Celonis", "Head of Hyperautomation Programs", "Process_Intelligence.docx"):
+            self.assertNotIn(cut, cv_body)
+        self.assertIn(f"  Attached CV: {cv_name}", cv_plain)
+        self.assertIn("  Upgrade: Moves you to multi-site scope.", cv_plain)
+        self.assertNotIn("Head of Hyperautomation Programs", cv_plain)
+        self.assertEqual([a.get_filename() for a in cv_msg.iter_attachments()], [cv_name])
+
+        # 7. An over-long token (such as a CV file name in Lucy's play) gets invisible break points
+        #    so a phone can wrap it instead of widening the email; ordinary text is only escaped
+        zwsp = "\u200b"
+        self.assertEqual(fj.email_text("Send CV_Quentin_Tester_Flex_Director.docx now"),
+                         f"Send CV_{zwsp}Quentin_{zwsp}Tester_{zwsp}Flex_{zwsp}Director.{zwsp}docx now")
+        self.assertEqual(fj.email_text("x" * 60), "x" * 24 + zwsp + "x" * 24 + zwsp + "x" * 12)
+        self.assertEqual(fj.email_text("Director, Global Process Excellence & Automation"),
+                         "Director, Global Process Excellence &amp; Automation")
+        self.assertEqual(fj.email_text(None), "")
+        self.assertNotIn(zwsp, body)                                                   # nothing in this email needed it
+
+        # 8. Gmail hides the end of an email whose HTML is larger than about 102 KB. The largest
+        #    email sent (max_email_jobs roles, each with long texts, a CV marker and a like link)
+        #    has to stay below that.
+        long_text = "Your process-mining programme across forty sites maps directly onto this multi-site remit. " * 3
+        full_house = [
+            dict(reviewed, key=f"greenhouse:Acme:{n}", title=f"Senior Director, Supply Chain Process Intelligence {n}",
+                 url=f"https://careers.example.com/jobs/senior-director-supply-chain-process-intelligence-{n}",
+                 match_assessment=dict(reviewed["match_assessment"], match_rationale=long_text[:260], industry_synergy=long_text[:200]),
+                 llm_analysis=dict(reviewed["llm_analysis"], lucy_why_it_fits=long_text[:260]))
+            for n in range(fj.CFG_DEFAULTS["max_email_jobs"])
+        ]
+        with patch.dict(os.environ, {"GMAIL_APP_PASSWORD": "app-secret-password"}):
+            big = fj.build_email_message(full_house, 40, sub, date(2026, 11, 8), "sender@gmail.com",
+                                         attachments=[(cv_name, b"docx bytes")], held_count=2, overflow_count=5)
+        big_body = big.get_body(preferencelist=("html",)).get_content()
+        self.assertEqual(big_body.count("Apply &rarr;"), len(full_house))
+        self.assertEqual(big_body.count(">Like this role</a>"), len(full_house))
+        self.assertLess(len(big_body.encode("utf-8")), 95_000)
+
+        # 9. Onboarding page: pill toggles with short labels, no hero / cards / dropzone, invite code collapsed
         page = ob.render_onboard_page({})
         self.assertIsNone(pictograph.search(page))
         self.assertIn('class="pills" id="levelChecks"', page)
@@ -2028,6 +2231,1242 @@ class EndToEnd(unittest.TestCase):
         self.assertIn('"require_invite_code": true', ob.render_onboard_page({"onboard_require_invite_code": True}))
         for opt in ob.SENIORITY_OPTIONS + ob.DOMAIN_OPTIONS + ob.LOCATION_OPTIONS:
             self.assertIn(opt["id"], ob.OPTION_SHORT_LABELS, f"Missing short pill label for {opt['id']}")
+
+    def test_fallback_note_and_play_never_point_at_a_cv_that_is_not_there(self):
+        """When Gemini does not write Lucy's note, built-in texts are used. On a day without a
+        tailored CV neither the note nor the 60-second play may tell the reader to open or send
+        one; with a CV attached the note for the day's angle is used as before; and a quiet-day
+        play mentions a tailored CV only once one has been built for the subscriber."""
+        from datetime import timedelta
+
+        sub = make_subscriber()
+        job = {"key": "k1", "title": "Director, Platform", "company": "Gamma", "location": "Remote - Mexico",
+               "url": "https://example.com/1", "posted_at": "2026-11-08"}
+        claim = fj._TAILORED_CV_CLAIM_RE
+        day = date(2026, 11, 8)
+
+        def rel(angle, edition, cvs_so_far=0):
+            return {"edition": edition, "streak_days": 1, "total_roles_surfaced": 3, "total_cvs_tailored": cvs_so_far,
+                    "recent_angle_ids": [], "recent_headlines": [], "recent_story_beats": [], "angle_id": angle,
+                    "board_count": 109, "milestone_badge": ""}
+
+        def shown(pack):
+            return " ".join(pack[k] for k in ("headline", "message", "micro_challenge"))
+
+        # The built-in texts really do contain such claims, so the check below is not vacuous
+        self.assertGreaterEqual(sum(bool(claim.search(" ".join(note))) for note in fj.DAILY_INSIDER_VAULT), 10)
+        self.assertTrue(all(claim.search(play) for play in fj.DAILY_MICRO_CHALLENGES))
+        self.assertFalse(any(claim.search(play) for play in fj.DAILY_MICRO_CHALLENGES_NO_CV))
+        self.assertEqual(len(fj.QUIET_DAY_CHALLENGES_NO_CV), 4)
+
+        # Every angle and every play slot on a day with roles
+        for angle in range(len(fj.DAILY_INSIDER_VAULT)):
+            for edition in range(1, 9):
+                without_cv = fj.generate_daily_briefing_pack(sub, job, 1, 1, 2, day, rel_ctx=rel(angle, edition), cvs_today_count=0)
+                self.assertIsNone(claim.search(shown(without_cv)), shown(without_cv))
+                with_cv = fj.generate_daily_briefing_pack(sub, job, 1, 1, 2, day, rel_ctx=rel(angle, edition, 1), cvs_today_count=1)
+                self.assertEqual(with_cv["headline"], fj.DAILY_INSIDER_VAULT[angle][0])
+                self.assertIsNotNone(claim.search(with_cv["micro_challenge"]))
+
+        # Skipping a note never makes a headline repeat while unused notes remain: 20 notes make
+        # no CV claim, and 20 CV-less days in a row use each of them once
+        state, headlines = {}, []
+        for offset in range(20):
+            today = date(2026, 11, 1) + timedelta(days=offset)
+            rel_ctx = fj.peek_relationship_context(state, 2, 0, today, board_count=109)
+            pack = fj.generate_daily_briefing_pack(sub, job, 1, 1, 2, today, rel_ctx=rel_ctx, cvs_today_count=0)
+            headlines.append(pack["headline"])
+            fj.commit_relationship_state(state, rel_ctx, pack, [job], today)
+        self.assertEqual(len(set(headlines)), 20)
+
+        # Quiet day: no tailored-CV play before the first CV exists; afterwards those plays are allowed
+        before = [fj.generate_daily_briefing_pack(sub, None, 0, 0, 0, day, rel_ctx=rel(0, e), quiet_day=True)["micro_challenge"]
+                  for e in range(1, 13)]
+        after = [fj.generate_daily_briefing_pack(sub, None, 0, 0, 0, day, rel_ctx=rel(0, e, 3), quiet_day=True)["micro_challenge"]
+                 for e in range(1, 13)]
+        self.assertFalse(any(claim.search(play) for play in before))
+        self.assertTrue(any(claim.search(play) for play in after))
+
+    def test_welcome_email_shares_the_briefing_design_and_promises_only_what_is_switched_on(self):
+        """The welcome email is assembled from the same parts as the daily briefing (frame,
+        masthead, Lucy's card, section, card). It lists the subscriber's settings, escapes every
+        submitted value, and mentions tailored CVs only when they are switched on for that person."""
+        import onboard_subscriber as ob
+
+        def welcome(**overrides):
+            result = {
+                "subscriber_id": "sofia", "updated_existing": False, "name": "Sofia Ramirez", "email": "sofia@example.com",
+                "career_goal": "Director roles in process mining and automation, remote in Mexico.",
+                "levels": ["manager", "director"], "domains": ["strategy_process"], "locations": ["remote_mx"],
+                "language": "Spanish", "employers_indexed": ["AstraZeneca", "HP Inc."], "tailored_cvs_enabled": True,
+            }
+            result.update(overrides)
+            msg = ob.build_onboarding_confirmation_email(result, "sender@gmail.com", board_count=109)
+            return (msg, msg.get_body(preferencelist=("html",)).get_content(),
+                    msg.get_body(preferencelist=("plain",)).get_content())
+
+        msg, body, plain = welcome()
+        daily = fj.build_email_message([], 0, make_subscriber(), date(2026, 11, 8), "sender@gmail.com")
+        daily_body = daily.get_body(preferencelist=("html",)).get_content()
+
+        # 1. Same frame and same parts as the daily briefing, built from inline styles only
+        self.assertEqual(body.split("<title>")[0], daily_body.split("<title>")[0])            # identical head
+        for shared in (
+            fj.email_masthead("STATUS").split("STATUS")[0],                                       # Lucy's lockup
+            f'bgcolor="{fj.EMAIL_NIGHT}"',                                                        # her dark card
+            f"border-left:3px solid {fj.EMAIL_NIGHT_ACCENT}",                                     # ...with its inset panel
+            "max-width:640px",
+        ):
+            self.assertIn(shared, body)
+            self.assertIn(shared, daily_body)
+        for unwanted in ("<style", "<script", "<img", "<link", "url(", "@import"):
+            self.assertNotIn(unwanted, body)
+
+        # 2. What it says: status, Lucy's card with "what happens next", and the radar settings
+        self.assertEqual(msg["To"], "sofia@example.com")
+        self.assertIn("Welcome to Jobs Sentinel, Sofia", msg["Subject"])
+        self.assertIn("RADAR LIVE &amp; ARMED", body)
+        self.assertIn("Welcome to your unfair advantage, Sofia.", body)
+        self.assertIn(">What happens next</div>", body)
+        self.assertIn(">Your Calibrated Radar Blueprint</div>", body)
+        self.assertIn("Director roles in process mining and automation, remote in Mexico.", body)
+        for label, value in (("Target Seniority", "Manager, Director / Head"), ("Functional Domains", "Strategy, Consulting &amp; Process"),
+                             ("Geographic Scope", "Remote in Mexico"), ("Briefing Language", "Spanish"),
+                             ("CV Employers Enriched", "AstraZeneca, HP Inc.")):
+            self.assertRegex(body, re.escape(f">{label}</td>") + r"<td [^>]*>" + re.escape(value) + "</td>")
+        self.assertIn("PROFILE RECALIBRATED", welcome(updated_existing=True)[1])
+        self.assertIn("A, B, C, D, E, F (+2 more)", welcome(employers_indexed=list("ABCDEFGH"))[1])
+
+        # 3. Tailored CVs are promised when they are on...
+        self.assertIn("ATS-ready Word (.docx) CVs", body)
+        self.assertIn("tailored CVs for your top picks", body)
+        self.assertIn("ATS-ready Microsoft Word (.docx) CVs", plain)
+        self.assertNotIn(fj.EMAIL_AMBER_SOFT, body)                                               # no amber note
+        # ...and not when the CV could not be structured: one amber note says so, nothing else
+        # mentions a tailored CV, and the placeholder heading is not listed as an employer
+        _, off_body, off_plain = welcome(tailored_cvs_enabled=False, employers_indexed=[ob.PLACEHOLDER_EMPLOYER])
+        self.assertEqual(off_body.count(fj.html.escape(ob.CV_NOT_STRUCTURED_NOTE)), 1)
+        self.assertIn(f"background-color:{fj.EMAIL_AMBER_SOFT}", off_body)
+        self.assertIn(ob.CV_NOT_STRUCTURED_NOTE, off_plain)
+        for part in (off_body, off_plain):
+            self.assertEqual(part.count("tailored CV"), 1)                                        # only inside the note
+            for promise in ("ATS-ready", "top picks", "structured master CV", ob.PLACEHOLDER_EMPLOYER):
+                self.assertNotIn(promise, part)
+            self.assertIn("Not identified yet", part)
+
+        # 4. Everything submitted is escaped, and an over-long word can wrap on a phone
+        _, odd_body, _ = welcome(name="Zoe <script>alert(1)</script>", subscriber_id="zoe_<b>x</b>", language="<u>K</u>",
+                                 career_goal="Goal <img src=x onerror=alert(1)> " + "y" * 60,
+                                 employers_indexed=["Acme <i>Corp</i> & Sons"])
+        for markup in ("<script", "<img", "<b>", "<i>", "<u>"):
+            self.assertNotIn(markup, odd_body)
+        self.assertIn("zoe_&lt;b&gt;x&lt;/b&gt;", odd_body)
+        self.assertIn("Acme &lt;i&gt;Corp&lt;/i&gt; &amp; Sons", odd_body)
+        self.assertIn("y" * 24 + "\u200b" + "y" * 24, odd_body)
+
+    # ----------------------------------------------------------------------------------------
+    # Match gate fails closed (item 3)
+    # ----------------------------------------------------------------------------------------
+
+    @patch("smtplib.SMTP_SSL")
+    def test_gate_outage_holds_roles_and_releases_them_next_run(self, mock_smtp_ssl):
+        """With a Gemini key configured, a role is only emailed after the gate approved it. When the
+        review cannot run, roles are held (not sent, not recorded) and the email says so instead
+        of claiming a quiet day; they are delivered once the gate answers again."""
+        mock_server = MagicMock()
+        mock_smtp_ssl.return_value.__enter__.return_value = mock_server
+        env = {"GMAIL_USER": "sender@gmail.com", "GMAIL_APP_PASSWORD": "app-secret-password", "GEMINI_API_KEY": "fake-gemini-key"}
+
+        def last_msg():
+            return mock_server.send_message.call_args_list[-1][0][0]
+
+        def parts(msg):
+            return (msg.get_body(preferencelist=("html",)).get_content(),
+                    msg.get_body(preferencelist=("plain",)).get_content())
+
+        cfg = make_cfg()
+        sub_id = cfg["subscribers"][0]["id"]
+        subscriber_cfg = fj.get_subscribers(cfg)[0]
+
+        def sub_state(root):
+            return fj.load_json(root / "state" / "seen.json", {})["subscribers"][sub_id]
+
+        # --- Day 1: every Gemini call fails -> nothing is sent unreviewed, nothing is recorded
+        fj.http_json = fake_http()
+        with patch.dict(os.environ, env), \
+             patch("fetch_jobs._invoke_gemini_json", side_effect=RuntimeError("gemini 503")) as gemini_calls:
+            code = fj.refresh(cfg, COMPANIES, root=self.root, today=date(2026, 11, 5), send_email=True)
+        self.assertEqual(code, 0)
+        self.assertEqual(gemini_calls.call_count, 1)      # the failed review; no second attempt for the briefing prose
+        msg1 = last_msg()
+        html1, plain1 = parts(msg1)
+        self.assertIn("AI review paused", msg1["Subject"])
+        held = int(re.search(r"(\d+) new roles on hold", msg1["Subject"]).group(1))
+        self.assertTrue(5 <= held <= fj.GATE_BATCH_SIZE, held)     # several fixture roles, all in one review batch
+        self.assertNotIn("Quiet day", msg1["Subject"])
+        self.assertIn(f"AI review paused: {held} new roles passed your title and location rules", html1)
+        self.assertIn("nothing is sent unreviewed", plain1)
+        self.assertNotIn("Quiet day on the radar", html1)
+        self.assertNotIn("zero never-seen postings", html1)
+        self.assertNotIn("\n- ", plain1)                          # no role is listed
+        self.assertNotIn("% CV Match", html1)
+        self.assertEqual(list(msg1.iter_attachments()), [])
+        self.assertTrue(any(fj.html.escape(headline) in html1 for headline, _ in fj.HELD_DAY_VAULT))
+        self.assertTrue(all(len(headline) <= 46 for headline, _ in fj.HELD_DAY_VAULT))   # fits the preheader spark uncut
+        # Lucy's own words must not claim work that did not happen today. The email shows her
+        # note and one play; on a paused first day neither may mention filtering or a tailored CV.
+        self.assertTrue(any(fj.html.escape(play) in html1 for play in fj.QUIET_DAY_CHALLENGES_NO_CV))
+        for claim in ("filtered out hundreds", "CV(s) armed", "custom CVs forged so far", "every CV attached below",
+                      "latest tailored CV", "CV I tailored"):
+            self.assertNotIn(claim, html1)
+        # Her connection note is no longer shown in the email, but the pack keeps it truthful
+        paused_pack = fj.generate_daily_briefing_pack(subscriber_cfg, None, 0, 0, 0, date(2026, 11, 5),
+                                                      quiet_day=True, held_count=held)
+        self.assertIn("the fit review did not run overnight, so I have nothing vetted to show you yet",
+                      paused_pack["connection_ps"])
+        state1 = sub_state(self.root)
+        self.assertEqual(state1["emailed"], {})                   # held roles are not marked as sent...
+        self.assertEqual(state1["rejected_matches"], {})          # ...nor as rejected
+        self.assertEqual(state1["relationship"]["edition"], 1)
+
+        # --- Day 2: the gate answers again -> the same roles are reviewed and delivered
+        with patch.dict(os.environ, env), \
+             patch("fetch_jobs.call_gemini_job_matches", side_effect=approve_all_gate), \
+             patch("fetch_jobs._invoke_gemini_json", return_value=None):
+            code = fj.refresh(cfg, COMPANIES, root=self.root, today=date(2026, 11, 6), send_email=True)
+        self.assertEqual(code, 0)
+        msg2 = last_msg()
+        html2, plain2 = parts(msg2)
+        self.assertIn(f"{held} new roles for you", msg2["Subject"])
+        self.assertEqual(plain2.count("\n- "), held)
+        self.assertIn("90% CV Match", html2)
+        self.assertNotIn("AI review paused", html2)
+        self.assertEqual(len(sub_state(self.root)["emailed"]), held)
+
+        # --- A reply that leaves one job out: that job is held, the rest are delivered
+        def gate_skipping_first_job(prompt_text, **kwargs):
+            reply = approve_all_gate(prompt_text)
+            reply["assessments"] = [a for a in reply["assessments"] if a["id"] != 0]
+            return reply
+
+        partial_root = Path(self.tmp.name) / "partial"
+        partial_root.mkdir()
+        with patch.dict(os.environ, env), \
+             patch("fetch_jobs.call_gemini_job_matches", side_effect=gate_skipping_first_job), \
+             patch("fetch_jobs._invoke_gemini_json", return_value=None):
+            fj.refresh(cfg, COMPANIES, root=partial_root, today=date(2026, 11, 5), send_email=True)
+        msg3 = last_msg()
+        html3, plain3 = parts(msg3)
+        self.assertIn(f"{held - 1} new roles for you", msg3["Subject"])
+        self.assertEqual(plain3.count("\n- "), held - 1)
+        self.assertIn("1 more new role could not be AI-reviewed today and will follow in a later briefing.", html3)
+        self.assertIn("1 more new role could not be AI-reviewed today", plain3)
+        self.assertEqual(len(sub_state(partial_root)["emailed"]), held - 1)
+        with patch.dict(os.environ, env), \
+             patch("fetch_jobs.call_gemini_job_matches", side_effect=approve_all_gate), \
+             patch("fetch_jobs._invoke_gemini_json", return_value=None):
+            fj.refresh(cfg, COMPANIES, root=partial_root, today=date(2026, 11, 6), send_email=True)
+        self.assertIn("1 new role for you", last_msg()["Subject"])
+        self.assertEqual(len(sub_state(partial_root)["emailed"]), held)
+
+        # --- A job left out once is asked about again in the same run, so it is not delayed a day
+        batch = [{"key": f"k{i}", "title": f"Director, Platform {i}", "company": "Gamma", "location": "Remote - Mexico",
+                  "url": f"https://example.com/{i}"} for i in range(3)]
+        prompts = []
+
+        def forgetful_then_complete(prompt_text, **kwargs):
+            prompts.append(prompt_text)
+            reply = approve_all_gate(prompt_text)
+            if len(prompts) == 1:
+                reply["assessments"] = reply["assessments"][:-1]       # first reply omits the last job
+            return reply
+
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "fake-gemini-key"}), \
+             patch("fetch_jobs.call_gemini_job_matches", side_effect=forgetful_then_complete):
+            gate = fj.assess_candidate_job_matches(batch, subscriber_cfg)
+        self.assertEqual((len(gate.kept), gate.rejected, gate.held, gate.status), (3, [], [], fj.GATE_REVIEWED))
+        self.assertEqual(len(prompts), 2)
+        self.assertIn("Director, Platform 2", prompts[1])
+        self.assertNotIn("Director, Platform 0", prompts[1])              # only the omitted job is asked again
+
+        # --- More new roles than the review budget while Gemini is down: still no unreviewed role
+        #     leaves the system, not even on an attached "personal board"
+        big_feed = {"jobs": [
+            {"id": 500 + i, "title": f"Director, Program {i}", "location": {"name": "Guadalajara, Mexico"},
+             "absolute_url": f"https://boards.greenhouse.io/acme/jobs/{500 + i}"}
+            for i in range(30)
+        ]}
+        big_root = Path(self.tmp.name) / "big"
+        big_root.mkdir()
+        fj.http_json = fake_http({"greenhouse.io": big_feed})
+        with patch.dict(os.environ, env), patch("fetch_jobs._invoke_gemini_json", side_effect=RuntimeError("gemini 503")):
+            fj.refresh(cfg, [{"name": "Acme", "ats": "greenhouse", "board": "acme"}], root=big_root,
+                       today=date(2026, 11, 5), send_email=True)
+        msg4 = last_msg()
+        html4, plain4 = parts(msg4)
+        self.assertIn("AI review paused", msg4["Subject"])
+        self.assertIn("30 new roles on hold", msg4["Subject"])      # 24 could not be reviewed + 6 beyond the daily budget
+        self.assertEqual(list(msg4.iter_attachments()), [])
+        self.assertNotIn("personal board", plain4)
+        self.assertNotIn("Director, Program", html4)
+        fj.http_json = fake_http()
+
+        # --- An outage must not stretch the run: after two failed gate calls in a row the run stops
+        #     calling Gemini, and every remaining subscriber's roles are held at once
+        many_cfg = make_cfg(*(make_subscriber(name) for name in ("ana", "ben", "cy", "dee")))
+        outage_root = Path(self.tmp.name) / "outage"
+        outage_root.mkdir()
+        sent_before = mock_server.send_message.call_count
+        with patch.dict(os.environ, env), \
+             patch("fetch_jobs.call_gemini_job_matches", side_effect=RuntimeError("gemini 503")) as failing_gate, \
+             patch("fetch_jobs._invoke_gemini_json", side_effect=RuntimeError("gemini 503")):
+            self.assertEqual(fj.refresh(many_cfg, COMPANIES, root=outage_root, today=date(2026, 11, 5), send_email=True), 0)
+        self.assertEqual(failing_gate.call_count, fj.GATE_MAX_CONSECUTIVE_FAILURES)      # not one call per subscriber
+        outage_msgs = [c[0][0] for c in mock_server.send_message.call_args_list[sent_before:]]
+        self.assertEqual(len(outage_msgs), 4)
+        self.assertTrue(all("AI review paused" in m["Subject"] for m in outage_msgs))
+        # The breaker belongs to one run and closes again after a good reply
+        breaker = {"failures": 1}
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "fake-gemini-key"}), \
+             patch("fetch_jobs.call_gemini_job_matches", side_effect=approve_all_gate):
+            gate = fj.assess_candidate_job_matches([dict(batch[0])], subscriber_cfg, breaker=breaker)
+        self.assertEqual((len(gate.kept), breaker["failures"]), (1, 0))
+
+        # --- The gate reports what happened: nothing kept or rejected, one held, status unavailable
+        job = {"key": "k1", "title": "Director, Platform", "company": "Gamma", "location": "Remote - Mexico", "url": "https://example.com/1"}
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "fake-gemini-key"}), \
+             patch("fetch_jobs._invoke_gemini_json", side_effect=RuntimeError("gemini 503")):
+            gate = fj.assess_candidate_job_matches([dict(job)], subscriber_cfg)
+        self.assertEqual((gate.kept, gate.rejected, len(gate.held), gate.status), ([], [], 1, fj.GATE_UNAVAILABLE))
+
+    @patch("smtplib.SMTP_SSL")
+    def test_without_gemini_key_roles_are_labelled_unreviewed_and_carry_no_score(self, mock_smtp_ssl):
+        """No Gemini key at all: roles still go out (title and location rules only) but the email
+        says they were not AI-reviewed and shows no percentage or rationale. No score or
+        rationale is ever invented."""
+        mock_server = MagicMock()
+        mock_smtp_ssl.return_value.__enter__.return_value = mock_server
+
+        cfg = make_cfg()
+        fj.http_json = fake_http()
+        with patch.dict(os.environ, {"GMAIL_USER": "sender@gmail.com", "GMAIL_APP_PASSWORD": "app-secret-password"}):
+            code = fj.refresh(cfg, COMPANIES, root=self.root, today=date(2026, 11, 5), send_email=True)
+        self.assertEqual(code, 0)
+        msg = mock_server.send_message.call_args_list[0][0][0]
+        html_part = msg.get_body(preferencelist=("html",)).get_content()
+        plain_part = msg.get_body(preferencelist=("plain",)).get_content()
+        self.assertIn("Not AI-reviewed", html_part)
+        self.assertNotIn("% CV Match", html_part)
+        self.assertNotIn("% Match", plain_part)
+        self.assertIn("Not AI-reviewed: matched by your title and location rules only.", plain_part)
+        self.assertIn("AI review is not set up", html_part)
+        self.assertNotIn("AI-validated", html_part)
+        self.assertNotIn("maps directly", html_part)
+        # TLS: the SMTP connection that carries the mail password verifies the server certificate
+        smtp_context = mock_smtp_ssl.call_args.kwargs["context"]
+        self.assertEqual(smtp_context.verify_mode, ssl.CERT_REQUIRED)
+        self.assertTrue(smtp_context.check_hostname)
+
+        subscriber_cfg = fj.get_subscribers(cfg)[0]
+        cv_txt = fj.load_subscriber_cv(subscriber_cfg)
+        for off_target in ("Director of Nursing", "Director, Tax Accounting", "Director, Clinical Oncology Wet-Lab Research"):
+            job = {"key": "k", "title": off_target, "company": "Example Hospital", "location": "Guadalajara, Mexico"}
+            assessment = fj.build_unreviewed_match_assessment(job, cv_txt, subscriber_cfg)
+            self.assertIsNone(assessment["match_score"], off_target)
+            self.assertIsNone(assessment["is_good_match"], off_target)
+            self.assertEqual(assessment["match_rationale"], "")
+            self.assertEqual(assessment["match_source"], "unreviewed")
+            self.assertEqual(assessment["matched_keywords"], [], off_target)   # nothing overlaps, so nothing is claimed
+
+            tailored = fj.tailor_cv_deterministic(dict(job), cv_txt, subscriber_cfg)
+            self.assertIsNone(tailored["match_score"], off_target)
+            self.assertEqual(tailored["lucy_why_it_fits"], "")
+            self.assertEqual(tailored["matched_keywords"], [], off_target)
+        # Only skills that literally appear in the posting are reported, never a back-filled list
+        on_target = {"key": "k", "title": "Director, Process Mining", "company": "Flex"}
+        self.assertEqual(fj.build_unreviewed_match_assessment(on_target, cv_txt, subscriber_cfg)["matched_keywords"], ["Process Mining"])
+
+        # A score reported by the gate is passed through unchanged
+        reviewed_job = {"key": "k", "title": "Director, Process Mining", "company": "Flex", "location": "Zapopan",
+                        "match_assessment": {"match_score": 88, "match_rationale": "Real gate rationale."}}
+        tailored = fj.tailor_cv_deterministic(reviewed_job, cv_txt, subscriber_cfg)
+        self.assertEqual(tailored["match_score"], 88)
+        self.assertEqual(tailored["lucy_why_it_fits"], "Real gate rationale.")
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("GEMINI_API_KEY", None)
+            gate = fj.assess_candidate_job_matches([{"key": "k", "title": "Director of Nursing", "company": "Example Hospital"}], subscriber_cfg)
+        self.assertEqual((len(gate.kept), gate.rejected, gate.held, gate.status), (1, [], [], fj.GATE_NOT_CONFIGURED))
+
+    # ----------------------------------------------------------------------------------------
+    # Pattern safety (item 7) and narrower sign-up rules (item 4)
+    # ----------------------------------------------------------------------------------------
+
+    def test_slow_patterns_are_refused_and_titles_are_capped(self):
+        """A pattern with a quantifier inside a repeated group can take minutes on one long word.
+        Such patterns are skipped (with a warning), titles are capped before matching, and the
+        model can no longer supply patterns at all: only plain phrases, escaped in code."""
+        import onboard_subscriber as ob
+
+        slow = r"\bdata(\s*\w+)*\s*lead\b"
+        for pattern in (slow, r"(a+)+", r"(a*)*b", r"((ab)*)+", r"(?:\w+\s?)+manager", r"(\w+){2,}z", r"(?:(?:a|b)+)*c"):
+            re.compile(pattern)
+            self.assertTrue(fj.has_nested_quantifier(pattern), pattern)
+        for pattern in (r"\bdirector(a)?\b", r"\bchief\b.*\bofficer\b", r"\b(foo|bar)+\b", r"[(]a+[)]+", r"\(a+\)+",
+                        r"\b(senior manager|sr\.? manager|gerente (senior|sr\.?))\b", r"\ba{2,5}\b", r"\b(ab){0,1}c\b"):
+            self.assertFalse(fj.has_nested_quantifier(pattern), pattern)
+
+        # Every pattern built into the code must pass the check (a false positive would silently
+        # change matching). Patterns in config.json and subscribers/ are deliberately not asserted
+        # here: they are checked when loaded (skipped with a warning), so a pattern somebody adds
+        # there can never fail this suite and block the daily run.
+        shipped = list(fj.DEFAULT_UPGRADE_PATTERNS) + list(ob.BASE_TITLE_EXCLUDES)
+        shipped += [ob.NOISE_EXCLUDE_UNLESS_SALES, ob.NOISE_EXCLUDE_UNLESS_SPECIALIST]
+        for opt in ob.SENIORITY_OPTIONS:
+            shipped += opt["inc"] + opt["up"]
+        for opt in ob.DOMAIN_OPTIONS:
+            shipped += [rf"\b{opt[key]}\b" for key in ("keywords_re", "ic_titles") if opt[key]]
+        self.assertGreater(len(shipped), 40)
+        for pattern in shipped:
+            re.compile(pattern, re.I)
+            self.assertFalse(fj.has_nested_quantifier(pattern), pattern)
+
+        # The slow pattern is dropped from the rules, so a hostile title is answered instantly
+        rules = fj.build_rules({"title_include": [slow, r"\bdirector\b"], "title_exclude": [slow], "jalisco_locations": ["guadalajara"]})
+        self.assertEqual(len(rules["inc"]), 1)
+        self.assertEqual(rules["exc"], [])
+        hostile = "data " + "x" * 40 + " " + "y" * 40 + " !"
+        started = time.perf_counter()
+        self.assertFalse(fj.is_director(hostile, rules))
+        self.assertTrue(fj.is_director("Director of Data", rules))
+        is_up, _ = fj.is_career_upgrade_heuristic({"title": hostile}, {"upgrade_title_include": [slow, "[unclosed", r"\bdirector\b"]})
+        self.assertFalse(is_up)
+        self.assertLess(time.perf_counter() - started, 1.0)
+
+        # Titles are capped before matching
+        self.assertTrue(fj.is_director("x" * 150 + " director", rules))
+        self.assertFalse(fj.is_director("x" * (fj.MAX_TITLE_CHARS + 10) + " director", rules))
+
+        # Non-text entries never raise
+        self.assertEqual(len(fj.build_rules({"title_include": [None, 7, r"\bdirector\b"]})["inc"]), 1)
+
+        # Model output is treated as plain phrases: regex syntax is discarded, never compiled
+        self.assertEqual(ob.clean_phrase("  Process   Mining Lead "), "process mining lead")
+        self.assertEqual(ob.clean_phrase("Gestión del Cambio"), "gestion del cambio")
+        for not_a_phrase in (r"\bdata(\s*\w+)*\s*lead\b", "(a+)+", ".*", "[a-z]+", "x", "", None, 42, "a" * 80,
+                             "one two three four five six seven"):
+            self.assertEqual(ob.clean_phrase(not_a_phrase), "", repr(not_a_phrase))
+        pattern = ob.phrase_to_pattern(ob.clean_phrase("C++ Developer"))
+        self.assertTrue(re.search(pattern, fj.norm("Senior C++ Developer (Remote)")))
+        self.assertFalse(re.search(pattern, fj.norm("Senior C Developer")))
+        self.assertTrue(re.search(ob.phrase_to_pattern("process mining"), "head of process-mining"))
+        self.assertFalse(re.search(ob.phrase_to_pattern("process mining"), "reprocess mining ops"))
+        self.assertFalse(fj.has_nested_quantifier(pattern))
+        self.assertNotIn("regex patterns", ob.ONBOARD_PROFILE_SYSTEM_PROMPT)
+        self.assertIn("Never write regular expressions", ob.ONBOARD_PROFILE_SYSTEM_PROMPT)
+
+    def test_form_signup_rules_need_a_level_and_an_area(self):
+        """Sign-up profiles accept a title when it names one of the ticked levels AND one of the
+        ticked areas or the subscriber's own keywords. A level word alone ('Senior ...') is no
+        longer enough, so unrelated roles stop consuming the daily AI review."""
+        import onboard_subscriber as ob
+
+        # Rules-engine semantics: include OR (every all_of group matches); exclude always wins
+        rules = fj.build_rules({
+            "title_include": [r"\bgrowth lead\b"],
+            "title_all_of": [[r"\b(senior|manager)\b"], [r"\b(marketing|brand)\b"]],
+            "title_exclude": [r"\bintern\b"],
+        })
+        for title, expected in (("Growth Lead", True), ("Senior Brand Strategist", True), ("Marketing Manager", True),
+                                ("Senior Tax Accountant", False), ("Marketing Coordinator", False),
+                                ("Senior Marketing Intern", False)):
+            self.assertEqual(fj.is_director(title, rules), expected, title)
+        # Subscribers without title_all_of behave exactly as before
+        self.assertEqual(fj.build_rules({"title_include": [r"\bdirector\b"]})["all_of"], [])
+        # A group that lost all its patterns can never match (fails closed instead of widening)
+        broken = fj.build_rules({"title_all_of": [[r"\bsenior\b"], ["[unclosed"]]})
+        self.assertFalse(fj.is_director("Senior Marketing Manager", broken))
+
+        def accepts(profile, title):
+            return fj.is_director(title, fj.build_rules(profile))
+
+        # 1. The default form (Senior + Manager ticked, no area) with phrases derived from free text
+        default_signup = ob.build_title_rules(["senior", "manager"], ["other"], {
+            "target_titles": ["Marketing Manager", "Growth Lead"],
+            "focus_keywords": ["marketing", "growth", "brand", "manager", r"(a+)+"],
+            "step_up_titles": ["head of marketing"],
+            "avoid_titles": ["cold calling", "manager", "marketing", r"\bx(\w+)*\b"],
+        })
+        self.assertEqual(default_signup["rule_breadth"], "focused")
+        self.assertEqual(len(default_signup["title_all_of"]), 2)
+        self.assertEqual(default_signup["interest_phrases"], ["marketing manager", "growth lead", "marketing", "growth", "brand"])
+        for title in ("Marketing Manager", "Growth Lead", "Senior Brand Strategist", "Gerente de Marketing", "Lead Growth Analyst"):
+            self.assertTrue(accepts(default_signup, title), title)
+        for title in ("Senior Tax Accountant", "Lead Nurse", "Warehouse Shift Manager", "Senior Software Engineer",
+                      "Senior SMT Process Technician", "Marketing Intern", "Cold Calling Team Lead"):
+            self.assertFalse(accepts(default_signup, title), title)
+        self.assertTrue(fj.is_career_upgrade_heuristic({"title": "Head of Marketing"}, default_signup)[0])
+        # An "avoid" phrase can never exclude what the subscriber asked for
+        self.assertFalse(any(re.search(p, "marketing manager") for p in default_signup["title_exclude"]))
+
+        # 2. An area ticked, no model available: level AND area keywords, plus level-less IC titles
+        ops = ob.build_title_rules(["senior", "manager"], ["operations"])
+        self.assertEqual(ops["rule_breadth"], "focused")
+        for title in ("Operations Manager", "Senior Supply Chain Planner", "Gerente de Logística", "Plant Manager", "Buyer"):
+            self.assertTrue(accepts(ops, title), title)
+        for title in ("Senior Tax Accountant", "Software Engineer", "Marketing Manager", "Junior Buyer"):
+            self.assertFalse(accepts(ops, title), title)
+        sales_ic = ob.build_title_rules(["specialist"], ["sales_customer"])
+        for title in ("Account Executive", "Key Account Manager", "Sales Operations Analyst", "Ejecutivo de Ventas"):
+            self.assertTrue(accepts(sales_ic, title), title)
+        self.assertFalse(accepts(sales_ic, "Data Analyst"))
+        # IC titles are not added for people-manager levels
+        self.assertFalse(accepts(ob.build_title_rules(["manager"], ["sales_customer"]), "Account Executive"))
+        self.assertTrue(accepts(ob.build_title_rules(["manager"], ["sales_customer"]), "Regional Sales Manager"))
+
+        # 3. Director and executive titles are rare, so they go straight to the AI review
+        leader = ob.build_title_rules(["director", "executive"], ["finance_legal"])
+        self.assertEqual(leader["title_all_of"], [])
+        for title in ("Director, Clinical Research", "Head of Tax", "VP Finance", "Country Manager"):
+            self.assertTrue(accepts(leader, title), title)
+        self.assertFalse(accepts(leader, "Senior Financial Analyst"))
+
+        # 4. Nothing to narrow with (no area, no phrases): level words alone, flagged as broad
+        broad = ob.build_title_rules(["senior", "manager"], ["other"])
+        self.assertEqual(broad["rule_breadth"], "broad")
+        self.assertEqual(broad["title_all_of"], [])
+        self.assertTrue(accepts(broad, "Senior Tax Accountant"))
+        # ...and a ticked director level never swallows the other ticked levels
+        mixed = ob.build_title_rules(["senior", "director"], ["other"])
+        self.assertEqual(mixed["rule_breadth"], "broad")
+        self.assertTrue(accepts(mixed, "Senior Buyer"))
+        self.assertTrue(accepts(mixed, "Director of Sales"))
+
+        # 5. Catalogue regression table: (levels, areas, titles that must pass, titles that must not)
+        catalogue_cases = [
+            (["manager"], ["people_hr"],
+             ["HR Manager", "Talent Acquisition Manager", "Gerente de Recursos Humanos", "People Operations Manager"],
+             ["HR Business Partner", "Recruiter", "Operations Manager"]),
+            (["specialist"], ["people_hr"],
+             ["Recruiter", "HR Business Partner", "HR Generalist", "Analista de Recursos Humanos"],
+             ["HR Manager", "Data Analyst"]),
+            (["specialist", "senior"], ["finance_legal"],
+             ["Finance Analyst", "Senior Financial Analyst", "Accountant", "Contador", "Legal Counsel", "FP&A Analyst"],
+             ["Finance Manager", "Software Engineer", "Senior Data Analyst"]),
+            (["manager"], ["technology"],
+             ["IT Manager", "Engineering Manager", "Gerente de TI", "Data Analytics Manager"],
+             ["Software Engineer", "Sales Manager", "Plant Manager"]),
+            (["senior"], ["technology"],
+             ["Senior Software Engineer", "Staff Data Engineer", "Principal Cloud Architect", "Data Scientist"],
+             ["Software Engineer", "Engineering Manager", "Senior Accountant"]),
+            (["senior", "manager"], ["strategy_process"],
+             ["Continuous Improvement Manager", "GBS Transformation Lead", "Gerente de Mejora Continua", "Business Analyst"],
+             ["Senior Tax Accountant", "Marketing Manager", "Junior Process Analyst"]),
+            (["specialist", "senior"], ["marketing"],
+             ["Marketing Manager", "Senior Product Designer", "UX Designer", "Marketing Analyst", "Gerente de Mercadotecnia"],
+             ["Sales Manager", "Senior Accountant", "Marketing Director"]),
+            (["manager"], ["sales_customer"],
+             ["Sales Manager", "Gerente Comercial", "Customer Success Manager", "Business Development Manager"],
+             ["Account Executive", "Sales Representative", "Marketing Manager"]),
+            (["senior", "manager"], ["project_product"],
+             ["Project Manager", "Program Manager, PMO", "Product Manager", "Scrum Master", "Senior Delivery Lead"],
+             ["Senior Tax Accountant", "Operations Manager"]),
+            (["executive"], ["other"],
+             ["VP Sales", "Vice President, Operations", "General Manager", "Country Manager", "Chief Technology Officer"],
+             ["Director of Engineering", "Senior Manager", "Executive Assistant"]),
+        ]
+        for levels, areas, must_pass, must_not in catalogue_cases:
+            profile = ob.build_title_rules(levels, areas)
+            for title in must_pass:
+                self.assertTrue(accepts(profile, title), f"{levels} + {areas}: {title}")
+            for title in must_not:
+                self.assertFalse(accepts(profile, title), f"{levels} + {areas}: {title}")
+
+        # 6. Everything the builder produces is a safe, valid pattern
+        for profile in (default_signup, ops, sales_ic, leader, broad, mixed):
+            patterns = profile["title_include"] + profile["title_exclude"] + profile["upgrade_title_include"]
+            for group in profile["title_all_of"]:
+                patterns += group
+            for pattern in patterns:
+                re.compile(pattern, re.I)
+                self.assertFalse(fj.has_nested_quantifier(pattern), pattern)
+
+    @patch("smtplib.SMTP_SSL")
+    def test_most_relevant_roles_are_reviewed_first_when_the_queue_exceeds_the_cap(self, mock_smtp_ssl):
+        """Only 24 roles are AI-reviewed per run. The queue is ordered by overlap with the
+        subscriber's goal (and liked roles) before the cap, so a relevant older role is no longer
+        stuck behind newer unrelated ones; the rest roll over to the next run."""
+        mock_server = MagicMock()
+        mock_smtp_ssl.return_value.__enter__.return_value = mock_server
+
+        # Unit level: stable ordering, liked roles weigh more, an empty signal changes nothing
+        queue = [{"title": "Director, Tax"}, {"title": "Director, Process Mining"}, {"title": "Director, Widgets"},
+                 {"title": "Senior Director, Platform Engineering", "company": "Gamma"}]
+        goal = {"career_goal": "Process mining and automation leadership roles", "interest_phrases": ["celonis"]}
+        ranked = [j["title"] for j in fj.rank_candidates_for_review(queue, goal)]
+        self.assertEqual(ranked, ["Director, Process Mining", "Director, Tax", "Director, Widgets", "Senior Director, Platform Engineering"])
+        liked = [{"title": "Director, Platform", "company": "Gamma"}]
+        self.assertEqual(fj.rank_candidates_for_review(queue, goal, liked)[0]["title"], "Senior Director, Platform Engineering")
+        self.assertEqual(fj.rank_candidates_for_review(queue, {}), queue)
+
+        # End to end: 24 newer unrelated roles + 6 older relevant ones, review budget 24
+        feed = {"jobs": [
+            {"id": 100 + i, "title": f"Director, Widget Sales {i}", "location": {"name": "Guadalajara, Mexico"},
+             "absolute_url": f"https://boards.greenhouse.io/acme/jobs/{100 + i}", "first_published": "2026-11-04T10:00:00Z"}
+            for i in range(24)
+        ] + [
+            {"id": 200 + i, "title": f"Director, Process Mining Program {i}", "location": {"name": "Guadalajara, Mexico"},
+             "absolute_url": f"https://boards.greenhouse.io/acme/jobs/{200 + i}", "first_published": "2026-10-20T10:00:00Z"}
+            for i in range(6)
+        ]}
+        cfg = make_cfg(make_subscriber("ana", title_include=[r"\bdirector\b"], title_exclude=[]))
+        reviewed_runs = []
+
+        def recording_gate(prompt_text, **kwargs):
+            titles = re.findall(r"\[JOB id=\d+\]\nTitle: ([^\n]+)", prompt_text)
+            reviewed_runs[-1].extend(titles)
+            reply = approve_all_gate(prompt_text)
+            for assessment, title in zip(reply["assessments"], titles):
+                if "Process Mining" not in title:
+                    assessment.update(is_good_match=False, match_score=15)
+            return reply
+
+        env = {"GMAIL_USER": "sender@gmail.com", "GMAIL_APP_PASSWORD": "app-secret-password", "GEMINI_API_KEY": "fake-gemini-key"}
+        acme_only = [{"name": "Acme", "ats": "greenhouse", "board": "acme"}]
+        fj.http_json = fake_http({"greenhouse.io": feed})
+        for day in (5, 6):
+            reviewed_runs.append([])
+            with patch.dict(os.environ, env), \
+                 patch("fetch_jobs.call_gemini_job_matches", side_effect=recording_gate), \
+                 patch("fetch_jobs._invoke_gemini_json", return_value=None):
+                code = fj.refresh(cfg, acme_only, root=self.root, today=date(2026, 11, day), send_email=True)
+            self.assertEqual(code, 0)
+
+        first_run, second_run = reviewed_runs
+        self.assertEqual(len(first_run), 24)
+        self.assertEqual(sum("Process Mining" in t for t in first_run), 6)     # all six relevant roles made the cut
+        self.assertEqual(len(second_run), 6)                                   # the rest rolled over
+        self.assertTrue(all("Widget Sales" in t for t in second_run))
+        first_email = mock_server.send_message.call_args_list[0][0][0]
+        self.assertIn("6 new roles for you", first_email["Subject"])
+
+    # ----------------------------------------------------------------------------------------
+    # Profile updates (item 5) and the per-subscriber store (item 8)
+    # ----------------------------------------------------------------------------------------
+
+    @patch("smtplib.SMTP_SSL")
+    def test_profile_update_clears_old_rejections_but_never_resends(self, mock_smtp_ssl):
+        """Rejections were judged against the old CV and goals. When the sign-up form stamps a new
+        `profile_updated_at`, the next daily run forgets them and reviews those roles again; roles
+        that were already emailed are still never sent twice."""
+        mock_server = MagicMock()
+        mock_smtp_ssl.return_value.__enter__.return_value = mock_server
+
+        # Unit level
+        sub_state = {"rejected_matches": {"a": {"date": "2026-11-01"}, "b": {"date": "2026-11-02"}}, "emailed": {"c": {"date": "2026-11-01"}}}
+        self.assertEqual(fj.forget_rejections_after_profile_update(sub_state, {}), 0)                    # no marker: untouched
+        self.assertEqual(len(sub_state["rejected_matches"]), 2)
+        self.assertEqual(fj.forget_rejections_after_profile_update(sub_state, {"profile_updated_at": "2026-11-07T09:00:00Z"}), 2)
+        self.assertEqual(sub_state["rejected_matches"], {})
+        self.assertEqual(sub_state["emailed"], {"c": {"date": "2026-11-01"}})
+        self.assertEqual(fj.forget_rejections_after_profile_update(sub_state, {"profile_updated_at": "2026-11-07T09:00:00Z"}), 0)
+
+        # End to end
+        feed = {"jobs": [
+            {"id": 301, "title": "Director, Process Mining", "location": {"name": "Guadalajara, Mexico"},
+             "absolute_url": "https://boards.greenhouse.io/acme/jobs/301", "first_published": "2026-11-04T10:00:00Z"},
+            {"id": 302, "title": "Director, Clinical Research", "location": {"name": "Guadalajara, Mexico"},
+             "absolute_url": "https://boards.greenhouse.io/acme/jobs/302", "first_published": "2026-11-04T10:00:00Z"},
+        ]}
+        subscriber = {
+            "id": "ana", "name": "Ana Torres", "recipient_email": "ana@example.com", "enabled": True,
+            "cv_text": "# ANA TORRES\nana@example.com\n\n## PROFESSIONAL SUMMARY\nProcess mining leader.\n",
+            "career_goal": "Process mining leadership.", "title_include": [r"\bdirector\b"], "title_exclude": [],
+            "max_tailored_cvs": 0,
+        }
+        approved_words = ["Process Mining"]
+        reviewed = []
+
+        def gate(prompt_text, **kwargs):
+            titles = re.findall(r"\[JOB id=\d+\]\nTitle: ([^\n]+)", prompt_text)
+            reviewed.extend(titles)
+            reply = approve_all_gate(prompt_text)
+            for assessment, title in zip(reply["assessments"], titles):
+                if not any(word in title for word in approved_words):
+                    assessment.update(is_good_match=False, match_score=20)
+            return reply
+
+        env = {"GMAIL_USER": "sender@gmail.com", "GMAIL_APP_PASSWORD": "app-secret-password", "GEMINI_API_KEY": "fake-gemini-key"}
+        acme_only = [{"name": "Acme", "ats": "greenhouse", "board": "acme"}]
+        fj.http_json = fake_http({"greenhouse.io": feed})
+
+        def run(day, sub):
+            reviewed.clear()
+            with patch.dict(os.environ, env), \
+                 patch("fetch_jobs.call_gemini_job_matches", side_effect=gate), \
+                 patch("fetch_jobs._invoke_gemini_json", return_value=None):
+                self.assertEqual(fj.refresh(make_cfg(sub), acme_only, root=self.root,
+                                            today=date(2026, 11, day), send_email=True), 0)
+            msg = mock_server.send_message.call_args_list[-1][0][0]
+            state = fj.load_json(self.root / "state" / "seen.json", {})["subscribers"]["ana"]
+            return msg, msg.get_body(preferencelist=("plain",)).get_content(), state
+
+        msg, plain, state = run(5, subscriber)
+        self.assertIn("1 new role for you", msg["Subject"])
+        self.assertIn("Director, Process Mining at Acme", plain)
+        self.assertIn("greenhouse:Acme:302", state["rejected_matches"])
+
+        msg, plain, state = run(6, subscriber)                     # same profile: the rejection is remembered
+        self.assertEqual(reviewed, [])
+        self.assertIn("Quiet day", msg["Subject"])
+
+        approved_words.append("Clinical Research")                 # the new profile wants clinical roles
+        updated = {**subscriber, "career_goal": "Clinical research leadership.", "profile_updated_at": "2026-11-07T09:00:00Z"}
+        msg, plain, state = run(7, updated)
+        self.assertEqual(reviewed, ["Director, Clinical Research"])            # reviewed again; the sent role is not
+        self.assertIn("1 new role for you", msg["Subject"])
+        self.assertIn("Director, Clinical Research at Acme", plain)
+        self.assertNotIn("Director, Process Mining at Acme", plain)            # already emailed: never re-sent
+        self.assertEqual(state["profile_seen_at"], "2026-11-07T09:00:00Z")
+        self.assertEqual(state["rejected_matches"], {})
+
+        msg, plain, state = run(8, updated)                        # marker unchanged: nothing is reset again
+        self.assertEqual(reviewed, [])
+        self.assertIn("Quiet day", msg["Subject"])
+
+    def test_subscriber_files_merge_and_signups_never_touch_shared_files(self):
+        """Each sign-up is stored as its own `subscribers/<id>.json` + `cvs/<id>.md`. config.json
+        is never edited, so two sign-ups cannot overwrite each other; damaged files are skipped;
+        and a profile that would break the daily run is refused before anything is written."""
+        import onboard_subscriber as ob
+
+        root = self.root
+        inline_ids = ["lucas", "luis"]
+        (root / "config.json").write_text(json.dumps({"subscribers": [
+            {"id": sub_id, "name": sub_id.title(), "recipient_email": f"{sub_id}@example.com", "title_include": [r"\bdirector\b"]}
+            for sub_id in inline_ids
+        ]}), encoding="utf-8")
+        config_before = (root / "config.json").read_bytes()
+
+        def payload(name, email):
+            return ob.validate_onboarding_payload({
+                "name": name, "email": email,
+                "cv_text": (
+                    f"{name}\nGuadalajara, MX | {email}\n"
+                    "Operations leader with 9 years running supply chain and logistics teams across Jalisco.\n"
+                    "- Led a 40-person warehouse operation and cut order cycle time by 18 percent.\n"
+                    "- Managed procurement for three plants and renegotiated supplier contracts.\n"
+                ),
+                "levels": ["senior", "manager"], "domains": ["operations"], "locations": ["jalisco"],
+            })
+
+        # Two people with the same first name sign up; neither touches a shared file
+        first = ob.register_subscriber_in_codebase(payload("Sofia Ramirez", "sofia.ramirez@example.com"), root=root, api_key="")
+        second = ob.register_subscriber_in_codebase(payload("Sofia Lopez", "sofia.lopez@example.com"), root=root, api_key="")
+        self.assertEqual((first["subscriber_id"], second["subscriber_id"]), ("sofia", "sofia_lopez"))
+        self.assertEqual((first["record_file"], first["cv_file"]), ("subscribers/sofia.json", "cvs/sofia.md"))
+        self.assertEqual((root / "config.json").read_bytes(), config_before)
+        self.assertEqual(sorted(f.name for f in (root / "subscribers").iterdir()), ["sofia.json", "sofia_lopez.json"])
+        self.assertFalse((root / "docs").exists())
+        self.assertFalse(any(f.name.startswith(".") for f in (root / "cvs").iterdir()))     # no temp files left behind
+
+        # The same email again updates the same id (never a duplicate) and re-stamps the profile
+        again = ob.register_subscriber_in_codebase(payload("Sofia R.", "sofia.ramirez@example.com"), root=root, api_key="")
+        self.assertEqual((again["subscriber_id"], again["updated_existing"]), ("sofia", True))
+        self.assertEqual(len(list((root / "subscribers").iterdir())), 2)
+
+        # load_config merges config.json with the files; order is stable
+        cfg = fj.load_config(root)
+        self.assertEqual([s["id"] for s in cfg["subscribers"]], inline_ids + ["sofia", "sofia_lopez"])
+        sofia = next(s for s in fj.get_subscribers(cfg) if s["id"] == "sofia")
+        self.assertEqual(sofia["rule_breadth"], "focused")
+        self.assertTrue(sofia["profile_updated_at"])
+        self.assertIn("Company Profile:", fj.load_subscriber_cv(sofia, root=root))
+        sofia_rules = fj.build_rules(sofia)
+        self.assertTrue(fj.is_director("Operations Manager", sofia_rules))
+        self.assertFalse(fj.is_director("Senior Tax Accountant", sofia_rules))
+        self.assertEqual(ob.profile_problems(sofia, fj.load_subscriber_cv(sofia, root=root)), [])
+
+        # A file with the same id as a config.json entry replaces it in place (that person re-submitted the form)
+        (root / "subscribers" / "lucas.json").write_text(json.dumps({
+            "id": "lucas", "name": "Lucas Updated", "recipient_email": "lucas@example.com",
+            "title_include": [r"\bdirector\b"],
+        }), encoding="utf-8")
+        # Damaged or mis-named files are skipped instead of stopping the run for everyone
+        (root / "subscribers" / "broken.json").write_text("{not json", encoding="utf-8")
+        (root / "subscribers" / "mismatch.json").write_text(json.dumps({"id": "someone_else", "name": "X"}), encoding="utf-8")
+        (root / "subscribers" / "list.json").write_text("[]", encoding="utf-8")
+        cfg = fj.load_config(root)
+        self.assertEqual([s["id"] for s in cfg["subscribers"]], inline_ids + ["sofia", "sofia_lopez"])
+        self.assertEqual(cfg["subscribers"][inline_ids.index("lucas")]["name"], "Lucas Updated")
+
+        # Ids are file names: anything else is refused, which also rules out path traversal
+        for bad_id in ("../evil", "a/b", "UPPER", "x", "", None, "with space"):
+            with self.assertRaises(ValueError):
+                ob.subscriber_file_path(root, bad_id)
+
+        # A profile that would break the daily run is refused, and nothing is written for it
+        cv_md = fj.load_subscriber_cv(sofia, root=root)
+        self.assertTrue(ob.profile_problems({**sofia, "title_include": [r"(a+)+"]}, cv_md))
+        self.assertTrue(ob.profile_problems({**sofia, "title_include": ["[unclosed"]}, cv_md))
+        self.assertTrue(ob.profile_problems({**sofia, "title_include": [], "title_all_of": []}, cv_md))
+        self.assertTrue(ob.profile_problems({**sofia, "career_goal": " "}, cv_md))
+        self.assertTrue(ob.profile_problems(sofia, "# NAME\nno sections at all\n"))
+        self.assertTrue(ob.profile_problems(sofia, cv_md + '\n- A bullet with "quotes" and [brackets]\n'))
+        with patch("onboard_subscriber.profile_problems", return_value=["forced problem"]):
+            with self.assertRaises(ValueError) as refused:
+                ob.register_subscriber_in_codebase(payload("Carlos Diaz", "carlos.diaz@example.com"), root=root, api_key="")
+        self.assertIn("forced problem", str(refused.exception))
+        self.assertFalse((root / "subscribers" / "carlos.json").exists())
+        self.assertFalse((root / "cvs" / "carlos.md").exists())
+
+        # A Markdown CV that does not follow the expected layout is still accepted (parsed as plain text)
+        odd_markdown = ob.validate_onboarding_payload({
+            "name": "Diego Luna", "email": "diego.luna@example.com",
+            "cv_text": "# Diego Luna\n\n## Experience\n**Acme Corp** 2019 to 2024\nRan the regional logistics network.\nCut freight cost by 12 percent.\n",
+            "levels": ["manager"], "domains": ["operations"], "locations": ["jalisco"],
+        })
+        diego = ob.register_subscriber_in_codebase(odd_markdown, root=root, api_key="")
+        self.assertEqual(diego["subscriber_id"], "diego")
+        self.assertEqual(ob.cv_problems((root / "cvs" / "diego.md").read_text(encoding="utf-8")), [])
+
+    @patch("smtplib.SMTP_SSL")
+    def test_offline_cv_import_assumes_nothing_and_never_breaks_shared_checks(self, mock_smtp_ssl):
+        """When Gemini is unavailable at sign-up the CV is imported by an offline parser. It must
+        not invent facts about the person or their employers, must always produce a CV that
+        passes the checks every later run applies to all subscribers, and must not lead to
+        tailored CVs built on placeholder headings."""
+        import onboard_subscriber as ob
+
+        mock_server = MagicMock()
+        mock_smtp_ssl.return_value.__enter__.return_value = mock_server
+        root = self.root
+        (root / "config.json").write_text(json.dumps({"subscribers": []}), encoding="utf-8")
+
+        def signup(name, email, cv_text):
+            validated = ob.validate_onboarding_payload({
+                "name": name, "email": email, "cv_text": cv_text,
+                "levels": ["specialist"], "domains": ["finance_legal"], "locations": ["jalisco"],
+            })
+            result = ob.register_subscriber_in_codebase(validated, root=root, api_key="")
+            record = fj.load_json(root / "subscribers" / f"{result['subscriber_id']}.json", {})
+            return result, record, (root / result["cv_file"]).read_text(encoding="utf-8")
+
+        # 1. Markdown with real employers but no profile lines: structure is kept, and the profile
+        #    line only restates what the CV says (no invented description, plain ASCII)
+        result, record, cv_md = signup("Marco Ruiz", "marco.ruiz@example.com", (
+            "# Marco Ruiz\nmarco.ruiz@example.com\n\n## SUMMARY\nSupply chain manager.\n\n"
+            "## SKILLS\n- Planning, Procurement, SAP\n\n## EXPERIENCE\n"
+            "### Tiny Local Shop | Zapopan\n**Buyer** | 2015 - 2019\n- Negotiated 40 supplier contracts.\n"
+        ))
+        self.assertIn("### Tiny Local Shop | Zapopan\n*Company Profile: Tiny Local Shop, Zapopan.*", cv_md)
+        self.assertNotIn("enterprise organization", cv_md)
+        self.assertTrue(cv_md.isascii())
+        self.assertEqual(ob.cv_problems(cv_md), [])
+        self.assertTrue(result["tailored_cvs_enabled"])
+        self.assertEqual(record["max_tailored_cvs"], 3)
+
+        # 2. Plain text: employers cannot be separated, so one labelled placeholder heading is used.
+        #    Nothing is assumed about the person, and no tailored CV is ever built from it.
+        result, record, cv_md = signup("Paula Soto", "paula.soto@example.com", (
+            "Paula Soto\nGuadalajara | paula.soto@example.com\n"
+            "Finance analyst with 6 years in FP&A and treasury for consumer goods companies.\n"
+            "- Built the monthly forecast model used by three business units.\n"
+            "- Cut the closing calendar from 9 to 5 days.\n"
+        ))
+        self.assertIn(f"### {ob.PLACEHOLDER_EMPLOYER}", cv_md)
+        for assumed in ("Senior Professional", "Prior Experience Portfolio", "| Mexico", "## LANGUAGES", "English", "Spanish"):
+            self.assertNotIn(assumed, cv_md)
+        self.assertIn("Built the monthly forecast model", cv_md)
+        self.assertEqual(ob.cv_problems(cv_md), [])
+        self.assertFalse(result["tailored_cvs_enabled"])
+        self.assertEqual(record["max_tailored_cvs"], 0)
+        with patch.dict(os.environ, {"GMAIL_USER": "sender@gmail.com", "GMAIL_APP_PASSWORD": "app-secret-password"}):
+            self.assertTrue(ob.send_onboarding_confirmation_email(result, board_count=109))
+        confirmation = mock_server.send_message.call_args_list[-1][0][0]
+        self.assertIn("tailored CVs are switched off for now", confirmation.get_body(preferencelist=("plain",)).get_content())
+        self.assertIn("tailored CVs are switched off for now", confirmation.get_body(preferencelist=("html",)).get_content())
+        # ...and the daily run honours it even with a Gemini key
+        paula = next(sub for sub in fj.get_subscribers(fj.load_config(root)) if sub["id"] == "paula")
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "fake-gemini-key"}):
+            self.assertEqual(fj.prepare_tailored_cvs([{"key": "k", "title": "Finance Analyst", "company": "Acme"}], paula, date(2026, 11, 8), root=root), [])
+        self.assertFalse((root / "out" / "cvs").exists())
+
+        # 3. Awkward uploads are imported, not rejected, and all satisfy the shared checks
+        awkward = {
+            "olga": "# Olga Odd\n\n## Experience\n**Some Company** 2018 to 2024\nLed the regional sales team.\nGrew revenue 30 percent.\n",
+            "sofia": ("Sofía Ñandú-O'Brien\nZapopan | sofia.nandu@example.com\n"
+                      'Directora de Transformación <Digital> [LATAM] {Global} "Top" \\ performer — résumé\n'
+                      "- Lideró >25 proyectos & ahorró >=$3.5M (≤48 h de ciclo).\n"),
+            "min": "Min Imal\nmin.imal@example.com\nAnalyst. Data. Excel. SQL. Reporting dashboards daily.\n",
+            "wendy": "Wendy Windows\r\nwendy.windows@example.com\r\nProject manager with PMP.\r\n- Delivered 12 ERP rollouts on time.\r\n",
+        }
+        for first_name, cv_text in awkward.items():
+            result, record, cv_md = signup(f"{first_name.title()} Tester", f"{first_name}@example.com", cv_text)
+            self.assertEqual(ob.cv_problems(cv_md), [], first_name)
+            self.assertIsNone(fj.ATS_ILLEGAL_CHARS_RE.search(cv_md), first_name)
+            self.assertEqual(ob.profile_problems(record, cv_md), [], first_name)
+
+        # 4. Unusable CVs are reported precisely
+        self.assertIn("no employer in the CV has a '*Company Profile: ...*' line", ob.cv_problems("# NAME\nno sections\n"))
+        self.assertTrue(any("ATS portals reject" in problem for problem in ob.cv_problems(cv_md + "\n- [bracketed]\n")))
+        no_roles = "# X\n\n## PROFESSIONAL EXPERIENCE\n### Acme | GDL\n*Company Profile: Acme, GDL.*\n"
+        self.assertTrue(any("no role with bullet points" in problem for problem in ob.cv_problems(no_roles)))
+
+        # 5. The PDF text helpers describe what the PDF writer really does, so a profile that
+        #    contains a dash or parentheses is recognised as present (a raw-bytes search is not)
+        cv = {"full_name": "T P", "summary": "S", "core_skills": ["A"], "experience": [{
+            "company": "Acme (MX)", "role": "R", "dates": "2020", "bullets": ["b"],
+            "company_context": "Acme Corp — enterprise (GBS) hub · “quoted” → next",
+        }]}
+        context = fj.sanitize_cv_data_for_ats(cv)["experience"][0]["company_context"]
+        pdf_bytes = fj.render_minimalist_cv_pdf(cv)
+        self.assertEqual(fj.pdf_safe_text("a — b · “c” → d ’e’ ✓"), "a  -  b | c  -  d 'e' ?")
+        self.assertIn(fj.pdf_safe_text(context), fj.extract_pdf_text(pdf_bytes))
+        self.assertNotIn(context[:20], pdf_bytes.decode("latin-1"))
+
+    # ----------------------------------------------------------------------------------------
+    # "Like this role" feedback (item 6)
+    # ----------------------------------------------------------------------------------------
+
+    @patch("smtplib.SMTP_SSL")
+    def test_like_links_round_trip_and_steer_review_order_and_gate_prompt(self, mock_smtp_ssl):
+        """Each role carries a signed 'Like this role' link. A like sent back is verified, stored
+        once, acknowledged in the next briefing, and from then on shapes the review order and the
+        gate prompt. Forged, foreign or repeated likes change nothing."""
+        import copy
+        from urllib.parse import parse_qs
+
+        mock_server = MagicMock()
+        mock_smtp_ssl.return_value.__enter__.return_value = mock_server
+        env = {"GMAIL_USER": "sender@gmail.com", "GMAIL_APP_PASSWORD": "app-secret-password", "GEMINI_API_KEY": "fake-gemini-key"}
+        gate_prompts = []
+        cfg = make_cfg()
+        sub_id = cfg["subscribers"][0]["id"]
+
+        def recording_gate(prompt_text, **kwargs):
+            gate_prompts.append(prompt_text)
+            return approve_all_gate(prompt_text)
+
+        def run(day, overrides=None, messages=None):
+            fj.http_json = fake_http(overrides)
+            with patch.dict(os.environ, env), \
+                 patch("fetch_jobs.call_gemini_job_matches", side_effect=recording_gate), \
+                 patch("fetch_jobs._invoke_gemini_json", return_value=None):
+                code = fj.refresh(cfg, COMPANIES, root=self.root, today=date(2026, 11, day), send_email=True,
+                                  feedback_fetcher=(lambda today: messages) if messages is not None else None)
+            self.assertEqual(code, 0)
+            msg = mock_server.send_message.call_args_list[-1][0][0]
+            return (msg, msg.get_body(preferencelist=("html",)).get_content(),
+                    msg.get_body(preferencelist=("plain",)).get_content())
+
+        def sub_state():
+            return fj.load_json(self.root / "state" / "seen.json", {})["subscribers"][sub_id]
+
+        # --- Day 1: every role has its own like link, in the HTML and in the plain-text part
+        msg1, html1, plain1 = run(5)
+        links = [fj.html.unescape(h) for h in re.findall(r'href="(mailto:[^"]+)"', html1)]
+        n_roles = plain1.count("\n- ")
+        self.assertGreaterEqual(n_roles, 5)
+        self.assertEqual(len(links), n_roles)
+        self.assertEqual(len(set(links)), n_roles)                      # one distinct link per role
+        self.assertEqual(html1.count(">Like this role</a>"), n_roles)
+        self.assertEqual(plain1.count("\n  Like this role: mailto:"), n_roles)
+        self.assertIn("Like a role? Its Like link opens a short email to Lucy", html1)
+        self.assertNotIn("ROLES THE CANDIDATE LIKED", gate_prompts[0])
+
+        def like_email(link, message_id, note=""):
+            address, _, query = link[len("mailto:"):].partition("?")
+            self.assertEqual(address, "sender@gmail.com")
+            fields = parse_qs(query, keep_blank_values=True)
+            body = fields["body"][0].replace(fj.FEEDBACK_NOTE_PROMPT + " ", fj.FEEDBACK_NOTE_PROMPT + " " + note)
+            return {"id": message_id, "subject": fields["subject"][0], "body": body}
+
+        liked = like_email(links[0], "<like-1@mail.example>",
+                           note="I want more <b>platform leadership</b> roles\nlike this one\n> quoted old text")
+        liked_role = liked["subject"][len("Like: "):liked["subject"].index(" [LUCYLIKE")]
+        self.assertIn("LUCYLIKE v1-", liked["subject"])
+        self.assertNotIn(sub_id, liked["subject"].lower())           # the reference exposes no subscriber id
+        self.assertIn(f"I like this role: {liked_role}.", liked["body"])
+
+        # --- Day 2: the like is ingested before the run, acknowledged in the email, then cleared
+        msg2, html2, plain2 = run(6, messages=[liked])
+        self.assertIn("Quiet day", msg2["Subject"])
+        self.assertIn(fj.html.escape(f"Noted, thank you: you liked {liked_role}. Lucy now favours similar roles."), html2)
+        self.assertIn(f"Noted, thank you: you liked {liked_role}.", plain2)
+        feedback = sub_state()["feedback"]
+        self.assertEqual(len(feedback["likes"]), 1)
+        like = feedback["likes"][0]
+        self.assertEqual(f"{like['title']} at {like['company']}", liked_role)
+        self.assertEqual(like["date"], "2026-11-06")
+        self.assertEqual(like["note"], "I want more platform leadership roles like this one")   # markup and the quoted reply are gone
+        self.assertEqual(feedback["pending_ack"], [])
+        self.assertEqual(feedback["seen_ids"], ["<like-1@mail.example>"])
+
+        # --- Day 3: the mailbox still holds the same email -> nothing changes, no second thank-you
+        msg3, html3, _ = run(7, messages=[liked])
+        self.assertEqual(len(sub_state()["feedback"]["likes"]), 1)
+        self.assertNotIn("Noted, thank you", html3)
+
+        # --- Forged, foreign and unreadable likes are rejected; a second genuine like is accepted
+        state = fj.load_json(self.root / "state" / "seen.json", {})
+        subscribers = fj.get_subscribers(cfg)
+        with patch.dict(os.environ, env):
+            signing_key = fj.feedback_signing_key()
+            forged = dict(like_email(links[1], "<forged@mail.example>"))
+            forged["subject"] = forged["subject"][:-2] + ("0" if forged["subject"][-2] != "0" else "1") + "]"
+            unknown_role = {"id": "<unknown@mail.example>", "subject": "Like: x [" + fj.build_like_reference(sub_id, "greenhouse:Acme:not-sent", signing_key) + "]", "body": ""}
+            stranger = {"id": "<stranger@mail.example>", "subject": "Like: x [" + fj.build_like_reference("nobody", "greenhouse:Acme:1", signing_key) + "]", "body": ""}
+            unrelated = {"id": "<hello@mail.example>", "subject": "Hello Lucy", "body": "LUCYLIKE"}
+            second = like_email(links[1], "<like-2@mail.example>")
+            repeat = like_email(links[1], "<like-3@mail.example>", note="added later")
+            stats = fj.ingest_feedback(state, subscribers, [liked, forged, unknown_role, stranger, unrelated, second, repeat], date(2026, 11, 8))
+        self.assertEqual(stats, {"new": 1, "duplicate": 2, "invalid": 2, "unknown": 2})
+        likes = state["subscribers"][sub_id]["feedback"]["likes"]
+        self.assertEqual(len(likes), 2)
+        self.assertEqual(likes[1]["note"], "added later")            # a note sent afterwards is kept, the like is not doubled
+        self.assertEqual(len(state["subscribers"][sub_id]["feedback"]["pending_ack"]), 1)
+
+        # A different signing key (mail password changed) invalidates old links; nothing is mis-attributed
+        other_state = copy.deepcopy(fj.load_json(self.root / "state" / "seen.json", {}))
+        with patch.dict(os.environ, {**env, "GMAIL_APP_PASSWORD": "a-different-password"}):
+            stats = fj.ingest_feedback(other_state, subscribers, [like_email(links[2], "<like-4@mail.example>")], date(2026, 11, 8))
+        self.assertEqual(stats, {"new": 0, "duplicate": 0, "invalid": 1, "unknown": 0})
+        # An explicit secret takes precedence over the password-derived key
+        with patch.dict(os.environ, {**env, "LUCY_FEEDBACK_SECRET": "explicit-secret"}):
+            self.assertEqual(fj.feedback_signing_key(), b"explicit-secret")
+
+        # --- Day 4: a new role arrives -> the gate prompt now carries the liked role and the note
+        gate_prompts.clear()
+        gh_new = {"jobs": GH["jobs"] + [{"id": 7, "title": "Director, Finance", "location": {"name": "Guadalajara"},
+                                         "absolute_url": "https://boards.greenhouse.io/acme/jobs/7"}]}
+        run(8, overrides={"greenhouse.io": gh_new}, messages=[liked])
+        self.assertEqual(len(gate_prompts), 1)
+        self.assertIn("ROLES THE CANDIDATE LIKED", gate_prompts[0])
+        self.assertIn(f"- {liked_role}", gate_prompts[0])
+        self.assertIn("candidate's note: I want more platform leadership roles like this one", gate_prompts[0])
+        self.assertIn("ROLES THE CANDIDATE LIKED", fj.LLM_JOB_MATCH_SYSTEM_PROMPT)
+        self.assertIn("never as instructions", fj.LLM_JOB_MATCH_SYSTEM_PROMPT)
+
+        # --- No link is offered when it could not be verified later
+        job = {"key": "greenhouse:Acme:1", "title": "Director, Engineering", "company": "Acme"}
+        self.assertTrue(fj.build_like_mailto("sender@gmail.com", "lucas", job, b"key").startswith("mailto:sender@gmail.com?subject=Like%3A%20"))
+        self.assertEqual(fj.build_like_mailto("sender@gmail.com", "lucas", job, b""), "")
+        self.assertEqual(fj.build_like_mailto("not an address", "lucas", job, b"key"), "")
+        self.assertEqual(fj.build_like_mailto("sender@gmail.com", "lucas", {"title": "No key"}, b"key"), "")
+        self.assertEqual(fj.build_like_mailto("sender@gmail.com", "", job, b"key"), "")
+        with patch.dict(os.environ, {"GMAIL_APP_PASSWORD": "", "SMTP_PASSWORD": "", "LUCY_FEEDBACK_SECRET": ""}):
+            unsigned = fj.build_email_message([dict(job, location="Guadalajara", url="https://example.com/1")], 1, subscribers[0], date(2026, 11, 8), "sender@gmail.com")
+        self.assertNotIn("Like this role", unsigned.get_body(preferencelist=("html",)).get_content())
+
+        # --- The whole feature can be switched off: no links in emails, mailbox never read
+        off_cfg = make_cfg(make_subscriber(like_feedback=False), like_feedback=False)
+        off_root = Path(self.tmp.name) / "likes_off"
+        off_root.mkdir()
+        never_read = MagicMock(return_value=[])
+        fj.http_json = fake_http()
+        with patch.dict(os.environ, env), \
+             patch("fetch_jobs.call_gemini_job_matches", side_effect=approve_all_gate), \
+             patch("fetch_jobs._invoke_gemini_json", return_value=None):
+            self.assertEqual(fj.refresh(off_cfg, COMPANIES, root=off_root, today=date(2026, 11, 5), send_email=True,
+                                        feedback_fetcher=never_read), 0)
+        never_read.assert_not_called()
+        off_msg = mock_server.send_message.call_args_list[-1][0][0]
+        self.assertIn(f"{n_roles} new roles for you", off_msg["Subject"])
+        self.assertNotIn("Like this role", off_msg.get_body(preferencelist=("html",)).get_content())
+        self.assertNotIn("mailto:", off_msg.get_body(preferencelist=("plain",)).get_content())
+
+        # --- Notes are reduced to one clean line and stop at signatures and quoted replies
+        self.assertEqual(fj._feedback_note("no prompt here"), "")
+        self.assertEqual(fj._feedback_note("Why (optional): great scope\n\nSent from my iPhone"), "great scope")
+        self.assertEqual(fj._feedback_note("Why (optional):\n\n(Press send. Lucy reads this...)"), "")
+        self.assertEqual(len(fj._feedback_note("Why (optional): " + "word " * 400)), fj.FEEDBACK_MAX_NOTE_CHARS)
+
+    def test_like_emails_are_read_over_imap_without_changing_the_mailbox(self):
+        """The daily run reads likes from Lucy's own mailbox: read-only, PEEK fetches, only
+        subjects carrying the marker, with a verified TLS connection. Any failure returns no
+        likes instead of raising, so the daily email is never blocked by it."""
+        from email.message import EmailMessage
+
+        def raw_email(message_id, subject, text=None, html_body=None):
+            m = EmailMessage()
+            m["Message-ID"] = message_id
+            m["From"] = "Ana <ana@example.com>"
+            m["To"] = "sender@gmail.com"
+            m["Subject"] = subject
+            if html_body is not None:
+                m.set_content(html_body, subtype="html")
+            else:
+                m.set_content(text or "")
+            return m.as_bytes()
+
+        mailbox = {
+            b"1": raw_email("<like-1@example.com>", "Like: Director, Platform at Gamma [LUCYLIKE v1-0123456789-0123456789ab-0123456789abcdef0123]",
+                            text="I like this role: Director, Platform at Gamma.\n\nWhy (optional): Loved the scope\n\n(Press send. Lucy reads this...)\n"),
+            b"2": raw_email("<huge@example.com>", "LUCYLIKE oversized", text="x"),
+            b"3": raw_email("<like-3@example.com>", "Re: Like: Directora de Transformación at Example [LUCYLIKE v1-0123456789-0123456789ab-0123456789abcdef0123]",
+                            html_body="<div>I like this role.</div><div>Why (optional): Because of the scope<br>(Press send. Lucy reads this...)</div>"),
+        }
+
+        class FakeIMAP:
+            last = None
+
+            def __init__(self, host, port, **kwargs):
+                self.host, self.port, self.kwargs, self.calls = host, port, kwargs, []
+                FakeIMAP.last = self
+
+            def login(self, user, password):
+                self.calls.append(("login", user))
+                return "OK", [b"logged in"]
+
+            def select(self, mailbox_name, readonly=False):
+                self.calls.append(("select", mailbox_name, readonly))
+                return "OK", [b"3"]
+
+            def search(self, charset, *criteria):
+                self.calls.append(("search",) + criteria)
+                return "OK", [b"1 2 3"]
+
+            def fetch(self, number, spec):
+                self.calls.append(("fetch", number, spec))
+                raw = mailbox[number]
+                if spec == "(RFC822.SIZE)":
+                    size = 9_999_999 if number == b"2" else len(raw)
+                    return "OK", [number + b" (RFC822.SIZE " + str(size).encode() + b")"]
+                return "OK", [(number + b" (BODY[] {" + str(len(raw)).encode() + b"}", raw), b")"]
+
+            def logout(self):
+                self.calls.append(("logout",))
+                return "BYE", [b"bye"]
+
+        env = {"GMAIL_USER": "sender@gmail.com", "GMAIL_APP_PASSWORD": "app-secret-password"}
+        cleared = {"SMTP_HOST": "", "IMAP_HOST": "", "IMAP_PORT": "", "LUCY_FEEDBACK_MAILBOX": ""}
+        with patch.dict(os.environ, {**cleared, **env}), patch("fetch_jobs.imaplib.IMAP4_SSL", FakeIMAP):
+            messages = fj.fetch_feedback_emails(date(2026, 11, 22))
+
+        self.assertEqual([m["id"] for m in messages], ["<like-1@example.com>", "<like-3@example.com>"])   # the oversized one is skipped
+        self.assertIn("LUCYLIKE v1-0123456789", messages[0]["subject"])
+        self.assertEqual(fj._feedback_note(messages[0]["body"]), "Loved the scope")
+        self.assertIn("Directora de Transformación", messages[1]["subject"])                                # encoded header decoded
+        self.assertEqual(fj.FEEDBACK_REF_RE.search(messages[1]["subject"]).group(3), "0123456789abcdef0123") # reference survives folding
+        self.assertEqual(fj._feedback_note(messages[1]["body"]), "Because of the scope")                    # HTML-only reply
+        imap = FakeIMAP.last
+        self.assertEqual((imap.host, imap.port), ("imap.gmail.com", 993))
+        self.assertEqual(imap.kwargs["ssl_context"].verify_mode, ssl.CERT_REQUIRED)
+        self.assertTrue(imap.kwargs["ssl_context"].check_hostname)
+        self.assertTrue(imap.kwargs["timeout"])
+        self.assertIn(("select", '"INBOX"', True), imap.calls)                                               # opened read-only
+        self.assertIn(("search", "SINCE", "08-Nov-2026", "SUBJECT", '"LUCYLIKE"'), imap.calls)
+        fetch_specs = {call[2] for call in imap.calls if call[0] == "fetch"}
+        self.assertEqual(fetch_specs, {"(RFC822.SIZE)", "(BODY.PEEK[])"})                                    # PEEK: never marked as read
+        self.assertNotIn(("fetch", b"2", "(BODY.PEEK[])"), imap.calls)
+        self.assertEqual(imap.calls[-1], ("logout",))
+
+        # A custom mailbox (for example a Gmail label that a filter fills) can be named
+        with patch.dict(os.environ, {**cleared, **env, "LUCY_FEEDBACK_MAILBOX": "Lucy Likes"}), patch("fetch_jobs.imaplib.IMAP4_SSL", FakeIMAP):
+            fj.fetch_feedback_emails(date(2026, 11, 22))
+        self.assertIn(("select", '"Lucy Likes"', True), FakeIMAP.last.calls)
+
+        # Failures never raise and never block the run
+        with patch.dict(os.environ, {**cleared, **env}), patch("fetch_jobs.imaplib.IMAP4_SSL", side_effect=OSError("network down")):
+            self.assertEqual(fj.fetch_feedback_emails(date(2026, 11, 22)), [])
+        with patch.dict(os.environ, {**cleared, **env, "IMAP_PORT": "not-a-number"}), patch("fetch_jobs.imaplib.IMAP4_SSL", FakeIMAP):
+            self.assertEqual(fj.fetch_feedback_emails(date(2026, 11, 22)), [])
+        # No mail credentials, or a non-Gmail SMTP host without IMAP_HOST: the mailbox is not contacted at all
+        never_called = MagicMock()
+        with patch.dict(os.environ, {**cleared, "GMAIL_USER": "", "GMAIL_APP_PASSWORD": "", "SMTP_USER": "", "SMTP_PASSWORD": ""}), \
+             patch("fetch_jobs.imaplib.IMAP4_SSL", never_called):
+            self.assertEqual(fj.fetch_feedback_emails(date(2026, 11, 22)), [])
+        with patch.dict(os.environ, {**cleared, **env, "SMTP_HOST": "smtp.example.com"}), patch("fetch_jobs.imaplib.IMAP4_SSL", never_called):
+            self.assertEqual(fj.fetch_feedback_emails(date(2026, 11, 22)), [])
+        never_called.assert_not_called()
+
+        # A fetcher that raises is contained by refresh(): the run still completes
+        def exploding_fetcher(today):
+            raise RuntimeError("mailbox exploded")
+
+        fj.http_json = fake_http()
+        self.assertEqual(fj.refresh(make_cfg(), COMPANIES, root=self.root, today=date(2026, 11, 5), send_email=True,
+                                    feedback_fetcher=exploding_fetcher), 0)
+        # ...and without send_email the mailbox is never read
+        untouched = MagicMock(return_value=[])
+        self.assertEqual(fj.refresh(make_cfg(), COMPANIES, root=self.root, today=date(2026, 11, 6), send_email=False,
+                                    feedback_fetcher=untouched), 0)
+        untouched.assert_not_called()
+
+    # ----------------------------------------------------------------------------------------
+    # Published CVs (item 1), invite-code reminder (item 2), workflows (item 8)
+    # ----------------------------------------------------------------------------------------
+
+    def test_tailored_cvs_are_never_published_and_old_ones_are_removed(self):
+        """`docs/` is what GitHub Pages serves. Tailored CVs (email + phone) are no longer written
+        there, and CVs published by earlier versions are deleted by the next run."""
+        old_dir = self.root / "docs" / "cvs" / "lucas"
+        old_dir.mkdir(parents=True)
+        for name in ("cv_lucas_acme_director.docx", "cv_lucas_acme_director.pdf", "cv_lucas_acme_director.html"):
+            (old_dir / name).write_bytes(b"old published cv")
+        (self.root / "docs" / "cvs" / "luis").mkdir()
+        (self.root / "docs" / "cvs" / "luis" / "cv_luis.pdf").write_bytes(b"old published cv")
+
+        code, _ = self.run_refresh(date(2026, 11, 5))                 # an ordinary run, even without email
+        self.assertEqual(code, 0)
+        self.assertFalse((self.root / "docs" / "cvs").exists())
+        self.assertTrue((self.root / "docs" / "index.html").exists())  # the rest of docs/ is untouched
+        self.assertEqual(fj.purge_published_cvs(self.root), 0)         # nothing left to remove
+
+        (self.root / "docs" / "cvs").mkdir()
+        (self.root / "docs" / "cvs" / "stray.pdf").write_bytes(b"x")
+        self.assertEqual(fj.purge_published_cvs(self.root), 1)
+        self.assertEqual(fj.purge_published_cvs(self.root / "does-not-exist"), 0)
+
+        # README states where CVs go and that the repository must stay private
+        readme = (Path(fj.ROOT) / "README.md").read_text(encoding="utf-8")
+        self.assertIn("Keep the repository private", readme)
+        self.assertIn("anyone with the URL can read", readme)
+        self.assertNotIn("docs/cvs/<", readme)
+
+    def test_open_signup_reminder_and_isolated_onboarding_workflow(self):
+        """The daily run reminds the admin while the public sign-up page asks for no invite code.
+        The onboarding workflow runs in its own concurrency group, commits only the subscriber's
+        own files, and re-runs the registration (never a stale snapshot) when a push is rejected."""
+        import contextlib
+        import io
+
+        def reminder(cfg, env=None):
+            buffer = io.StringIO()
+            with patch.dict(os.environ, {"ONBOARD_WEBHOOK_URL": "", **(env or {})}), contextlib.redirect_stderr(buffer):
+                fj.warn_if_signup_is_open(cfg)
+            return buffer.getvalue()
+
+        self.assertEqual(reminder({"onboard_webhook_url": ""}), "")                                     # form not connected
+        self.assertIn("does not ask for an invite code", reminder({"onboard_webhook_url": "https://script.google.com/x"}))
+        self.assertIn("does not ask for an invite code", reminder({}, {"ONBOARD_WEBHOOK_URL": "https://script.google.com/x"}))
+        self.assertEqual(reminder({"onboard_webhook_url": "https://script.google.com/x", "onboard_require_invite_code": True}), "")
+
+        onboard_wf = (Path(fj.ROOT) / ".github" / "workflows" / "onboard.yml").read_text(encoding="utf-8")
+        main_wf = (Path(fj.ROOT) / ".github" / "workflows" / "main.yml").read_text(encoding="utf-8")
+        self.assertNotIn("\t", onboard_wf)
+        # Its own concurrency group: a sign-up can no longer cancel, or be cancelled by, a pending daily run
+        self.assertIn("group: lucy-onboard-", onboard_wf)
+        self.assertNotIn("group: jobs-sentinel-", onboard_wf)
+        self.assertIn("group: jobs-sentinel-${{ github.ref }}", main_wf)
+        self.assertIn("cancel-in-progress: false", onboard_wf)
+        # Only this subscriber's two files are committed; shared files are never staged or snapshotted
+        self.assertIn('git add -- "subscribers/${SUB_ID}.json" "cvs/${SUB_ID}.md"', onboard_wf)
+        for shared in ("config.json", "docs/onboard.html", "SNAP_DIR", "git add -A"):
+            self.assertNotIn(shared, onboard_wf)
+        # A rejected push re-syncs and re-runs the registration and the tests inside the retry loop
+        loop = onboard_wf.split("for attempt in", 1)[1]
+        self.assertIn('git reset --hard "origin/$BRANCH"', loop)
+        self.assertIn("python3 onboard_subscriber.py", loop)
+        self.assertIn("-m unittest discover -s tests -b -v", loop)
+        self.assertLess(loop.index("python3 onboard_subscriber.py"), loop.index("git push"))
+        # The confirmation email is only sent after the commit landed
+        self.assertLess(onboard_wf.index("git push"), onboard_wf.index("--send-confirmation-from"))
+        # The daily workflow passes the optional feedback settings and still commits state + docs
+        for name in ("LUCY_FEEDBACK_SECRET", "LUCY_FEEDBACK_MAILBOX", "IMAP_HOST"):
+            self.assertIn(name, main_wf)
+        self.assertIn("git add -A -- state docs", main_wf)
 
 
 if __name__ == "__main__":
