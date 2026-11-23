@@ -1262,7 +1262,7 @@ def build_onboarding_confirmation_email(result, sender_email, board_count=109):
         fj.email_masthead(status_html)
         + fj.email_greeting(f"Welcome to your unfair advantage, {first_esc}.", dek_html)
         + fj.email_lucy_card(
-            "Us vs. Their Machine &middot; Onboarding Confirmed",
+            "Lucy&rsquo;s note &middot; Onboarding confirmed",
             "Zero Job-Board Noise. Only Verified Matches Built Around Your Track Record.",
             message_html,
             "What happens next",

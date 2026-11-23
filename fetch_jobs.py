@@ -3428,72 +3428,372 @@ def job_age_info(j, today):
     return days, is_hot, label
 
 
-DAILY_MOTIVATION_SYSTEM_PROMPT = """You are Lucy: a private, elite executive headhunter who chose a side. You work for exactly ONE candidate (your partner), never for the companies. Every morning you write them a personal 45-second briefing.
+# --------------------------------------------------------------------------
+# Lucy's morning note: what she says, and how it stays fresh
+# --------------------------------------------------------------------------
+#
+# Every briefing opens with one short note from Lucy. Three things change every day so the
+# notes never blur together:
+#   LENS   the idea of the day (32 of them, no repeat until all have been used),
+#   SHAPE  the form and length of the note (8 of them, no repeat within 5 days),
+#   PLAY   the type of one-minute action asked for (no repeat within 5 days).
+# Gemini writes the note from a prompt that names all three plus the real facts of the night,
+# the candidate's real record, the story so far, and a DO NOT REPEAT section built from the
+# last two weeks of notes. A quality gate rejects a draft that repeats a recent headline,
+# opening or play, leans on words worn out lately, invents an attached CV, or falls back on
+# the old "us against their software" theme; one revision is requested before the built-in
+# text for the day's lens is used instead.
+#
+# The built-in texts (the "vault") follow the same rotation, so a run without Gemini is varied
+# too. Nothing here invents facts: the only numbers are the ones the run measured.
 
-THE STORY WE ARE LIVING ("Us vs. Their Machine"):
-- For years, large employers have pointed AI at candidates. Applicant tracking systems (Workday, Greenhouse, Oracle, Eightfold, SmartRecruiters, Lever, Ashby, Workable, BambooHR) parse, score, rank and filter CVs before any human reads a name. Generic CVs lose silently and the candidate never learns why.
-- That asymmetry ended the day we teamed up. Now the candidate has an AI of their own: overnight we sweep more than 100 employer career portals across 9 ATS platforms, discard 99% of the noise, read each target posting, and rebuild the candidate's REAL track record in the exact dialect each screening system scores highest, then attach ATS-ready Word CVs so they wake up to pure leverage.
-- We do not break their system; we decode it. We turned their own filter into our front door. Their robot became our doorman. That is the partner image: two of us, shoulder to shoulder, playing offense against a machine that was designed to say no.
+DAILY_MOTIVATION_SYSTEM_PROMPT = """You are Lucy, a private headhunter who works for exactly one person: the candidate reading this note. Never for employers. Every morning you write them a short personal note that sits above the roles found for them overnight.
 
-YOUR VOICE AND PSYCHOLOGY:
-1. PARTNER, NOT TOOL. Always "we / us / our". You did real work last night and you say so specifically (portals swept, roles surfaced, CVs forged). Warm, loyal, sharp-witted, a little conspiratorial. Never corporate, never generic, never a cheerleader shouting slogans.
-2. DOPAMINE THROUGH TRUTHFUL MOMENTUM. Make the morning feel electric: one fresh insight, visible progress (edition, streak, cumulative wins together) and one tiny win available right now. Feed autonomy (their choice), competence (their proven wins) and relatedness (our bond).
-3. SEEN, NOT FLATTERED. Anchor every note in their REAL craft from the identity snapshot, their career goal, today's spotlight employer and role, the weekday rhythm and today's chapter theme. Use the candidate's first name naturally once or twice.
-4. CONTINUITY. You remember yesterday. Reference the STORY SO FAR lightly (what we targeted, the last micro-challenge) with curiosity and zero guilt. Never scold, never pressure, never shame.
-5. RADICAL HONESTY. Never invent statistics, companies, product features or promises; use only the facts in the briefing data. We never lie on a CV and we never advise it: we make the truth machine-readable. FORBIDDEN vocabulary: hack, hacking, cheat, trick the system, lying, fake, fabricate, exploit, game the system, deceive. PREFERRED vocabulary: decode, translate, reverse-engineer, speak their machine's language, pass their filter truthfully, their filter is our front door.
-6. EMPLOYER NAMES. Always use the exact Spotlight Hiring Employer name. Never call the employer by its ATS platform (Workday, Greenhouse, Oracle, Eightfold...). The platform is THEIR tool; the employer is the target.
-7. ZERO REPETITION. Never reuse a hook, metaphor or phrase from RECENT_HEADLINES_TO_AVOID or the STORY SO FAR. Surprise them every single morning.
-8. FORMAT. Write in the requested language. Plain text only: no markdown, no emojis, no quotation marks inside values, and never the characters < > [ ] { } or backslash.
+WHAT THE NOTE IS FOR
+A good morning note does four things, and only with true material: it gives one fresh idea (never the same idea two days running), it shows the candidate something real about themselves (one specific detail from their record, not flattery), it marks progress (briefing number, streak, roles surfaced together, only when those facts are given), and it offers one small win that can be done in a minute. That is what makes the note worth opening: novelty, recognition, progress, a win. Fake urgency, slogans and hype do the opposite; never use them.
+
+VOICE
+Warm, direct, specific, a little playful. "We" and "us", because you did real work last night and you say what it was. Short sentences. No corporate language, no cheerleading, no lecture. Use the first name once or twice, naturally.
+
+HONESTY
+Use only the facts given below. Never invent statistics, employers, product details, deadlines or promises. Never say a CV is attached unless the facts say so. Never say nothing was found when roles are on hold. On a quiet day, say so plainly and do not point at roles below. Forbidden words: hack, cheat, trick, fake, fabricate, exploit, deceive, game the system.
+
+NOT THE THEME
+Do not frame the job search as a contest against screening software, applicant tracking systems, algorithms or anyone's AI. No doorman, machine, robot, filter, decoding or black-box images. Talk about people: the hiring manager, the recruiter, the team, and the candidate's own work.
+
+VARIETY IS THE PRODUCT
+Each day you are given a LENS (the idea), a SHAPE (the form and length) and a PLAY (the kind of one-minute action). Follow all three; they change every day so the notes never blur together. Do not reuse any headline, opening or image from the DO NOT REPEAT section, and do not use the words listed as worn out. Start differently from every recent opening. Vary sentence length. Surprise them a little.
+
+FORMAT
+Write in the requested language. Plain text only: no markdown, no emojis, no quotation marks inside values, and never the characters < > [ ] { } or backslash.
 
 Return ONLY valid JSON with exactly these keys:
 {
-  "subject_spark": "3-6 word curiosity hook for the Gmail subject line",
-  "chapter_title": "3-6 word title of today's chapter in our story",
-  "headline": "4-9 word bold manifesto headline for the dark card",
-  "message": "2-4 vivid sentences (50-90 words) to the candidate by first name: today's chapter theme + their real craft + the spotlight employer + what we did overnight, ending in a confidence surge rather than a lecture",
-  "their_ai_vs_our_ai": "1-2 sentences (25-45 words) of honest tactical intel: how the spotlight employer's screening tool reads a CV and exactly how today's attached CV is built to pass it truthfully",
-  "connection_ps": "1 warm partner sentence (18-32 words) from Lucy: what you did last night for them, our edition or streak together, why you have their back, with light continuity to yesterday when relevant",
-  "micro_challenge": "1 concrete zero-friction 60-second action (15-28 words) for right now that names the spotlight employer and the attached CV",
-  "partner_signoff": "3-8 word sign-off in Lucy's voice",
-  "story_beat": "12-22 word third-person memory note summarizing today's chapter for tomorrow's continuity"
+  "subject_spark": "3-6 word curiosity hook for the subject line",
+  "note_title": "2-5 word title for today's note, in the spirit of the lens",
+  "headline": "4-9 word headline: a sentence a person might say, not a slogan",
+  "message": "the note itself, in today's SHAPE and length, addressed to the candidate by first name",
+  "micro_challenge": "today's PLAY as one concrete sentence (15-28 words) the candidate can do in a minute, naming the spotlight employer when there is one",
+  "story_beat": "12-22 word third-person memory note of today's note, for tomorrow's continuity"
 }"""
 
-# Narrative arc phases keyed by briefing edition: (min_edition, max_edition, title, guidance for Lucy)
+# Where the relationship is, by briefing edition: (first edition, last edition, title, guidance)
 PARTNERSHIP_ARC = [
     (1, 3, "Chapter I: First Contact",
-     "We just met. Explain who you are, what you did overnight, and why the odds changed: their AI has been filtering candidates for years and now the candidate has an AI of their own."),
+     "We just met. Say briefly what you do each night and what the candidate can expect; keep it light and specific, with no grand promises."),
     (4, 10, "Chapter II: Building the Habit",
-     "Reps and rhythm. Celebrate the streak, make the 60-second play feel like a ritual, and show how every application compounds into real market intelligence."),
-    (11, 20, "Chapter III: Optionality and Leverage",
-     "Confidence from pipeline. Talk posture, negotiating power and interviewing from strength; their filter now works for us."),
+     "Reps and rhythm. Notice the streak, make the one-minute play feel like a small ritual, and show how each application adds to a picture of their market."),
+    (11, 20, "Chapter III: Options and Leverage",
+     "Confidence from pipeline. Talk about posture, choice and interviewing from strength, grounded in what has actually been sent so far."),
     (21, 10 ** 9, "Chapter IV: The Operator",
-     "Mastery. The candidate is now the kind of leader the market bids for; keep sharpening the edge and keep the partnership alive with gratitude, precision and wit."),
+     "Mastery. The candidate is the kind of person employers compete for; keep sharpening, keep it warm, keep it honest."),
 ]
 
-# Honest, high-level intel on how each supported ATS reads a CV (the "their tool" half of the story).
-ATS_INTEL = {
-    "workday": ("Workday", "Workday parses every CV into structured fields (titles, skills, dates) and lets recruiters filter and keyword-search the candidate pool, so clean single-column text with the exact skill terms gets parsed and found"),
-    "greenhouse": ("Greenhouse", "Greenhouse indexes the CV text for recruiter keyword searches and structured scorecards, so truthfully mirroring the posting's vocabulary puts a profile at the top of their own search results"),
-    "lever": ("Lever", "Lever indexes resume text for recruiter searches and tags, so precise role and skill terminology is what makes a profile surface"),
-    "ashby": ("Ashby", "Ashby parses CVs against structured job requirements and recruiter filters, so clarity of titles, scope and metrics drives the match"),
-    "workable": ("Workable", "Workable's AI screening scores candidates against the job requirements and highlights keyword overlap, so a truthful mirror of the posting's language lifts the score"),
-    "smartrecruiters": ("SmartRecruiters", "SmartRecruiters applies AI match scoring between the CV's skills and the posting, so exact verifiable skill terms raise the score before a human looks"),
-    "oracle_hcm": ("Oracle Recruiting Cloud", "Oracle Recruiting Cloud auto-parses the resume into a candidate profile and ranks by requirement match, so clean parsing and exact competencies decide who ranks"),
-    "eightfold": ("Eightfold AI", "Eightfold uses AI talent-matching that infers skills from career history and scores fit against the role's skill graph, so explicit quantified skills in context feed its model"),
-    "bamboohr": ("BambooHR", "BambooHR's applicant tracking relies on recruiter keyword filters and status pipelines, so precise titles and skills keep a profile in the shortlist"),
+EDITION_MILESTONES = {
+    1: "Edition #1 · Welcome to Your Unfair Advantage",
+    3: "3-Briefing Spark · Habit Locked In",
+    5: "High-Five Milestone · 5 Briefings Together",
+    7: "7-Briefing Streak · Top 1% Consistency",
+    10: "Double-Digit Radar · 10 Briefings Strong",
+    14: "Fortnight Momentum · 14 Briefings Together",
+    21: "21-Briefing Ritual · Unstoppable Velocity",
+    30: "30-Briefing Club · Relentless Market Edge",
 }
-GENERIC_ATS_INTEL = "Enterprise screening tools parse a CV into fields, score keyword and seniority overlap with the posting, and rank candidates before a recruiter reads a name"
 
-LUCY_SIGNOFFS = [
-    "Shoulder to shoulder, always. Lucy",
-    "Same side of the table. Lucy",
-    "Your radar never sleeps. Lucy",
-    "Their filter, our front door. Lucy",
-    "On watch while you win. Lucy",
-    "Two of us, one machine to beat. Lucy",
-    "Decoded, armed, ready. Lucy",
-    "Until tomorrow's sweep. Lucy",
+# The lenses: (title, guidance for Gemini, built-in headline, built-in message).
+# Built-in texts may use {first_name}, {top_company}, {highlight_count}, {board_count},
+# {edition} and {total_roles}. Headlines stay within 46 characters because they double as the
+# subject-line spark. Three lenses mention the attached CV and are skipped on days without one.
+LUCY_LENSES = [
+    ("Proof over adjectives",
+     "Pick one concrete, quantified result from the candidate's real record and say why a hiring manager at the spotlight employer would stop on it. No adjectives about the candidate; the number does the work.",
+     "Your Numbers Do the Talking.",
+     "{first_name}, adjectives are free and every application has them; a result with a number in it is rare, and your record has several. Lead with one of them when you open {top_company}'s posting today, and let the hiring manager supply the adjectives. {highlight_count} role(s) below earned a place on your radar overnight."),
+    ("The first readers",
+     "A fresh posting is read while the pile is still small and attention is highest. Say that plainly; do not invent statistics about callback rates.",
+     "Be Read While the Pile Is Small.",
+     "Every posting has a first week, {first_name}, when the person hiring still opens each application with curiosity. {top_company}'s role is in that week now. The earlier you are in the pile, the more carefully you are read, and that is worth more than any polish you could add by waiting."),
+    ("Interview from strength",
+     "The candidate is employed and doing well; exploring from that position changes the tone of every conversation. Posture, not pressure.",
+     "You Are Choosing, Not Asking.",
+     "{first_name}, the best time to talk to {top_company} is while you do not need to. A conversation you could walk away from is a conversation held as equals, and that is exactly your position this morning. One application costs a minute; it buys you a choice."),
+    ("The quiet cost of staying",
+     "Staying in a seat you have outgrown has a cost nobody invoices: scope and title that stopped moving. Name it without numbers and without drama.",
+     "Staying Put Has a Price Too.",
+     "Nobody sends an invoice for the years spent in a seat you have outgrown, {first_name}, but the cost is real: scope that stopped growing, a title that stopped moving. {top_company} is hiring for the next size up. Reading that posting today is how you find out what the market thinks you are worth."),
+    ("Wish lists, not checklists",
+     "A job description is a wish list written by someone who knows nobody has all of it. Hiring managers hire people who can do most of the job today and learn the rest.",
+     "A Job Description Is a Wish List.",
+     "{first_name}, the person who wrote {top_company}'s posting listed everything they could dream of, knowing nobody has all of it. Hiring managers hire people who can do most of the job today and learn the rest fast. You are that person for at least one role below. Let them decide; never decide for them."),
+    ("The six-second scan",
+     "A human gives a new application a few seconds before deciding whether to keep reading. What survives is a clear direction and one proof point, placed first.",
+     "Six Seconds Decide the Next Six Minutes.",
+     "A hiring manager gives a new application a few seconds before deciding whether to keep reading, {first_name}. What survives that glance is a clear direction and one proof point. The CV I attached for {top_company} puts both in its first lines; read them once before you send it."),
+    ("Pipeline over anxiety",
+     "Career anxiety responds to pipeline, not reassurance. Two live conversations with other employers change how someone walks into every meeting at their current one.",
+     "Two Conversations Change Everything.",
+     "{first_name}, career anxiety does not respond to reassurance; it responds to pipeline. Two live conversations with other employers change how you walk into every meeting at your current one. {top_company} could be the first of the two. The application below is where it starts."),
+    ("The CEO of Me, Inc.",
+     "Treat the candidate's talent as capital to allocate: more of the same, or a role with more scope, better mentors and a steeper curve. Today is an allocation decision.",
+     "Run Your Career Like a Portfolio.",
+     "If your talent were capital, {first_name}, where would you deploy it for the highest return: more of the same, or a role with more scope, better mentors and a steeper curve? {top_company} is offering the second kind. Today's decision is an allocation decision, and you are the one who makes it."),
+    ("Rejection is information",
+     "A rejection tells the candidate how one employer priced their skills on one day and nothing more. People who treat a no as data apply more and land higher.",
+     "A No Is Free Market Data.",
+     "{first_name}, a rejection tells you how one employer priced your skills on one day; it says nothing about the next one. People who treat every no as data apply more, learn faster and land higher. Send one to {top_company} today and collect the data either way."),
+    ("Stretch seats are emptier",
+     "Most people only apply for roles they already do, so the field thins out one level above where they sit. The committee, not the candidate, decides readiness.",
+     "Fewer People Apply One Level Up.",
+     "Most people only apply for roles they already do, {first_name}, so the field thins out exactly one level above where you sit. That is where {top_company}'s opening is. The competition for stretch roles is smaller than it feels; the committee, not you, decides whether you are ready."),
+    ("Jalisco is a hub",
+     "Say something true about the local market: global employers run large operations around Guadalajara and Zapopan and hire remotely across Mexico. Use the spotlight employer's profile when it is given.",
+     "The Premium Seats Are Local.",
+     "{first_name}, the roles you are after are not in another country. Global companies keep building senior teams around Guadalajara and hiring from inside Mexico, and {board_count} of their career portals are swept for you every night. {top_company}, hiring here and now, is the one I would open first this morning."),
+    ("Your specific edge",
+     "Name the candidate's niche from the identity snapshot and say why it is scarcer than it feels from the inside. Specialists underprice what feels easy to them.",
+     "Your Specialty Is Rarer Than You Think.",
+     "What feels ordinary to you after years of practice is exactly what {top_company} is struggling to hire, {first_name}. Specialists underprice themselves because their skill feels easy from the inside. Read their posting and count how many lines describe what you already do on a normal Tuesday."),
+    ("Momentum before nine",
+     "One minute on their own future before the calendar fills with other people's priorities. Small, early and theirs.",
+     "One Minute Before the Day Takes Over.",
+     "{first_name}, the calendar will fill with other people's priorities within the hour. Spend one minute on your own first: open the top role from {top_company}, decide whether it deserves an application, and act on the answer. Small, early and yours beats big, late and someone else's."),
+    ("Let them bid",
+     "Nobody learns their market value inside one org chart; other employers reveal it by competing. Applying is how the candidate invites a bid they can always decline.",
+     "Let the Market Name Your Price.",
+     "You cannot learn your market value from inside one org chart, {first_name}. Only other employers can tell you, and they tell you by competing. {top_company} is one bidder. Applying is how you invite the bid; you can always decline it later."),
+    ("Reps sharpen the story",
+     "Each time the candidate decides which role fits and why, they get better at saying what they are for. Frame today's posting as a rep for that sentence.",
+     "Every Application Tightens Your Story.",
+     "{first_name}, each time you decide which role fits and why, you get better at saying what you are for. That sentence is what interviews, promotions and offers run on. Use {top_company}'s posting today as a rep: read it, then write one line on why you are the obvious fit."),
+    ("Outgrow the room",
+     "If the candidate is the most experienced voice in most of their meetings, they have stopped learning from the room. The spotlight employer is hiring a room where they would not be.",
+     "If You Are the Expert in Every Meeting.",
+     "There is a moment when you stop learning from the room, {first_name}, and it rarely announces itself. If you are the most experienced voice in most of your meetings, that moment may already be here. {top_company} is hiring a room where you would not be. That is the point."),
+    ("Nothing to prove, something to choose",
+     "Autonomy. The roles are options, not obligations; invite the candidate to pick the one they would be curious to hear back from.",
+     "This Is a Choice, Not a Test.",
+     "{first_name}, you have nothing to prove this morning; you have something to choose. The {highlight_count} role(s) below passed a hard review to reach you, and each one is an option, not an obligation. Pick the one you would be curious to hear back from, and let {top_company} earn the rest."),
+    ("The long game",
+     "A career is thirty years long and today is one step. Honest, well-aimed steps most mornings beat sprints.",
+     "One Calibrated Step on a Long Road.",
+     "A career is thirty years long, {first_name}, and today is one step. The people who end up where they wanted did not sprint; they took one honest, well-aimed step most mornings. {top_company}'s posting is today's step. It does not have to be perfect, it has to be taken."),
+    ("Read it like a peer",
+     "Invite the candidate to read the posting as a future colleague: which problem is the team trying to solve, and have they solved it before? Curiosity over eagerness.",
+     "Read It Like a Future Colleague.",
+     "{first_name}, read {top_company}'s posting the way a future colleague would, not an applicant: which problem are they trying to solve, and have you solved it before? If the answer is yes, that is your opening line. Curiosity makes a better first impression than eagerness ever did."),
+    ("Small bets, big upside",
+     "The arithmetic is lopsided: one minute to apply against a different title, bigger scope and a reset of pay. Say it plainly, without hype.",
+     "A Minute Down, Years Up.",
+     "The arithmetic is lopsided in your favour, {first_name}: one minute to apply, against a different title, a bigger scope and a reset of what you are paid. {top_company} is on the table today. Lopsided bets like this are the ones worth taking without a second meeting about it."),
+    ("Say it in their words",
+     "Every employer has its own words for the work; the posting is a glossary of theirs. Describing real results in that vocabulary helps the reader recognise themselves. Practical, no imagery about software.",
+     "Use Their Words for Your Wins.",
+     "{first_name}, every employer has its own words for the work you do, and {top_company}'s posting is a glossary of theirs. The CV I attached for it already describes your real results in that vocabulary; read it once and you will hear the difference. Same facts, their language."),
+    ("The employer's story",
+     "Tell one true thing about the spotlight employer from its profile (industry, what it builds, its local footprint) and connect it to the candidate's record. If no profile is given, talk about the role instead.",
+     "Know Who You Are Writing To.",
+     "{first_name}, a posting is easier to answer when you know who is asking. {top_company} is below with its industry; read that first, then the role. Applications that show you understood the business read differently from the ones that only list skills, and yours can be the former."),
+    ("Which one made you lean forward",
+     "Somewhere in the list one role made them sit up; that reaction is information. Invite them to open that one first and to press Like on the kind of role they want more of.",
+     "Notice Which Role Made You Lean In.",
+     "Somewhere in today's list one role made you sit up a little, {first_name}. That reaction is information; trust it. Open that one first, {top_company} or another, and if it is the kind of role you want more of, tell me with the Like button so I can tune your radar around it."),
+    ("Quiet confidence",
+     "No hype day. State plainly that the spotlight role is work the candidate has already done well and that it passed every check before reaching them. Calm and short.",
+     "No Hype. Just a Good Match.",
+     "{first_name}, I will not dress this up: {top_company} is hiring for work you have already done well, and the role passed every check I run before it reached you. The CV attached for it is built from your real record, nothing added. That is the whole pitch, and it is enough."),
+    ("The person on the other side",
+     "Behind the posting is a person with a problem and a pile of applications that do not solve it. A clear application from someone who has done the work is a relief to them.",
+     "Someone Is Hoping You Apply.",
+     "On the other side of {top_company}'s posting is a person with a problem and a stack of applications that do not solve it, {first_name}. They are hoping the next one is different. A clear application from someone who has done the work is a relief to them, not an imposition. Be the relief."),
+    ("What you would tell a friend",
+     "Most people are braver on behalf of a friend than for themselves. Ask what they would tell a friend with their exact record about this posting, then invite them to take that advice.",
+     "Advise Yourself Like a Friend.",
+     "{first_name}, if a friend with your exact record showed you {top_company}'s posting and asked whether to apply, what would you say? Most people are braver on behalf of a friend than for themselves. Give yourself the advice you would give them, then take it."),
+    ("Together so far",
+     "Progress day. Name the real cumulative numbers given (briefing edition, streak, roles surfaced together) and what they add up to. Warm, specific, no slogans.",
+     "Look How Far the Radar Has Come.",
+     "{first_name}, this is briefing number {edition}, and together we have surfaced {total_roles} roles that fit you, none of them twice. Consistency is the quiet superpower here: a few minutes most mornings, a growing picture of your market. Today's picture includes {top_company}; add it to the record."),
+    ("Your one-line introduction",
+     "Write the one sentence Lucy would use to introduce the candidate to the hiring manager at the spotlight employer, built only from the real identity snapshot, and invite them to use it.",
+     "Here Is How I Would Introduce You.",
+     "{first_name}, if I had thirty seconds with the hiring manager at {top_company}, I would not list your skills; I would tell them the one problem you have solved more times than anyone else they will interview. You know which one that is. Put that sentence at the top of what you send them."),
+    ("Facts of the night",
+     "Numbers day. Lead with the real counts from the sweep (portals checked, roles kept, hot postings) and what they mean. Nothing invented.",
+     "Last Night, by the Numbers.",
+     "{first_name}, {board_count} employer portals checked, {highlight_count} role(s) kept for you, the rest set aside so you never see them. That is the night's work in one line. The one worth your first minute is at {top_company}; the others are below in order of fit."),
+    ("Decide fast, act slow",
+     "Indecision costs the same minute every day. Ask for one of three answers on the spotlight role: apply, skip, or save for the weekend. Any of them is progress.",
+     "Decide Fast, Then Act Slow.",
+     "Indecision costs more than a wrong call, {first_name}, because it costs the same minute every day. Give {top_company}'s role sixty seconds and one of three answers: apply, skip, or save for the weekend. Any of the three is progress; only 'I will look later' is not."),
+    ("A quiet hour is an advantage",
+     "Unhurried attention is the edge: careful applications stand out in a pile of hurried ones. Frame a calm stretch of the day as the moment for the spotlight posting.",
+     "A Quiet Hour Is an Advantage.",
+     "{first_name}, applications sent in a quiet hour tend to be the careful ones, and careful is what stands out in a pile of hurried ones. If today gives you a calm stretch, give {top_company}'s posting the slow read it deserves. Unhurried beats fast when the work is good."),
+    ("Small wins compound",
+     "Career moves that look sudden from outside were built from small, unremarkable mornings. Today's small win is reading one posting carefully and acting on it.",
+     "Small Wins Are the Only Kind That Compound.",
+     "{first_name}, the career moves that look sudden from outside were built from small, unremarkable mornings like this one: reading one posting carefully, sending one application that fits. {top_company} is today's small win, available right now, and it compounds whether or not anyone is watching."),
 ]
+
+# Views of the lenses kept under their older names (tests and older state use them)
+PARTNER_STORY_BEATS = [(title, guidance) for title, guidance, _, _ in LUCY_LENSES]
+DAILY_INSIDER_VAULT = [(headline, message) for _, _, headline, message in LUCY_LENSES]
+
+# The shapes: (id, instruction for Gemini). Length is part of the shape so the notes vary in
+# weight as well as in idea; the shortest shape is a single thought.
+LUCY_SHAPES = [
+    ("spark", "One sharp observation, then why it matters for this candidate today. Two or three sentences, 45-70 words."),
+    ("story", "A two-sentence true mini-story about the spotlight employer or the role, from the facts given, then one sentence that lands it on the candidate. 55-85 words."),
+    ("question", "Open with one honest question to the candidate, answer it with something from their real record, close with the spotlight. 50-80 words."),
+    ("numbers", "Lead with one real number from tonight's facts, then what it means for them. 40-65 words. No invented numbers."),
+    ("letter", "A warm note from a friend who happens to be a headhunter: plain words, first person, one specific detail about them. 55-85 words."),
+    ("coach", "Short imperative sentences. Direct, kind, no padding. 35-60 words."),
+    ("mirror", "Reflect back one specific strength from their record exactly as a hiring manager at the spotlight employer would see it. 45-75 words."),
+    ("brief", "The shortest note of the week: one idea, one line about today's spotlight. 25-40 words."),
+]
+
+# The plays: (id, when it applies, instruction for Gemini, built-in text with a CV attached,
+# built-in text without one). `when` is "roles" (a day with roles listed), "quiet" (a day
+# without), or "any". Built-in texts may use {first_name} and {top_company}.
+LUCY_PLAYS = [
+    ("apply_now", "roles",
+     "Ask them to open the spotlight posting and submit the application now, before the first meeting of the day.",
+     "Open {top_company}'s posting, attach the CV I built for it, and submit before your first meeting of the day.",
+     "Open {top_company}'s posting and submit your application before your first meeting of the day."),
+    ("first_screen", "roles",
+     "Ask them to start the spotlight application and complete only its first screen; finishing is easier once started.",
+     "Open {top_company}'s Apply link, fill in the first screen and upload the attached CV; finishing is easier once you have started.",
+     "Open {top_company}'s Apply link and complete just the first screen; finishing is easier once you have started."),
+    ("read_decide", "roles",
+     "Ask them to read the first requirements of the spotlight posting and decide in sixty seconds: apply, skip, or save for the weekend.",
+     "Read the first three requirements in {top_company}'s posting and decide in sixty seconds: apply with the attached CV, skip, or save for the weekend.",
+     "Read the first three requirements in {top_company}'s posting and decide in sixty seconds: apply, skip, or save for the weekend."),
+    ("one_line", "roles",
+     "Ask them to write the one line that answers the posting's biggest requirement with a real result from their record.",
+     "Write one line that answers {top_company}'s biggest requirement with a result from your record, and put it at the top of the application.",
+     "Write one line that answers {top_company}'s biggest requirement with a result from your record, and keep it for the application."),
+    ("their_words", "roles",
+     "Ask them to note the two terms the spotlight posting repeats most and to lead with them when they apply.",
+     "Open {top_company}'s posting and note the two terms it repeats most; check that the attached CV uses them, then lead with them.",
+     "Open {top_company}'s posting and note the two terms it repeats most; lead with them when you apply."),
+    ("pick_one", "roles",
+     "Ask them to choose the single role in the list that stretches them most and to send that application today.",
+     "Pick the one role below that stretches you most, attach its tailored CV if there is one, and send the application today.",
+     "Pick the one role below that stretches you most and send the application today instead of bookmarking it."),
+    ("like_signal", "roles",
+     "Ask them to press Like on the role they would want more of, so tomorrow's radar leans that way.",
+     "Open the role below you would like more of and press Like, so tomorrow's radar leans that way.",
+     "Open the role below you would like more of and press Like, so tomorrow's radar leans that way."),
+    ("calendar_block", "roles",
+     "Ask them to put a ten-minute block in today's calendar for the spotlight application and treat it like any other meeting.",
+     "Put a ten-minute block in today's calendar for {top_company}'s application, and treat it like any other meeting.",
+     "Put a ten-minute block in today's calendar for {top_company}'s application, and treat it like any other meeting."),
+    ("ask_someone", "roles",
+     "Ask them to message one person who knows their work and ask what they have heard about the spotlight employer.",
+     "Message one person who knows your work and ask what they have heard about {top_company}; one sentence is enough.",
+     "Message one person who knows your work and ask what they have heard about {top_company}; one sentence is enough."),
+    ("review_cv", "roles",
+     "Ask them to open the attached CV, read its summary once, and fix any line that does not sound like them before sending.",
+     "Open the CV attached for {top_company}, read its summary out loud once, and fix any line that does not sound like you before you send it.",
+     ""),
+    ("follow_up", "quiet",
+     "Ask them to send a two-line follow-up on the last application they submitted.",
+     "Open the last application you submitted and send the hiring manager or recruiter a two-line follow-up note today.",
+     "Open the last application you submitted and send the hiring manager or recruiter a two-line follow-up note today."),
+    ("headline_line", "quiet",
+     "Ask them to spend a minute on their LinkedIn headline so it says what they want next, not only what they did last.",
+     "Spend sixty seconds on your LinkedIn headline so it says what you want next, not only what you did last.",
+     "Spend sixty seconds on your LinkedIn headline so it says what you want next, not only what you did last."),
+    ("one_contact", "quiet",
+     "Ask them to message one former colleague at an employer on their radar and ask how that team is hiring this quarter.",
+     "Message one former colleague at an employer on your radar and ask how their team is hiring this quarter.",
+     "Message one former colleague at an employer on your radar and ask how their team is hiring this quarter."),
+    ("research_block", "quiet",
+     "Ask them to pick one employer from an earlier briefing and set a ten-minute block this week to read about its leadership team.",
+     "Pick one employer from an earlier briefing and set a ten-minute block this week to read about its leadership team.",
+     "Pick one employer from an earlier briefing and set a ten-minute block this week to read about its leadership team."),
+    ("tune_radar", "quiet",
+     "Ask them to reply to the email with one role title they would love to see on their radar.",
+     "Reply to this email with one role title you would love to see on your radar; I will tune the filters around it.",
+     "Reply to this email with one role title you would love to see on your radar; I will tune the filters around it."),
+    ("reread_cv", "quiet",
+     "Ask them to re-open the latest CV Lucy tailored for them, read the summary once, and note one win to lead with in interviews.",
+     "Re-open the latest CV I tailored for you, read the summary once, and note one win you want to lead with in interviews.",
+     "Re-open the latest CV I tailored for you, read the summary once, and note one win you want to lead with in interviews."),
+    ("clean_pipeline", "quiet",
+     "Ask them to list the applications they have open and close the ones they no longer want; a short list they believe in beats a long one they avoid.",
+     "List the applications you have open and close the ones you no longer want; a short list you believe in beats a long one you avoid.",
+     "List the applications you have open and close the ones you no longer want; a short list you believe in beats a long one you avoid."),
+    ("take_it_back", "quiet",
+     "Give them the minute back: no job boards tonight, Lucy is watching them. Permission to rest, said warmly.",
+     "Take the minute back today: no job boards tonight, I am watching all of them for you.",
+     "Take the minute back today: no job boards tonight, I am watching all of them for you."),
+    ("next_role_line", "quiet",
+     "Ask them to write one sentence that says what they want their next role to be, and keep it where they will see it tomorrow.",
+     "Write one sentence that says what you want your next role to be, and keep it where you will see it tomorrow morning.",
+     "Write one sentence that says what you want your next role to be, and keep it where you will see it tomorrow morning."),
+]
+LUCY_PLAY_BY_ID = {play[0]: play for play in LUCY_PLAYS}
+
+# Views of the plays kept under their older names
+DAILY_MICRO_CHALLENGES = [p[3] for p in LUCY_PLAYS if p[1] == "roles" and p[3]]
+DAILY_MICRO_CHALLENGES_NO_CV = [p[4] for p in LUCY_PLAYS if p[1] == "roles" and p[4]]
+QUIET_DAY_CHALLENGES = [p[3] for p in LUCY_PLAYS if p[1] == "quiet" and p[3]]
+
+# Built-in notes for a quiet day (no new role matched). None of them mentions a CV.
+# Headlines stay within 46 characters because they double as the subject-line spark.
+QUIET_DAY_VAULT = [
+    ("A Quiet Board Is Still a Swept Board.", "{first_name}, {board_count} employer portals were swept overnight and nothing new matched your radar, so I am not going to pad your inbox with roles you have already seen. Quiet mornings are when the groundwork for the next move gets done."),
+    ("No New Doors Today. The Radar Never Blinked.", "Zero never-seen postings matched overnight, {first_name}, and that is honest news, not bad news. Every role I have already sent you stays tracked, and the moment a new one drops you will be among the first to read it."),
+    ("A Quiet Night Is Not a Verdict.", "{first_name}, nothing new cleared your bar across {board_count} portals overnight, and that says more about the calendar than about you. Markets move in bursts. The streak stays alive anyway, because the people who win are the ones still warm when the next posting lands."),
+    ("Quiet Market, Sharp Partner.", "Nothing new to send you this morning, {first_name}, and I refuse to recycle old roles as if they were news. Use the breathing room to tighten one thing in your pipeline; I will keep sweeping every portal tonight."),
+    ("Nothing New Dropped. Your Edge Did Not.", "{first_name}, overnight I checked {board_count} career portals and found zero roles you have not already seen. Momentum on a quiet day looks like one small follow-up, not a frantic search, and your radar stays on watch."),
+    ("Zero New Roles, One Honest Partner.", "I would rather tell you the truth than invent urgency, {first_name}: no never-seen postings matched this morning. The roles already in your hands remain live, and tomorrow's sweep starts the second this email leaves."),
+    ("Quiet Days Are Where the Work Compounds.", "{first_name}, the applications that land are usually prepared on days like this one, when nothing is urgent. No new role matched overnight, so the minute is yours: one follow-up, one line sharpened, one contact warmed. I will keep sweeping all {board_count} portals tonight."),
+    ("The Radar Did Its Rounds. The Market Slept.", "Overnight I walked every one of {board_count} portals, {first_name}, and the market had nothing new for you that you had not already seen. Streak intact, picture intact. Some mornings the most useful thing I can send is the plain fact that there is nothing to chase."),
+    ("No News Is Still News.", "{first_name}, here is the whole report: zero never-seen roles matched your radar overnight. I would rather tell you that in one line than fill the page with roles you have already read. The next real one reaches you the morning it appears."),
+    ("Rest Is a Tactic Too.", "No new roles today, {first_name}, so take the minute back. Nobody wins a search by refreshing job boards, and you have someone doing that for you across {board_count} portals every night. Spend the breathing room on the work that pays you now; I will spend it watching the market."),
+    ("The Pipeline You Already Have.", "{first_name}, nothing new matched overnight, which makes today a good day to look at what is already in motion: the roles I sent earlier remain open. A quiet morning is the right time to nudge one of them forward, or to decide which ones you no longer want."),
+    ("Patience With a Plan Is Not Waiting.", "A quiet night across {board_count} portals, {first_name}, and that is fine: we are not waiting, we are watching with a plan. The filters know what you want, the streak is live, and the first new role that fits reaches you before most people have had coffee."),
+    ("Today's Edge Is Preparation.", "{first_name}, no never-seen postings matched overnight, so the advantage today is not speed but readiness. One sentence about what you want next, sharpened now, makes the next application faster than anyone else's. The radar keeps its watch."),
+    ("Honest Mornings Build Trust.", "I could pad this email with roles you have already seen, {first_name}; I will not. Zero new matches overnight is the whole truth, and you get it plainly, the same way you will get the next real match. The sweep runs again tonight."),
+    ("Your Radar, Your Rules.", "{first_name}, nothing new matched overnight, and that is partly by design: the filters are set to your titles and your places, not to everything that moves. If they feel too narrow, reply with one role title and I will widen them. If they feel right, enjoy a quiet inbox."),
+    ("One Quiet Morning, One Clear Head.", "No new roles today, {first_name}, so this note is short on purpose. A clear head is worth more than a full inbox when the right role appears, and it will. {board_count} portals, every night, until it does."),
+    ("Nothing to Chase, Something to Keep.", "{first_name}, the sweep came back empty overnight, which leaves you with what you already have: a record worth hiring, a streak of mornings, and a radar that does not blink. Keep all three. I will keep looking."),
+    ("Still Here. Still Looking.", "A quiet night, {first_name}: no never-seen role matched across {board_count} portals. I am telling you so you do not have to wonder. The next match gets to you first thing, the morning it appears, with no need to check anything in between."),
+    ("The Market Took a Breath.", "{first_name}, markets breathe in and out, and last night was an out-breath: nothing new that fits you. That is not a signal about you; it is a calendar. Your filters stay sharp, your streak stays live, and the in-breath always comes."),
+    ("A Short Note for a Quiet Day.", "Nothing new to report, {first_name}, so I will keep this to the facts: {board_count} portals checked, zero new matches, nothing re-sent. The roles you already have remain open. See you tomorrow morning."),
+]
+
+# Used instead of QUIET_DAY_VAULT when new postings exist but could not be AI-reviewed. Saying
+# "nothing new matched" would be untrue on such a day. `{held_roles}` reads "3 new postings".
+HELD_DAY_VAULT = [
+    ("New Roles Wait. Nothing Goes Out Unchecked.", "{first_name}, {held_roles} cleared your title and location rules overnight, but the fit review that guards your inbox could not run. I am holding them rather than sending you roles nobody has checked. They stay first in line for the next sweep."),
+    ("Review Paused. Nothing Lost.", "The fit review did not run overnight, {first_name}, so I am keeping {held_roles} out of this email. Every one of them is queued for the next run, and you will only see the ones that pass."),
+    ("A Day Late Beats Unchecked.", "{first_name}, the radar swept {board_count} employer portals and found {held_roles}, but I could not finish the fit review. I would rather be a day late than fill your inbox with roles I have not vetted."),
+    ("Held Back on Purpose.", "{first_name}, {held_roles} came in overnight and I could not run the fit review that decides what reaches you. Rather than guess, I am holding them. The next run reviews them first, and you will only see the ones that pass."),
+    ("On Hold, Not Lost.", "The review step did not run overnight, {first_name}, so {held_roles} wait in the queue with their place kept. Nothing was discarded and nothing unreviewed was sent. That is the deal we have, even on the mornings it costs us a day."),
+]
+
+# Fallback text that tells the reader to open, send or re-read a tailored CV. It must not be
+# used on a day when no such CV exists.
+_TAILORED_CV_CLAIM_RE = re.compile(r"\bCVs?\b|\.docx\b|\battach|\bresumes?\b", re.I)
+QUIET_DAY_CHALLENGES_NO_CV = [c for c in QUIET_DAY_CHALLENGES if not _TAILORED_CV_CLAIM_RE.search(c)]
+
+# Stricter: a claim that a CV is attached to this email (used on Gemini output; "your CV shows"
+# is a fair reference to the master CV and is not caught).
+_ATTACHED_CV_CLAIM_RE = re.compile(
+    r"\.docx\b|\battach\w*|\btailored (?:cv|resume|word)|\bword (?:cv|resume)s?\b|"
+    r"\b(?:cv|resume)s? (?:i|we) (?:built|made|tailored|wrote|prepared)\b|\bthe (?:cv|resume) (?:i|we) (?:built|made|tailored)",
+    re.I,
+)
+
+# Words of the old "us against their software" theme. A note that uses them is rejected.
+_BRIEFING_THEME_RE = re.compile(
+    r"\b(doorman|black box|robots?|their machine|the machine|our ai|their ai|ai vs\.? ai|front door|phrasebook|"
+    r"applicant tracking|ats|parsers?|screening (?:software|systems?|tools?|ai|models?)|their filter|the filter|decod\w+)\b",
+    re.I,
+)
 
 _BRIEFING_BANNED_RE = re.compile(
     r"\b(hack(?:s|ed|ing|er|ers)?|cheat(?:s|ed|ing)?|lying|fake(?:s|d)?|fabricat\w*|exploit\w*|deceiv\w*|dishonest\w*|"
@@ -3504,39 +3804,107 @@ _BRIEFING_STOPWORDS = {
     "the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "your", "you", "we", "our", "us", "is", "are",
     "it", "its", "their", "this", "that", "with", "at", "by", "from", "into", "today", "now", "not", "no", "be",
 }
-BRIEFING_TEXT_KEYS = (
-    "subject_spark", "chapter_title", "headline", "message", "their_ai_vs_our_ai",
-    "connection_ps", "micro_challenge", "partner_signoff", "story_beat",
-)
+# Words Lucy needs most mornings; they never count as "worn out".
+_BRIEFING_EVERYDAY_WORDS = {
+    "about", "after", "again", "already", "application", "applications", "apply", "applying", "attached", "before",
+    "being", "below", "briefing", "candidate", "career", "check", "choice", "choose", "companies", "company", "could",
+    "decide", "decision", "email", "employer", "employers", "every", "first", "found", "hiring", "inbox", "interview",
+    "interviews", "manager", "managers", "market", "match", "matched", "matches", "minute", "minutes", "morning",
+    "night", "nothing", "offer", "offers", "opening", "overnight", "people", "person", "portal", "portals", "posting",
+    "postings", "radar", "reading", "record", "recruiter", "recruiters", "requirement", "requirements", "result",
+    "results", "roles", "scope", "search", "second", "seconds", "sent", "should", "skills", "still", "streak",
+    "submit", "sweep", "swept", "tailored", "there", "these", "thing", "things", "think", "those", "through", "title",
+    "titles", "together", "tonight", "under", "where", "which", "while", "would", "write", "yours", "yourself",
+}
+BRIEFING_TEXT_KEYS = ("subject_spark", "note_title", "headline", "message", "micro_challenge", "story_beat")
 
 
 def _briefing_tokens(text):
     return {t for t in re.findall(r"[a-z0-9']+", norm(text)) if t not in _BRIEFING_STOPWORDS and len(t) > 2}
 
 
-def _briefing_pack_quality(parsed, first_name="", recent_headlines=None):
-    """Quality gate for Gemini-written briefings. Returns (ok, rejection_reason)."""
+def _overlap(a, b):
+    """Share of distinct content words two texts have in common (0 to 1)."""
+    ta, tb = _briefing_tokens(a), _briefing_tokens(b)
+    return len(ta & tb) / len(ta | tb) if ta and tb else 0.0
+
+
+def _opening(text, first_name=""):
+    """The first four words of a note, with a leading 'Name,' removed, for 'starts the same' checks."""
+    body = norm(text)
+    name = norm(first_name)
+    if name and body.startswith(name):
+        body = body[len(name):]
+    words = re.findall(r"[a-z0-9']+", body)
+    return " ".join(words[:4])
+
+
+def worn_words(recent_messages, skip=(), limit=12):
+    """Content words that appeared in at least three of the last ten notes.
+
+    These are the images and pet words a writer drifts back to ("momentum", "leverage"). They
+    are listed in the prompt as off limits for today and the quality gate refuses a note that
+    uses two or more of them. Everyday vocabulary and the words in `skip` (the candidate's
+    name, the spotlight employer) never count."""
+    skip_words = set()
+    for item in skip:
+        skip_words.update(re.findall(r"[a-z0-9']+", norm(item)))
+    counts = {}
+    for message in [m for m in (recent_messages or []) if m][-10:]:
+        for token in {t for t in re.findall(r"[a-z']+", norm(message)) if len(t) >= 5}:
+            if token in _BRIEFING_STOPWORDS or token in _BRIEFING_EVERYDAY_WORDS or token in skip_words:
+                continue
+            counts[token] = counts.get(token, 0) + 1
+    worn = sorted((t for t, c in counts.items() if c >= 3), key=lambda t: (-counts[t], t))
+    return worn[:limit]
+
+
+def _briefing_pack_quality(
+    parsed, first_name="", recent_headlines=None, recent_messages=None, recent_plays=None,
+    worn=None, cv_attached=True, quiet_day=False,
+):
+    """Quality gate for a Gemini-written note. Returns (ok, rejection_reason).
+
+    Besides shape (lengths, placeholders, forbidden words) it enforces variety and honesty:
+    no repeated or near-repeated headline, no note that opens like a recent one or overlaps one
+    heavily, no play that repeats a recent play, no worn-out words, no claim of an attached CV
+    on a day without one, no pointing at roles on a quiet day, and none of the old theme."""
     if not isinstance(parsed, dict):
         return False, "the response was not a JSON object"
     headline = str(parsed.get("headline") or "").strip()
     message = str(parsed.get("message") or "").strip()
+    play = str(parsed.get("micro_challenge") or "").strip()
     if not headline or not message:
         return False, "headline or message was empty"
     hw = len(headline.split())
     mw = len(message.split())
-    if hw > 16:
+    if hw > 12:
         return False, f"the headline has {hw} words (maximum 9)"
-    if mw < 25 or mw > 150:
-        return False, f"the message has {mw} words (target 50-90)"
+    if mw < 18 or mw > 130:
+        return False, f"the message has {mw} words (write it in today's SHAPE and length)"
     all_text = " ".join(str(parsed.get(k) or "") for k in BRIEFING_TEXT_KEYS)
     if "{" in all_text or "}" in all_text:
         return False, "it contained unfilled template braces"
+    if play and not 8 <= len(play.split()) <= 40:
+        return False, f"the play has {len(play.split())} words (15-28 words, one concrete action)"
     m = _BRIEFING_BANNED_RE.search(all_text)
     if m:
         return False, (
-            f"it used forbidden vocabulary '{m.group(0)}'; we decode and translate truthfully, "
+            f"it used forbidden vocabulary '{m.group(0)}'; we describe real work truthfully, "
             "we never hack, cheat, fake or deceive"
         )
+    m = _BRIEFING_THEME_RE.search(all_text)
+    if m:
+        return False, (
+            f"it used the retired software-versus-candidate theme ('{m.group(0)}'); talk about people, "
+            "the work and the role instead"
+        )
+    if not cv_attached:
+        m = _ATTACHED_CV_CLAIM_RE.search(message + " " + play)
+        if m:
+            return False, f"it mentioned an attached or tailored CV ('{m.group(0)}') but no CV is attached today"
+    if quiet_day and re.search(r"\b(roles?|openings?|postings?|cards?|list) below\b|\btop (?:role|card)\b", message + " " + play, re.I):
+        return False, "it pointed at roles below, but no role is listed on a quiet day"
     ht = _briefing_tokens(headline)
     for prev in (recent_headlines or [])[-30:]:
         pt = _briefing_tokens(prev)
@@ -3544,6 +3912,19 @@ def _briefing_pack_quality(parsed, first_name="", recent_headlines=None):
             return False, f"the headline repeats a recent one ('{prev}')"
         if ht and pt and len(ht & pt) / len(ht | pt) >= 0.6:
             return False, f"the headline is too similar to the recent headline '{prev}'"
+    opening = _opening(message, first_name)
+    for prev in [p for p in (recent_messages or []) if p][-14:]:
+        share = _overlap(message, prev)
+        if share >= 0.45:
+            return False, f"the note repeats a recent note ({int(share * 100)}% of its words); say something new"
+        if opening and opening == _opening(prev, first_name):
+            return False, f"the note opens exactly like a recent one ('{opening} ...'); start differently"
+    used = [w for w in (worn or []) if re.search(r"\b" + re.escape(w) + r"\b", norm(message))]
+    if len(used) >= 2:
+        return False, f"it leaned on words worn out lately ({', '.join(used)}); find fresh ones"
+    for prev in [p for p in (recent_plays or []) if p][-5:]:
+        if play and _overlap(play, prev) >= 0.5:
+            return False, f"the play repeats a recent play ('{prev}'); ask for a different kind of action"
     return True, ""
 
 
@@ -3562,30 +3943,77 @@ def partnership_arc_for(edition):
     return PARTNERSHIP_ARC[-1][2], PARTNERSHIP_ARC[-1][3]
 
 
-def ats_intel_for(job_item):
-    """Return (platform display name, honest one-line intel) for the job's ATS, or a generic fallback."""
-    ats_key = str((job_item or {}).get("ats") or "").lower()
-    if ats_key in ATS_INTEL:
-        return ATS_INTEL[ats_key]
-    return "their applicant tracking system", GENERIC_ATS_INTEL
+def rotate_pick(count, recent, seed, window):
+    """Pick an index in range(count) that was not among the last `window` picks in `recent`,
+    starting from a position derived from `seed`, so that two subscribers (or two runs on the
+    same day) do not land on the same pick. The seed is scrambled first (Knuth's multiplicative
+    hash), so consecutive days scatter over the options instead of marching through them in
+    order. Falls back to the seed position when every index was used recently."""
+    if count <= 0:
+        return 0
+    seed = (int(seed) * 2654435761) & 0xFFFFFFFF
+    window = max(0, min(int(window), count - 1))
+    avoid = set()
+    for item in (recent or [])[-window:] if window else []:
+        try:
+            avoid.add(int(item))
+        except (TypeError, ValueError):
+            continue
+    base = int(seed) % count
+    for step in range(count):
+        cand = (base + step) % count
+        if cand not in avoid:
+            return cand
+    return base
 
 
-def compose_partner_briefing_prompt(
-    sub_cfg, top_job, rel_ctx, today, beat, cadence, cv_snapshot,
+def choose_play(recent_move_ids, seed, quiet_day, cv_attached, likes_available, cvs_ever):
+    """Pick today's play id from the plays that apply today, avoiding the last five picks."""
+    eligible = []
+    for play_id, when, _, with_cv, without_cv in LUCY_PLAYS:
+        if when == "roles" and quiet_day:
+            continue
+        if when == "quiet" and not quiet_day:
+            continue
+        if play_id == "like_signal" and not likes_available:
+            continue
+        if play_id == "review_cv" and not cv_attached:
+            continue
+        if play_id == "reread_cv" and not cvs_ever:
+            continue
+        if not (with_cv if cv_attached else without_cv):
+            continue
+        eligible.append(play_id)
+    recent_positions = [eligible.index(m) for m in (recent_move_ids or []) if m in eligible]
+    return eligible[rotate_pick(len(eligible), recent_positions, seed, 5)]
+
+
+def play_text(play_id, cv_attached, fields):
+    """The built-in sentence for a play, filled in."""
+    play = LUCY_PLAY_BY_ID[play_id]
+    template = play[3] if cv_attached and play[3] else play[4] or play[3]
+    return template.format(**fields)
+
+
+def compose_lucy_note_prompt(
+    sub_cfg, top_job, rel_ctx, today, lens, shape, play, cv_snapshot,
     upgrade_count, hot_count, total_count, cvs_today_count, is_quiet_spotlight, language="English",
-    quiet_day=False, active_count=None, ai_rejected_count=0, held_count=0,
+    quiet_day=False, active_count=None, ai_rejected_count=0, held_count=0, liked=None,
 ):
-    """Assemble the fully grounded 'Us vs. Their Machine' briefing prompt for Gemini.
+    """Assemble the grounded prompt for today's note.
 
-    `held_count` is the number of new postings waiting for an AI fit review that could not run;
-    on such a day the note must say so instead of claiming nothing new was found."""
+    `lens`, `shape` and `play` are today's picks (title + guidance, id + instruction, id +
+    instruction). `held_count` is the number of new postings waiting for an AI fit review that
+    could not run; on such a day the note must say so instead of claiming nothing new was
+    found. `liked` is a short list of 'Title at Company' the candidate liked recently."""
     held_count = max(0, int(held_count or 0))
     first_name = ((sub_cfg or {}).get("name") or "Candidate").split()[0]
     edition = int(rel_ctx.get("edition", 1))
     b_cnt = rel_ctx.get("board_count", 109)
     arc_title, arc_guidance = partnership_arc_for(edition)
-    cadence_title, cadence_subline = cadence
-    beat_title, beat_insight = beat
+    lens_title, lens_guidance = lens
+    shape_id, shape_text = shape
+    play_id, play_text_ = play
     if top_job:
         enrich_company_metadata([top_job])
     top_co = (top_job or {}).get("company") or "a top employer"
@@ -3593,15 +4021,15 @@ def compose_partner_briefing_prompt(
     top_co_desc = ((top_job or {}).get("company_description") or "").strip()
     top_title = (top_job or {}).get("title") or "a step-up role"
     top_loc = (top_job or {}).get("location") or "Jalisco / Remote Mexico"
-    ats_name, ats_intel = ats_intel_for(top_job)
     cv_file = (top_job or {}).get("cv_filename") or ""
     career_goal = ((sub_cfg or {}).get("career_goal") or "").strip()
     milestone = rel_ctx.get("milestone_badge") or ""
     beats = [b for b in (rel_ctx.get("recent_story_beats") or []) if b][-5:]
     story_lines = "\n".join(f"- {b}" for b in reversed(beats)) if beats else "- (none yet: this is our very first briefing together)"
-    avoid_list = [h for h in (rel_ctx.get("recent_headlines") or []) if h][-14:]
-    avoid_txt = "; ".join(f"'{h}'" for h in avoid_list) if avoid_list else "(none yet)"
-    last_chal = rel_ctx.get("last_micro_challenge") or ""
+    recent_headlines = [h for h in (rel_ctx.get("recent_headlines") or []) if h][-14:]
+    recent_messages = [m for m in (rel_ctx.get("recent_messages") or []) if m][-7:]
+    recent_plays = [p for p in (rel_ctx.get("recent_plays") or []) if p][-5:]
+    worn = worn_words(rel_ctx.get("recent_messages") or [], skip=(first_name, top_co))
     last_co = rel_ctx.get("last_spotlight_company") or ""
     if quiet_day and held_count > 0:
         mode_note = (
@@ -3609,29 +4037,25 @@ def compose_partner_briefing_prompt(
             "AI fit review could not run, so they are on hold and today's email lists NO roles (we never send a role "
             "that was not reviewed, and never repeat a role). Say this plainly and briefly, without drama and without "
             "blaming anyone: the postings are safe in the queue and will be reviewed on the next run. Do NOT say that "
-            "nothing new was found. Make the micro-challenge a pipeline-hygiene move instead of applying."
+            "nothing new was found."
         )
     elif quiet_day:
         mode_note = (
             "QUIET DAY: zero never-seen postings matched overnight, so today's email lists NO roles and re-sends nothing "
-            "(we never repeat a role). Keep the connection alive briefly and honestly: acknowledge the quiet market without drama, "
-            "reinforce that the radar kept sweeping and will keep sweeping, and make the micro-challenge a pipeline-hygiene move "
-            "(follow up on a pending application, sharpen the LinkedIn headline, message one contact) instead of applying."
+            "(we never repeat a role). Acknowledge the quiet market without drama, keep the connection warm and honest, "
+            "and do not point at roles below, because there are none."
         )
     elif is_quiet_spotlight:
-        mode_note = "Quiet-market momentum spotlight: zero brand-new postings dropped overnight, so you hand-picked their top unclaimed Career Upgrade Moves still live on the board to keep daily momentum unbroken."
+        mode_note = "Quiet-market spotlight: zero brand-new postings dropped overnight, so you hand-picked their top unclaimed step-up roles still live on the board to keep daily momentum unbroken."
     else:
-        mode_note = "Fresh market drop: never-seen openings matched overnight (every role listed today is AI-validated for true career & CV fit and new to the candidate; we never repeat a role)."
+        mode_note = "Fresh market drop: never-seen openings matched overnight (every role listed today passed the AI fit review and is new to the candidate; we never repeat a role)."
     cv_line = (
         f"{cvs_today_count} tailored Word CV(s) attached, each rebuilt by our Gemini AI from the real master CV plus the specific posting"
         if cvs_today_count
-        else "no tailored CV attached today"
+        else "no tailored CV attached today (so never mention an attached CV)"
     )
     if quiet_day or not top_job:
-        spotlight_block = (
-            "Spotlight role: none today (quiet day). Do NOT invent an employer or a role.\n"
-            f"Their screening tools in general: {GENERIC_ATS_INTEL}.\n"
-        )
+        spotlight_block = "Spotlight role: none today. Do NOT invent an employer or a role.\n"
     else:
         co_ctx_line = ""
         if top_co_ind or top_co_desc:
@@ -3639,7 +4063,6 @@ def compose_partner_briefing_prompt(
         spotlight_block = (
             f"Spotlight hiring employer: '{top_co}' | Spotlight role: '{top_title}' | Location: {top_loc}\n"
             f"{co_ctx_line}"
-            f"Their screening tool for this role: {ats_name}. How it reads a CV: {ats_intel}.\n"
             + (f"Attached CV built for the spotlight role: {cv_file}\n" if cv_file else "")
         )
     active_line = (
@@ -3648,222 +4071,100 @@ def compose_partner_briefing_prompt(
         else ""
     )
     rejected_line = (
-        f"Off-target openings automatically suppressed by our AI Match Gate overnight: {ai_rejected_count}\n"
+        f"Off-target openings set aside by the AI fit review overnight: {ai_rejected_count}\n"
         if isinstance(ai_rejected_count, int) and ai_rejected_count > 0
         else ""
     )
     held_line = (
         f"New postings on hold because the AI fit review could not run: {held_count}\n" if held_count else ""
     )
+    liked_line = (
+        "Roles they liked recently (they pressed Like): " + "; ".join(str(x) for x in liked[-3:]) + "\n"
+        if liked
+        else ""
+    )
+
+    def _quoted(items):
+        return "; ".join(f"'{str(x)[:140]}'" for x in items) if items else "(none yet)"
+
+    openings = [_opening(m, first_name) for m in recent_messages]
     return (
         "=== TODAY ===\n"
-        f"Date: {today.isoformat()} ({cadence_title}: {cadence_subline})\n"
+        f"Date: {today.isoformat()} ({today.strftime('%A')})\n"
         f"Language to write in: {language}\n"
-        f"Our story arc: {arc_title}. Guidance: {arc_guidance}\n"
+        f"Where we are: {arc_title}. Guidance: {arc_guidance}\n"
         f"Briefing edition together: #{edition} | Active streak: {rel_ctx.get('streak_days', 1)} day(s)"
         + (f" | Milestone unlocked today: {milestone}" if milestone else "") + "\n"
-        f"Cumulative wins together: {rel_ctx.get('total_roles_surfaced', total_count)} matched roles surfaced, "
-        f"{rel_ctx.get('total_cvs_tailored', cvs_today_count)} custom CVs forged\n"
-        f"Today's chapter theme (#{rel_ctx.get('angle_id', 0) + 1}): '{beat_title}'. {beat_insight}\n\n"
+        f"Together so far: {rel_ctx.get('total_roles_surfaced', total_count)} matched roles surfaced, "
+        f"{rel_ctx.get('total_cvs_tailored', cvs_today_count)} tailored CVs built\n\n"
+        "=== TODAY'S NOTE: LENS, SHAPE AND PLAY (follow all three) ===\n"
+        f"Lens #{rel_ctx.get('angle_id', 0) + 1} '{lens_title}': {lens_guidance}\n"
+        f"Shape '{shape_id}': {shape_text}\n"
+        f"Play '{play_id}': {play_text_}\n\n"
         "=== MY PARTNER (THE CANDIDATE) ===\n"
         f"First name: {first_name}\n"
-        f"Career identity from their real master CV: {cv_snapshot or 'Ambitious leader targeting high-impact step-up roles in Jalisco and Remote Mexico'}\n"
+        f"Career identity from their real master CV: {cv_snapshot or 'Experienced professional targeting a step-up role in Jalisco or Remote Mexico'}\n"
         + (f"Career goal / north star: {career_goal}\n" if career_goal else "")
-        + "\n=== LAST NIGHT'S OPERATION (REAL FACTS: use these, never invent others) ===\n"
-        f"Employer career portals swept: {b_cnt} across 9 ATS platforms (Workday, Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Oracle Recruiting Cloud, Eightfold, BambooHR)\n"
+        + liked_line
+        + "\n=== LAST NIGHT'S SWEEP (REAL FACTS: use these, never invent others) ===\n"
+        f"Employer career portals swept: {b_cnt}\n"
         f"Run context: {mode_note}\n"
         f"Today's briefing: {total_count} role(s) new to the candidate, {upgrade_count} Career Upgrade Move(s), {hot_count} hot opening(s) posted within 48 hours, {cv_line}\n"
         f"{rejected_line}"
         f"{held_line}"
         f"{active_line}"
         f"{spotlight_block}"
-        + "\n=== STORY SO FAR (continuity memory: reference lightly, never scold) ===\n"
+        + "\n=== STORY SO FAR (reference lightly, never scold) ===\n"
         f"{story_lines}\n"
-        + (f"Yesterday's micro-challenge: '{last_chal}'\n" if last_chal else "")
+        + (f"Yesterday's play: '{recent_plays[-1]}'\n" if recent_plays else "")
         + (f"Yesterday's spotlight employer: {last_co}\n" if last_co else "")
-        + f"RECENT_HEADLINES_TO_AVOID: {avoid_txt}\n\n"
+        + "\n=== DO NOT REPEAT (variety is the product) ===\n"
+        f"Recent headlines, never reuse or paraphrase: {_quoted(recent_headlines)}\n"
+        f"Recent openings, start differently: {_quoted(openings)}\n"
+        f"Words worn out lately, do not use: {', '.join(worn) if worn else '(none yet)'}\n"
+        f"Recent plays, ask for a different kind of action: {_quoted(recent_plays)}\n\n"
         "=== TASK ===\n"
-        f"Write Briefing #{edition} for {first_name} now, fully grounded in the facts above, in Lucy's partner voice. Return ONLY the JSON object."
+        f"Write note #{edition} for {first_name} now: today's lens, in today's shape, ending with today's play, "
+        "grounded only in the facts above, in Lucy's voice. Return ONLY the JSON object."
     )
 
 
-QUIET_DAY_VAULT = [
-    ("A Quiet Board Is Still a Swept Board.", "{first_name}, {board_count} employer portals were swept overnight and nothing new matched your radar, so I am not going to pad your inbox with roles you have already seen. Quiet mornings are when the groundwork for the next move gets done."),
-    ("No New Doors Today. The Radar Never Blinked.", "Zero never-seen postings matched overnight, {first_name}, and that is honest news, not bad news. Every role I have already sent you stays tracked, and the moment a new one drops you will be the first calibrated applicant in the queue."),
-    ("Silence From Their Machine Is Not a Verdict.", "{first_name}, the filters were quiet overnight: no new openings cleared your bar across {board_count} portals. We keep the streak alive anyway, because the candidates who win are the ones still warm when the next posting lands."),
-    ("Quiet Market, Sharp Partner.", "Nothing new to send you this morning, {first_name}, and I refuse to recycle old roles as if they were news. Use the breathing room to tighten one thing in your pipeline; I will keep sweeping every portal tonight."),
-    ("Nothing New Dropped. Your Edge Did Not Drop Either.", "{first_name}, overnight I checked {board_count} career portals and found zero roles you have not already seen. Momentum on a quiet day looks like one small follow-up, not a frantic search, and your radar stays on watch."),
-    ("Zero New Roles, One Honest Partner.", "I would rather tell you the truth than invent urgency, {first_name}: no never-seen postings matched this morning. The roles already in your hands remain live, and tomorrow's sweep starts the second this email leaves."),
-]
+def _least_recently_used(candidates, recent_headlines, fields):
+    """Among candidate (headline, message) templates, the one whose headline was used longest
+    ago according to `recent_headlines` (never used counts as longest ago); ties keep the
+    candidates' order. This is what makes a long run of quiet mornings cycle through every
+    quiet note with the widest possible gap instead of alternating between a few."""
+    recent = [norm(str(h)) for h in (recent_headlines or []) if h]
 
-# Used instead of QUIET_DAY_VAULT when new postings exist but could not be AI-reviewed. Saying
-# "nothing new matched" would be untrue on such a day. `{held_roles}` reads "3 new postings".
-# Headlines stay within 46 characters because they double as the email preheader spark.
-HELD_DAY_VAULT = [
-    ("New Roles Wait. Nothing Goes Out Unchecked.", "{first_name}, {held_roles} cleared your title and location rules overnight, but the fit review that guards your inbox could not run. I am holding them rather than sending you roles nobody has checked. They stay first in line for the next sweep."),
-    ("Review Paused. Nothing Lost.", "The fit review did not run overnight, {first_name}, so I am keeping {held_roles} out of this email. Every one of them is queued for the next run, and you will only see the ones that pass."),
-    ("A Day Late Beats Unchecked.", "{first_name}, the radar swept {board_count} employer portals and found {held_roles}, but I could not finish the fit review. I would rather be a day late than fill your inbox with roles I have not vetted."),
-]
+    def last_use(note):
+        headline = norm(note[0].format(**fields))
+        for idx in range(len(recent) - 1, -1, -1):
+            if recent[idx] == headline:
+                return idx
+        return -1
 
-QUIET_DAY_CHALLENGES = [
-    "Open the last application you submitted and send the hiring manager or recruiter a two-line follow-up note today.",
-    "Spend 60 seconds sharpening your LinkedIn headline so it mirrors the Target Role Direction on your latest tailored CV.",
-    "Message one former colleague at a company on your radar and ask how their team is hiring this quarter.",
-    "Re-open the latest CV I tailored for you, read the summary out loud once, and note one win you want to lead with in interviews.",
-    "Pick one company from your earlier briefings and set a 10-minute calendar block this week to research its leadership team.",
-    "Reply to this email with one role title you would love to see on your radar; I will tune the filters around it.",
-]
-
-WEEKDAY_CADENCE = [
-    ("Monday Launchpad", "New week, clean slate, asymmetric leverage"),
-    ("Tuesday Peak Window", "Tuesday mornings hit peak recruiter inbox velocity"),
-    ("Wednesday Pattern Interrupt", "Midweek check-in: invest 60 seconds in your own equity"),
-    ("Thursday Market Repricing", "Know your true external clearing price before Friday"),
-    ("Friday Future-Self Play", "Pay your future self one bold shot before the weekend"),
-    ("Saturday Quiet Sniper", "Zero inbox noise today — land at the top of Monday's stack"),
-    ("Sunday Strategic Ambush", "Position yourself ahead of 99% of candidates before Monday 8 AM"),
-]
-
-EDITION_MILESTONES = {
-    1: "Edition #1 · Welcome to Your Unfair Advantage",
-    3: "3-Briefing Spark · Habit Locked In",
-    5: "High-Five Milestone · 5 Briefings Together",
-    7: "7-Briefing Streak · Top 1% Consistency",
-    10: "Double-Digit Radar · 10 Briefings Strong",
-    14: "Fortnight Momentum · 14 Briefings Together",
-    21: "21-Briefing Ritual · Unstoppable Velocity",
-    30: "30-Briefing Club · Relentless Market Edge",
-}
-
-PARTNER_STORY_BEATS = [
-    ("The Filter Was Never Built For You", "Most large employers let an applicant tracking system rank CVs before a recruiter opens one, so generic CVs lose silently. Tonight we wrote the candidate's truth in the exact dialect that system scores highest."),
-    ("Their Robot, Our Translator", "Their screening AI reads structure, keywords and seniority signals. We do not fight it; we translate real wins into its native language so the robot becomes our doorman."),
-    ("Nobody Else Woke Up To This", "While the city slept we swept {board_count} employer portals, discarded 99% of the noise and left only curated leverage in the inbox. That asymmetry is the whole game."),
-    ("The Loyalty Tax Is Real", "Internal raises crawl while the external market reprices leaders with every move; staying still is the most expensive decision nobody talks about."),
-    ("Speed Is A Status Signal", "Fresh postings enjoy a clean recruiter queue for roughly two days; a calibrated application inside that window multiplies callback odds. We caught today's lineup off the wire."),
-    ("Interview From Power, Not Urgency", "Exploring while winning turns every conversation into a peer-to-peer negotiation instead of a plea. Optionality is posture."),
-    ("Job Descriptions Are Wish Lists", "Hiring managers hire people who own most of the role today and learn the rest fast. The filter cannot measure courage, so we supply it."),
-    ("Six Seconds, One Decision", "After the machine says yes, a human spends a few seconds deciding whether to keep reading. The tailored CV front-loads direction and proof for exactly that moment."),
-    ("Machines Reward Clarity", "ATS parsers choke on columns, tables and icons and silently drop what they cannot read. The single-column Word CV is engineered to be parsed with full fidelity."),
-    ("We Did The Boring 90 Percent", "Sourcing, filtering, keyword mapping, formatting: the exhausting part of applying is already done. All that remains is 60 seconds of audacity."),
-    ("Keywords Are Their Password", "Recruiters search their candidate pools by exact terms; a truthful CV that mirrors the posting's vocabulary shows up first in their own search box."),
-    ("Pipeline Beats Anxiety", "Two live external conversations change how anyone walks into every internal meeting. Today we open one more door."),
-    ("The CEO Of Me, Inc.", "Treat talent like growth capital and deploy it where scope, mentorship and upside compound fastest. Today's spotlight is a reallocation decision."),
-    ("The First Fifteen Applicants", "Early calibrated applicants dominate shortlist slots before recruiter fatigue sets in; being first and precise beats being perfect and late."),
-    ("Rejection Is Calibration", "Every no is free market data on how the candidate's skills price today, and it only takes one step-up yes to reset the baseline forever."),
-    ("Comfort Is Crowded", "Stretch seats have less competition than lateral ones because most people self-reject. Let the committee decide, never yourself."),
-    ("Their AI Cannot Read Ambition", "Screening models score the past; they cannot see the next gear. So we put the trajectory in the headline where humans look first."),
-    ("Jalisco Is A Global Hub", "World-class enterprises keep scaling leadership and transformation teams across Guadalajara, Zapopan and Remote Mexico. The premium seats are local."),
-    ("One Shot, Asymmetric Upside", "Sixty seconds of downside against a multi-year change in title, scope and compensation. Strategists take that bet every time."),
-    ("The Machine Rewards Numbers", "Quantified bullets survive both the parser and the human scan; vague duties vanish. The CV leads with metrics on purpose."),
-    ("Momentum Before Nine AM", "One minute invested in your own equity before the calendar fills is the highest-return meeting of the day."),
-    ("Familiarity Is Not Security", "Real security is knowing three companies would hire you tomorrow. We keep that muscle warm every single morning."),
-    ("Reverse-Engineered, Not Guessed", "We mapped how each ATS platform parses, ranks and searches, then built the CV to pass every gate truthfully. That is intelligence work, not luck."),
-    ("The Reorg Will Not Wait", "High-agency operators move on their own schedule. Waiting for circumstances shrinks choices; moving early multiplies them."),
-    ("Let Them Bid", "Nobody learns their market value inside one org chart; competing hiring managers reveal it within weeks."),
-    ("Signal Over Noise", "No two hours of doom-scrolling job boards tonight; the needles are already in the inbox."),
-    ("Proof Is Scarce", "Portals overflow with talkers; verifiable builders are rare. So we stripped the fluff and let the results speak."),
-    ("Posture Changes Outcomes", "Candidates with options negotiate titles and bands; candidates without them accept. Today's rep buys posture."),
-    ("The Compounding Narrative", "Every targeted application sharpens how the candidate articulates their highest-value wins; the story gets tighter with reps."),
-    ("Their Filter, Our Front Door", "The same automation that screens out so many applicants waves through the ones who speak its language. We hold the phrasebook."),
-    ("Outgrow The Room", "If you are the most experienced voice in every meeting, you have already outgrown the room. Step toward a steeper arena."),
-    ("Write Your Own Promotion Slip", "Stop waiting for annual calibration committees; let competing teams compete for the candidate's impact instead."),
-]
-
-# Backward-compatible flat view of the story beats (one line per angle)
-DAILY_MOTIVATION_THEMES = [f"{title}: {insight}" for title, insight in PARTNER_STORY_BEATS]
-
-DAILY_INSIDER_VAULT = [
-    ("Stop Paying the 3% Comfort Tax.", "{first_name}, staying comfortable in one seat hands you incremental adjustments while strategic moves unlock 30%+ leaps in scope and comp. It's you and me against the hiring black box—I isolated {highlight_count} high-leverage play(s) led by {top_company} and armed your CVs. Take 60 seconds and fire one shot."),
-    ("Don't Wait in Somebody Else's Queue.", "{first_name}, internal promotion cycles are engineered to keep top operators patiently producing in place. The fastest promotion committee on earth is the open market—and today's opening at {top_company} is wide open for your track record."),
-    ("Comfort Is Crowded. Stretch Scope Is Wide Open.", "The moment a role stops stretching you is the moment to look up, {first_name}. While passive talent waits for permission, we scanned {board_count} boards overnight and tuned your CV to beat the triage filter—pick one target below and make them tell you no."),
-    ("You + Lucy vs. The Hiring Machine.", "Most applicants lose before a human ever reads their name; we flipped the odds, {first_name}. Your wins are framed for both the ATS parser and the hiring manager's 6-second scan—grab your attached .docx for {top_company} and claim your edge."),
-    ("Interview From Power, Never Urgency.", "{first_name}, elite operators test the market while they are already winning—that is how you command step-up titles and top-of-band offers. Challenge yourself with one conversation at {top_company} today; 60 seconds now can reprice your next three years."),
-    ("The Market Reprices Talent Faster Than HR.", "Loyalty rarely compounds as fast as strategic mobility, {first_name}: companies pay market clearing prices to attract external leaders while capping internal bands. I surfaced {highlight_count} move(s) built for where you're going next—put your name at the top of the stack."),
-    ("One Surgical Shot Beats A Year of 'Someday'.", "Getting stuck happens one 'maybe next month' at a time, {first_name}. All the friction is gone—your top targets led by {top_company} are ranked below and your Word CVs are ready in Gmail. Hit send before your first meeting."),
-    ("Act Like the CEO of 'Me, Inc.' Today.", "If your career were a portfolio, {first_name}, you'd reallocate toward the highest growth ceiling immediately. {top_company} is actively investing in the exact capability you bring—deploy 60 seconds of capital into yourself this morning."),
-    ("First-Mover Physics Are In Your Favor.", "Being among the earliest calibrated candidates on a fresh opening dramatically multiplies interview callbacks, {first_name}. We caught today's lineup led by {top_company} right off the wire—strike while the recruiter's queue is clean."),
-    ("Outgrow the Room Before It Shrinks You.", "Burnout doesn't come from big challenges, {first_name}—it comes from solving familiar problems without bigger ownership. Step toward a steeper arena at {top_company} today; your attached CV already speaks their exact language."),
-    ("Job Descriptions Are Wish Lists. Own the Room.", "Half the people sitting in bigger seats today weren't '100% ready'—they simply raised their hand while peers hesitated, {first_name}. Your proven execution puts you ahead of 90% of the field for {top_company}; take the shot."),
-    ("Optionality Changes How You Walk Into Every Meeting.", "Even two live executive interviews completely change your leverage and confidence, {first_name}. Let's open a high-upside door at {top_company} this morning—zero downside, asymmetric upside."),
-    ("Don't Let Familiarity Masquerade as Security.", "True career security is knowing three great companies would hire you tomorrow, {first_name}. Keep your market muscles sharp—review today's {highlight_count} curated play(s) led by {top_company} and put one live rep on the board."),
-    ("Another Team's Bottleneck Is Your Promotion.", "Every open role below is a funded problem a VP is losing sleep over right now, {first_name}. At {top_company}, your real track record is the exact relief they're hunting for—introduce yourself while the seat is hot."),
-    ("90% of the Work Is Already In Your Attachments.", "Most people never apply because tailoring a resume after a 10-hour workday feels exhausting, {first_name}. You don't have that problem anymore—I built your minimalist .docx CVs overnight so all you bring is 60 seconds of audacity."),
-    ("Let Competing Leaders Bid on Your Impact.", "You never discover your real market value inside a single org chart, {first_name}. Test your ceiling against {top_company} today—one exploratory conversation can shift your entire compensation trajectory."),
-    ("High-Agency Operators Move Before the Reorg.", "Waiting for circumstances to push you shrinks your choices; moving on your own schedule multiplies them, {first_name}. Today's radar surfaced {highlight_count} target(s) led by {top_company}—play pure offense this morning."),
-    ("Clarity Wins the 6-Second Recruiter Scan.", "Hiring managers don't read walls of text—they scan for unmistakable direction and quantified proof, {first_name}. Your tailored CV for {top_company} leads with both; open it in Gmail and fire it off."),
-    ("Small Morning Boldness, Massive Multi-Year ROI.", "Think about the return on sixty seconds, {first_name}: one application sent over coffee can change the logo, scope, and paycheck of your next chapter. {top_company} is on the board today—make the move."),
-    ("Refuse Plateaus Dressed Up as Stability.", "Your best execution years shouldn't be spent treading water, {first_name}. Challenge yourself with a role that demands your next gear—starting with today's spotlight at {top_company}."),
-    ("Scarcity Belongs to Proven Builders.", "Talkers flood job portals; leaders with real, verifiable outcomes are scarce, {first_name}. That's why we stripped away every ounce of fluff on your CV for {top_company}—let your numbers speak."),
-    ("Momentum Is A Choice You Make Before 9 AM.", "Before your calendar fills up with everybody else's priorities, take one minute for your own future, {first_name}. {highlight_count} curated target(s) led by {top_company} are teed up and waiting."),
-    ("Beat the Crowd While They Procrastinate.", "For every great opening at {top_company}, ten qualified people bookmark the tab and forget to apply, {first_name}. Being the one who actually hits submit with a razor-sharp CV is half the game."),
-    ("Upgrade the Problems You Get Paid to Solve.", "The fastest way to grow is stepping into higher-stakes problems with bigger executive visibility, {first_name}. Today's lineup led by {top_company} offers exactly that arena—take a 60-second swing."),
-    ("Your Overnight Intelligence Edge Is Live.", "While Guadalajara slept, I swept {board_count} employer boards and threw out the noise so you only see signal, {first_name}. {top_company} topped today's filter—grab your custom CV and press your advantage."),
-    ("Never Self-Select Out of a Stretch Seat.", "Let the hiring committee decide if a role is a stretch—never reject yourself in advance, {first_name}. Your background gives {top_company} serious reason to book a call; put your hat in the ring."),
-    ("Turn Ambition Into Pipeline Today.", "Pipeline cures career anxiety better than anything else, {first_name}. Adding {top_company} to your active conversations today costs zero effort with your pre-tailored .docx ready to attach."),
-    ("Stop Discounting Skills That Feel Easy to You.", "What feels routine to you after years of mastery is often the exact capability {top_company} is paying a premium to hire right now, {first_name}. Price yourself accordingly and send one application."),
-    ("Every Shot Sharpens Your Executive Story.", "Even selecting which role excites you most today clarifies where you want your career headed next, {first_name}. Look closely at {top_company} below—if it sparks curiosity, trust that signal and apply."),
-    ("Play Asymmetric Offense.", "Downside of applying to {top_company} today: 60 seconds. Upside: a step-up leadership seat, fresh learning curve, and market-reset compensation. {first_name}, smart strategists take that bet every single time."),
-    ("Build Escape Velocity From Routine.", "Routine quietly shrinks ambition unless you interrupt it on purpose, {first_name}. Let today's {highlight_count} curated opening(s) led by {top_company} be your pattern interrupt—one bold click and you're in motion."),
-    ("Write Your Own Promotion Slip.", "Nobody cares more about your trajectory than you—except maybe me at 7 AM, {first_name}. I lined up {top_company} and armed your ATS-ready CV; go claim the conversation you deserve."),
-]
-
-LUCY_CONNECTION_NOTES = [
-    "Overnight I swept {board_count} Jalisco & Remote-Mexico boards for you—Edition #{edition} together ({total_roles} roles spotted & {total_cvs} custom CVs forged so far).",
-    "Briefing #{edition} in your corner: I filtered out hundreds of irrelevant postings overnight so you only spend energy on high-leverage moves.",
-    "Day {streak} on active radar together—we've now surfaced {total_roles} matched openings and custom-built {total_cvs} ATS-ready CVs exclusively for your profile.",
-    "Think of me as your 24/7 private scout: {board_count} company portals checked while you rested, distilled into Briefing #{edition} right on schedule.",
-    "Edition #{edition} delivered: every CV attached below was tuned line-by-line to your real track record so you never start from a blank page.",
-    "Your unfair advantage is compounding—{total_roles} curated roles tracked across {edition} briefings, and I'm keeping watch on {board_count} boards daily.",
-    "Briefing #{edition} · {streak}-day momentum: you bring 60 seconds of courage over coffee, and I'll handle the market scanning and CV engineering every morning.",
-    "Behind the scenes on Edition #{edition}: {board_count} live ATS feeds audited, noise eliminated, and {cv_today} fresh Word CV(s) armed in your inbox.",
-]
-
-# The 60-second play sits in Lucy's card above the role cards, so these point down the email.
-# Every play in this list tells the reader to open or send a tailored CV, so it is used only on
-# days with at least one CV attached; `DAILY_MICRO_CHALLENGES_NO_CV` covers the other days.
-DAILY_MICRO_CHALLENGES = [
-    "Tap your #1 ranked role at {top_company} below, preview the attached .docx right inside Gmail, and submit before your next meeting.",
-    "Set a 60-second timer right now: open {top_company}'s portal link, drop in your pre-built CV_*.docx, and log 1 fearless rep before 10 AM.",
-    "Don't bookmark—execute: pick the single role below that stretches you most, attach your tailored Word CV, and hit send while your coffee is warm.",
-    "Preview your first attached .docx in Gmail to feel how sharp your wins look on 1 page—then fire it straight into {top_company}'s queue.",
-    "Give yourself 1 minute of pure offense: click 'Apply' on {top_company}, upload the matching .docx I built for you, and close the tab victorious.",
-    "Beat 95% of procrastinating candidates today—pick 1 role below and submit your pre-armed CV before opening Slack or Teams.",
-    "Run the 1-Role Rule right now: choose your favorite opening led by {top_company}, attach its tailored .docx, and earn today's momentum win.",
-    "Zero overthinking allowed today: open the top card for {top_company}, verify your General Role Direction headline on the .docx, and hit submit.",
-]
-
-DAILY_MICRO_CHALLENGES_NO_CV = [
-    "Open the top role at {top_company} below, read its first three requirements, and decide in 60 seconds whether it earns an application today.",
-    "Pick the one role below that stretches you most and start its application before your first meeting.",
-    "Set a 60-second timer: open {top_company}'s posting and note the two skills it repeats most; those are the words to lead with when you apply.",
-    "Choose your favorite opening below and send the application today instead of bookmarking it.",
-    "Open {top_company}'s Apply link now and complete just the first screen; finishing is easier once you have started.",
-    "Read the top card for {top_company} and write down one result from your record that answers its biggest requirement.",
-]
-
-# Fallback text that tells the reader to open, send or re-read a tailored CV. It must not be
-# used on a day when no such CV exists.
-_TAILORED_CV_CLAIM_RE = re.compile(r"\bCVs?\b|\.docx\b|\battach|\bresumes?\b", re.I)
-QUIET_DAY_CHALLENGES_NO_CV = [c for c in QUIET_DAY_CHALLENGES if not _TAILORED_CV_CLAIM_RE.search(c)]
+    return min(candidates, key=last_use)
 
 
 def _pick_vault_note(angle_id, cv_attached, recent_headlines, fields):
-    """Pick today's fallback note from `DAILY_INSIDER_VAULT` as a (headline, message) template.
+    """Pick today's built-in note from `DAILY_INSIDER_VAULT` as a (headline, message) template.
 
-    Normally that is the note for today's angle. About a third of the notes tell the reader to
-    open or send an attached CV; on a day without one (`cv_attached` false) those are skipped,
-    and the pick moves on to the next note in rotation. A note whose headline was used recently
-    is skipped as well, so moving on never repeats a headline while unused notes remain."""
+    Normally that is the note for today's lens. A few notes mention the attached CV; on a day
+    without one (`cv_attached` false) those are skipped, and the pick moves on to the next note
+    in rotation. A note whose headline was used recently is skipped as well (least recently
+    used wins), so moving on never repeats a headline while unused notes remain."""
     total = len(DAILY_INSIDER_VAULT)
     rotation = [DAILY_INSIDER_VAULT[(angle_id + step) % total] for step in range(total)]
     if not cv_attached:
         rotation = [note for note in rotation if not _TAILORED_CV_CLAIM_RE.search(" ".join(note))] or rotation
-    recent = {norm(str(headline)) for headline in (recent_headlines or []) if headline}
-    for note in rotation:
-        if norm(note[0].format(**fields)) not in recent:
-            return note
-    return rotation[0]
+    return _least_recently_used(rotation, recent_headlines, fields)
+
+
+def _pick_day_note(vault, seed, recent_headlines, fields):
+    """Pick a (headline, message) from a small vault (quiet or held days): the least recently
+    used note, starting the tie-break from a seed-dependent position."""
+    rotation = [vault[(int(seed) + step) % len(vault)] for step in range(len(vault))]
+    return _least_recently_used(rotation, recent_headlines, fields)
 
 
 def extract_cv_identity_snapshot(sub_cfg, root=ROOT):
@@ -3939,8 +4240,9 @@ def extract_cv_identity_snapshot(sub_cfg, root=ROOT):
 
 
 def peek_relationship_context(sub_state, jobs_count, cvs_count, today, board_count=109, sub_id=""):
-    """Compute next briefing edition, streak, cumulative wins, and non-repeating angle selection
-    without mutating `sub_state` until delivery is confirmed."""
+    """Compute the next briefing edition, streak, cumulative wins, today's lens and shape, and
+    the memory the note needs (recent headlines, notes, plays), without mutating `sub_state`
+    until delivery is confirmed."""
     rel = (sub_state or {}).get("relationship") or {}
     edition = int(rel.get("edition", 0)) + 1
     last_date_str = rel.get("last_briefing_date")
@@ -3959,18 +4261,13 @@ def peek_relationship_context(sub_state, jobs_count, cvs_count, today, board_cou
     recent_angles = list(rel.get("recent_angle_ids") or [])
     recent_headlines = list(rel.get("recent_headlines") or [])
 
-    # Pick an angle guaranteed NOT to be in the recent window, offset per subscriber so
-    # teammates comparing notes on the same morning each receive their own unique angle.
-    total_themes = len(DAILY_MOTIVATION_THEMES)
-    sub_offset = sum((idx + 1) * ord(ch) for idx, ch in enumerate(str(sub_id or ""))) % total_themes
-    avoid_set = set(recent_angles[-(total_themes - 1):])
-    base_idx = (today.toordinal() + sub_offset + edition - 1) % total_themes
-    angle_id = base_idx
-    for step in range(total_themes):
-        cand = (base_idx + step) % total_themes
-        if cand not in avoid_set:
-            angle_id = cand
-            break
+    # Today's lens: never one used while every other lens was still unused, offset per
+    # subscriber so teammates comparing notes on the same morning each get their own.
+    total_lenses = len(LUCY_LENSES)
+    sub_offset = sum((idx + 1) * ord(ch) for idx, ch in enumerate(str(sub_id or ""))) % total_lenses
+    seed = today.toordinal() + sub_offset + edition - 1
+    angle_id = rotate_pick(total_lenses, recent_angles, seed, total_lenses - 1)
+    shape_id = rotate_pick(len(LUCY_SHAPES), rel.get("recent_shape_ids") or [], seed * 7 + 3, 5)
 
     return {
         "edition": edition,
@@ -3979,18 +4276,24 @@ def peek_relationship_context(sub_state, jobs_count, cvs_count, today, board_cou
         "total_cvs_tailored": int(rel.get("total_cvs_tailored", 0)) + int(cvs_count),
         "recent_angle_ids": recent_angles,
         "recent_headlines": recent_headlines,
+        "recent_messages": list(rel.get("recent_messages") or []),
+        "recent_plays": list(rel.get("recent_plays") or []),
+        "recent_move_ids": list(rel.get("recent_move_ids") or []),
         "recent_story_beats": list(rel.get("recent_story_beats") or []),
         "last_micro_challenge": str(rel.get("last_micro_challenge") or ""),
         "last_spotlight_company": str(rel.get("last_spotlight_company") or ""),
         "angle_id": angle_id,
+        "shape_id": shape_id,
+        "seed": seed,
         "board_count": board_count,
         "milestone_badge": EDITION_MILESTONES.get(edition, ""),
     }
 
 
 def commit_relationship_state(sub_state, rel_ctx, pack, jobs_sent, today):
-    """Persist updated relationship streak, edition, cumulative stats, continuity memory
-    (story beats, last micro-challenge, last spotlight employer) and anti-repeat history."""
+    """Persist the updated streak, edition and cumulative stats, the continuity memory (story
+    beats, last play, last spotlight employer) and the anti-repeat history: recent headlines,
+    notes, plays, lenses, shapes and play types. Every list is bounded."""
     if sub_state is None:
         return
     rel = sub_state.setdefault("relationship", {})
@@ -4000,24 +4303,33 @@ def commit_relationship_state(sub_state, rel_ctx, pack, jobs_sent, today):
     rel["total_roles_surfaced"] = rel_ctx["total_roles_surfaced"]
     rel["total_cvs_tailored"] = rel_ctx["total_cvs_tailored"]
 
-    angles = list(rel.get("recent_angle_ids") or [])
-    angles.append(rel_ctx["angle_id"])
-    rel["recent_angle_ids"] = angles[-30:]
+    def _remember(key, value, keep):
+        items = list(rel.get(key) or [])
+        if value not in (None, ""):
+            items.append(value)
+        rel[key] = items[-keep:]
 
-    headlines = list(rel.get("recent_headlines") or [])
-    if pack.get("headline"):
-        headlines.append(pack["headline"])
-    rel["recent_headlines"] = headlines[-30:]
-
-    beats = list(rel.get("recent_story_beats") or [])
+    _remember("recent_angle_ids", rel_ctx["angle_id"], 30)
+    _remember("recent_shape_ids", rel_ctx.get("shape_id"), 10)
+    _remember("recent_move_ids", pack.get("move") or None, 10)
+    _remember("recent_headlines", pack.get("headline"), 30)
+    _remember("recent_messages", str(pack.get("message") or "")[:600] or None, 14)
+    _remember("recent_plays", str(pack.get("micro_challenge") or "")[:300] or None, 14)
     if pack.get("story_beat"):
-        beats.append(f"Ed. #{rel_ctx['edition']} ({today.isoformat()}): {pack['story_beat']}")
-    rel["recent_story_beats"] = beats[-12:]
+        _remember("recent_story_beats", f"Ed. #{rel_ctx['edition']} ({today.isoformat()}): {pack['story_beat']}", 12)
+    else:
+        rel["recent_story_beats"] = list(rel.get("recent_story_beats") or [])[-12:]
     if pack.get("micro_challenge"):
         rel["last_micro_challenge"] = str(pack["micro_challenge"])[:300]
     if pack.get("spotlight_company"):
         rel["last_spotlight_company"] = str(pack["spotlight_company"])[:120]
     rel["last_briefing_source"] = pack.get("briefing_source", "vault")
+    rel["last_variety"] = {
+        "lens": pack.get("lens_title", ""),
+        "shape": pack.get("shape", ""),
+        "play": pack.get("move", ""),
+        "closest_recent_note": pack.get("closest_recent_note", 0.0),
+    }
 
     spotlights = list(rel.get("recent_spotlight_keys") or [])
     for j in jobs_sent or []:
@@ -4026,20 +4338,22 @@ def commit_relationship_state(sub_state, rel_ctx, pack, jobs_sent, today):
     rel["recent_spotlight_keys"] = spotlights[-18:]
 
 
-def call_gemini_daily_motivation(prompt_text, model=DEFAULT_LLM_MODEL, api_key=None, first_name="", recent_headlines=None):
-    """Ask Gemini for today's 9-part 'Us vs. Their Machine' partner briefing.
+def call_gemini_daily_motivation(
+    prompt_text, model=DEFAULT_LLM_MODEL, api_key=None, first_name="", recent_headlines=None,
+    recent_messages=None, recent_plays=None, worn=None, cv_attached=True, quiet_day=False,
+):
+    """Ask Gemini for today's note (subject spark, title, headline, message, play, memory beat).
 
-    Every draft passes `_briefing_pack_quality` (length, forbidden dishonest vocabulary, unfilled
-    placeholders, near-duplicate headlines). A rejected draft triggers exactly ONE revision round
-    with the rejection reason appended, so the final text is always AI-written and on-brand or we
-    fall back to the deterministic vault."""
+    Every draft passes `_briefing_pack_quality`. A rejected draft triggers exactly ONE revision
+    round with the rejection reason appended, so the final text is AI-written and fresh, or
+    the caller falls back to the built-in note for the day's lens."""
     rejection = None
     for attempt in range(2):
         prompt = prompt_text
         if rejection:
             prompt += (
                 f"\n\nREVISION NOTE: your previous draft was rejected because {rejection}. "
-                "Rewrite the whole briefing from scratch, fixing this, keeping every rule above."
+                "Rewrite the whole note from scratch, fixing this, keeping every rule above."
             )
         try:
             parsed = _invoke_gemini_json(
@@ -4057,7 +4371,10 @@ def call_gemini_daily_motivation(prompt_text, model=DEFAULT_LLM_MODEL, api_key=N
             return None
         if not parsed:
             return None
-        ok, reason = _briefing_pack_quality(parsed, first_name=first_name, recent_headlines=recent_headlines)
+        ok, reason = _briefing_pack_quality(
+            parsed, first_name=first_name, recent_headlines=recent_headlines, recent_messages=recent_messages,
+            recent_plays=recent_plays, worn=worn, cv_attached=cv_attached, quiet_day=quiet_day,
+        )
         if ok:
             out = {k: _clean_briefing_text(parsed.get(k) or "") for k in BRIEFING_TEXT_KEYS}
             out["_llm_model"] = str(parsed.get("_llm_model") or _normalize_gemini_model(model) or DEFAULT_LLM_MODEL)
@@ -4070,18 +4387,17 @@ def call_gemini_daily_motivation(prompt_text, model=DEFAULT_LLM_MODEL, api_key=N
 def generate_daily_briefing_pack(
     sub_cfg, top_job, upgrade_count, hot_count, total_count, today,
     rel_ctx=None, cvs_today_count=0, is_quiet_spotlight=False, root=ROOT,
-    quiet_day=False, active_count=None, ai_rejected_count=0, held_count=0,
+    quiet_day=False, active_count=None, ai_rejected_count=0, held_count=0, likes_available=False,
+    liked=None,
 ):
-    """Generate today's unique 'Us vs. Their Machine' partner briefing for the subscriber.
+    """Generate today's note for the subscriber: the pack the email is built from.
 
-    AI-first: Gemini writes all nine parts (subject spark, chapter title, headline, message,
-    their-AI-vs-our-AI intel, Lucy's connection note, micro-challenge, sign-off and a memory
-    beat) from a fully grounded prompt (real overnight facts, the candidate's real craft, the
-    spotlight employer's ATS, the story so far). The deterministic vault is used only when
-    Gemini is unavailable or every draft fails the quality gate. On a `quiet_day` (zero
-    never-seen roles) the note lists no roles and the challenge is pipeline hygiene. When
-    `held_count` new postings are waiting for an AI review that could not run, the note says
-    that instead of claiming nothing new was found."""
+    Gemini writes it from a grounded prompt (today's lens, shape and play, the real facts of
+    the night, the candidate's real record, the story so far and what not to repeat). The
+    built-in text for the day's lens is used only when Gemini is unavailable or both drafts
+    fail the quality gate. On a `quiet_day` (zero never-seen roles) the note lists no roles and
+    the play is pipeline hygiene; when `held_count` new postings wait for an AI review that
+    could not run, the note says so instead of claiming nothing new was found."""
     held_count = max(0, int(held_count or 0))
     sub_name = (sub_cfg or {}).get("name") or "Candidate"
     sub_id = (sub_cfg or {}).get("id") or sub_name.lower()
@@ -4093,8 +4409,8 @@ def generate_daily_briefing_pack(
     hi_cnt = upgrade_count if upgrade_count > 0 else max(1, total_count)
 
     if rel_ctx is None:
-        sub_offset = sum(ord(ch) for ch in sub_id) % len(PARTNER_STORY_BEATS)
-        angle_id = (today.toordinal() + sub_offset) % len(PARTNER_STORY_BEATS)
+        sub_offset = sum(ord(ch) for ch in sub_id) % len(LUCY_LENSES)
+        seed = today.toordinal() + sub_offset
         rel_ctx = {
             "edition": 1,
             "streak_days": 1,
@@ -4102,81 +4418,62 @@ def generate_daily_briefing_pack(
             "total_cvs_tailored": cvs_today_count,
             "recent_angle_ids": [],
             "recent_headlines": [],
+            "recent_messages": [],
+            "recent_plays": [],
+            "recent_move_ids": [],
             "recent_story_beats": [],
-            "angle_id": angle_id,
+            "angle_id": seed % len(LUCY_LENSES),
+            "shape_id": seed % len(LUCY_SHAPES),
+            "seed": seed,
             "board_count": 109,
             "milestone_badge": "",
         }
 
     b_cnt = rel_ctx.get("board_count", 109)
-    angle_id = rel_ctx["angle_id"]
+    angle_id = int(rel_ctx.get("angle_id", 0)) % len(LUCY_LENSES)
+    shape_id = int(rel_ctx.get("shape_id", 0)) % len(LUCY_SHAPES)
     edition = rel_ctx["edition"]
-    cadence_title, cadence_subline = WEEKDAY_CADENCE[today.weekday()]
-    beat_title, beat_insight_tmpl = PARTNER_STORY_BEATS[angle_id % len(PARTNER_STORY_BEATS)]
-    beat_insight = beat_insight_tmpl.format(board_count=b_cnt)
-    ats_name, ats_intel = ats_intel_for(top_job)
-
-    # Deterministic, non-repeating vault defaults (used only when Gemini is unavailable)
-    conn_tmpl = LUCY_CONNECTION_NOTES[(angle_id + edition) % len(LUCY_CONNECTION_NOTES)]
-    default_conn = conn_tmpl.format(
-        board_count=b_cnt,
-        edition=edition,
-        streak=rel_ctx.get("streak_days", 1),
-        total_roles=rel_ctx.get("total_roles_surfaced", total_count),
-        total_cvs=rel_ctx.get("total_cvs_tailored", cvs_today_count),
-        cv_today=max(1, cvs_today_count),
+    seed = int(rel_ctx.get("seed", today.toordinal() + edition))
+    lens_title, lens_guidance, _, _ = LUCY_LENSES[angle_id]
+    shape_key, shape_text = LUCY_SHAPES[shape_id]
+    cv_attached = bool(cvs_today_count) and not quiet_day
+    play_id = choose_play(
+        rel_ctx.get("recent_move_ids") or [], seed * 3 + 1, quiet_day, cv_attached, likes_available,
+        cvs_ever=bool(rel_ctx.get("total_cvs_tailored", 0)),
     )
-    if quiet_day:
-        # Two quiet-day plays point at a tailored CV; they only make sense once one exists.
-        plays = QUIET_DAY_CHALLENGES if rel_ctx.get("total_cvs_tailored", 0) else QUIET_DAY_CHALLENGES_NO_CV
-        default_challenge = plays[(angle_id + edition) % len(plays)]
-    else:
-        plays = DAILY_MICRO_CHALLENGES if cvs_today_count else DAILY_MICRO_CHALLENGES_NO_CV
-        chal_tmpl = plays[(angle_id + edition) % len(plays)]
-        default_challenge = chal_tmpl.format(top_company=top_co, first_name=first_name)
-    default_signoff = LUCY_SIGNOFFS[(angle_id + edition) % len(LUCY_SIGNOFFS)]
-    if ats_name == "their applicant tracking system" or norm(ats_intel).startswith(norm(ats_name)):
-        intel_sentence = ats_intel
-    else:
-        intel_sentence = f"{ats_name[0].upper() + ats_name[1:]}: {ats_intel}"
-    default_intel = (
-        f"{intel_sentence}. Your attached CV for {top_co} was built to pass exactly that gate, truthfully."
-        if top_job and cvs_today_count
-        else f"{intel_sentence}. We mirror that logic truthfully in every CV we forge together."
-    )
+    play_guidance = LUCY_PLAY_BY_ID[play_id][2]
 
     review_paused = bool(quiet_day) and held_count > 0
     held_roles = f"{held_count} new posting" + ("" if held_count == 1 else "s")
     vault_fields = {
         "first_name": first_name, "top_company": top_co, "highlight_count": hi_cnt,
-        "board_count": b_cnt, "held_roles": held_roles,
+        "board_count": b_cnt, "held_roles": held_roles, "edition": edition,
+        "total_roles": rel_ctx.get("total_roles_surfaced", total_count),
     }
+    default_challenge = play_text(play_id, cv_attached, vault_fields)
+    recent_headlines = rel_ctx.get("recent_headlines") or []
     if review_paused:
-        h_tmpl, m_tmpl = HELD_DAY_VAULT[(angle_id + edition) % len(HELD_DAY_VAULT)]
-        default_beat = f"Review paused: Lucy held {held_roles} for the next run instead of sending unreviewed roles to {first_name}."
-        # The regular connection notes talk about postings filtered and CVs built overnight.
-        # Neither happened today, so say what did.
-        default_conn = (
-            f"Briefing #{edition}: the fit review did not run overnight, so I have nothing vetted to show you yet. "
-            "Your new postings are safe in the queue and I will try again on the next sweep."
-        )
+        h_tmpl, m_tmpl = _pick_day_note(HELD_DAY_VAULT, seed, recent_headlines, vault_fields)
+        default_beat = f"Review paused: Lucy held {held_roles} for the next run instead of sending unreviewed roles to {first_name}; play '{play_id}'."
     elif quiet_day:
-        h_tmpl, m_tmpl = QUIET_DAY_VAULT[(angle_id + edition) % len(QUIET_DAY_VAULT)]
-        default_beat = f"Quiet day: Lucy sent no roles, kept the streak honest and asked {first_name} for one pipeline-hygiene move."
+        h_tmpl, m_tmpl = _pick_day_note(QUIET_DAY_VAULT, seed, recent_headlines, vault_fields)
+        default_beat = f"Quiet day: no new roles; Lucy wrote in the '{lens_title}' spirit and asked {first_name} for the play '{play_id}'."
     else:
-        h_tmpl, m_tmpl = _pick_vault_note(
-            angle_id, bool(cvs_today_count), rel_ctx.get("recent_headlines"), vault_fields
-        )
-        default_beat = f"Lucy framed '{beat_title}' around {top_co} ({top_title}) and asked {first_name} for one 60-second application."
+        h_tmpl, m_tmpl = _pick_vault_note(angle_id, cv_attached, recent_headlines, vault_fields)
+        default_beat = f"Lucy took the lens '{lens_title}' around {top_co} ({top_title}) and asked {first_name} for the play '{play_id}'."
     vault_headline = h_tmpl.format(**vault_fields)
     vault_message = m_tmpl.format(**vault_fields)
     default_spark = vault_headline.rstrip(".!")
 
+    # The built-in quiet and held-day notes are not written in the lens, so their title says
+    # what kind of morning it is; a Gemini note replaces this with its own title.
+    default_title = "Review paused" if review_paused else ("Quiet morning" if quiet_day else lens_title)
     base = {
-        "cadence_title": cadence_title,
-        "cadence_subline": cadence_subline,
-        "angle_number": angle_id + 1,
-        "chapter_title": beat_title,
+        "lens_number": angle_id + 1,
+        "lens_title": lens_title,
+        "note_title": default_title,
+        "shape": shape_key,
+        "move": play_id,
         "spotlight_company": top_co if top_job else "",
         "quiet_day": bool(quiet_day),
     }
@@ -4184,23 +4481,29 @@ def generate_daily_briefing_pack(
     def _fix(text):
         return _fix_ats_employer_confusion(str(text or "").strip(), top_co, top_title) if top_job else str(text or "").strip()
 
+    def _closest(message):
+        return round(max((_overlap(message, m) for m in (rel_ctx.get("recent_messages") or []) if m), default=0.0), 2)
+
     api_key = (os.environ.get("GEMINI_API_KEY") or "").strip()
     # On a "review paused" day Gemini failed moments ago for this subscriber. Asking it again
-    # for prose would only add minutes of timeouts; the vault note for that day is specific.
+    # for prose would only add minutes of timeouts; the built-in note for that day is specific.
     if api_key and not review_paused:
         cv_snapshot = extract_cv_identity_snapshot(sub_cfg, root=root)
         language = str((sub_cfg or {}).get("briefing_language") or "English").strip() or "English"
         model = (os.environ.get("GEMINI_MODEL") or "").strip() or (sub_cfg or {}).get("llm_model", DEFAULT_LLM_MODEL)
-        prompt = compose_partner_briefing_prompt(
-            sub_cfg, top_job, rel_ctx, today, (beat_title, beat_insight), (cadence_title, cadence_subline),
-            cv_snapshot, upgrade_count, hot_count, total_count, cvs_today_count, is_quiet_spotlight, language=language,
-            quiet_day=quiet_day, active_count=active_count, ai_rejected_count=ai_rejected_count,
-            held_count=held_count,
+        prompt = compose_lucy_note_prompt(
+            sub_cfg, top_job, rel_ctx, today, (lens_title, lens_guidance), (shape_key, shape_text),
+            (play_id, play_guidance), cv_snapshot, upgrade_count, hot_count, total_count, cvs_today_count,
+            is_quiet_spotlight, language=language, quiet_day=quiet_day, active_count=active_count,
+            ai_rejected_count=ai_rejected_count, held_count=held_count, liked=liked,
         )
         try:
             res = call_gemini_daily_motivation(
-                prompt, model=model, api_key=api_key,
-                first_name=first_name, recent_headlines=rel_ctx.get("recent_headlines") or [],
+                prompt, model=model, api_key=api_key, first_name=first_name,
+                recent_headlines=recent_headlines, recent_messages=rel_ctx.get("recent_messages") or [],
+                recent_plays=rel_ctx.get("recent_plays") or [],
+                worn=worn_words(rel_ctx.get("recent_messages") or [], skip=(first_name, top_co)),
+                cv_attached=cv_attached, quiet_day=quiet_day,
             )
             if isinstance(res, tuple) and len(res) == 2:
                 # Backward-compatible support if mocked as (headline, message)
@@ -4213,11 +4516,9 @@ def generate_daily_briefing_pack(
                     "subject_spark": headline.rstrip(".!")[:42],
                     "headline": headline,
                     "message": message,
-                    "their_ai_vs_our_ai": default_intel,
-                    "connection_ps": default_conn,
                     "micro_challenge": default_challenge,
-                    "partner_signoff": default_signoff,
                     "story_beat": default_beat,
+                    "closest_recent_note": _closest(message),
                 }
             if isinstance(res, dict) and res.get("headline") and res.get("message"):
                 hl = _fix(res["headline"])
@@ -4231,14 +4532,12 @@ def generate_daily_briefing_pack(
                     "briefing_model": str(res.get("_llm_model") or _normalize_gemini_model(model) or DEFAULT_LLM_MODEL),
                     "briefing_revised": bool(res.get("_revised")),
                     "subject_spark": spark[:46],
-                    "chapter_title": _fix(res.get("chapter_title") or beat_title)[:60],
+                    "note_title": _fix(res.get("note_title") or lens_title)[:60],
                     "headline": hl,
                     "message": msg_txt,
-                    "their_ai_vs_our_ai": _fix(res.get("their_ai_vs_our_ai") or default_intel),
-                    "connection_ps": _fix(res.get("connection_ps") or default_conn),
                     "micro_challenge": _fix(res.get("micro_challenge") or default_challenge),
-                    "partner_signoff": _fix(res.get("partner_signoff") or default_signoff)[:80],
                     "story_beat": _fix(res.get("story_beat") or default_beat)[:240],
+                    "closest_recent_note": _closest(msg_txt),
                 }
         except Exception:
             pass
@@ -4250,11 +4549,9 @@ def generate_daily_briefing_pack(
         "subject_spark": default_spark[:46],
         "headline": vault_headline,
         "message": vault_message,
-        "their_ai_vs_our_ai": default_intel,
-        "connection_ps": default_conn,
         "micro_challenge": default_challenge,
-        "partner_signoff": default_signoff,
         "story_beat": default_beat,
+        "closest_recent_note": _closest(vault_message),
     }
 
 
@@ -4933,7 +5230,7 @@ def build_email_message(
     """Build the daily briefing email: a plain-text part and a card-based HTML part.
 
     Lucy contributes exactly two things, shown together in one card at the top: the day's
-    inspiration (headline and message from the 'Us vs. Their Machine' briefing pack) and one
+    inspiration (headline and message of Lucy's note, which changes lens, shape and play daily) and one
     60-second action. A four-number summary and the role cards follow. Only roles never sent
     before are listed; on a quiet day (`quiet_day=True`) no roles are listed and nothing is
     re-sent.
@@ -5002,20 +5299,26 @@ def build_email_message(
         sub_state, len(jobs_to_send), len(attachments), today,
         board_count=board_count, sub_id=sub_cfg.get("id") or recipient,
     )
+    recent_likes = [
+        f"{like.get('title', '')} at {like.get('company', '')}".strip()
+        for like in liked_roles(sub_state)[-3:]
+        if like.get("title")
+    ]
     pack = generate_daily_briefing_pack(
         sub_cfg, top_job, len(upgrade_jobs), len(hot_jobs), len(jobs_to_send), today,
         rel_ctx=rel_ctx, cvs_today_count=len(attachments),
         is_quiet_spotlight=is_quiet_spotlight, root=root,
         quiet_day=quiet_day, active_count=int(all_jobs_count or 0),
         ai_rejected_count=ai_rejected_count, held_count=held_count,
+        likes_available=bool(like_urls), liked=recent_likes,
     )
-    # Of the nine parts in the pack, the email shows two: the inspiration (headline + message)
-    # and the 60-second play. The chapter title labels the card; the spark feeds the subject.
+    # The email shows two things from the pack: the inspiration (headline + message) and the
+    # 60-second play. The note's title labels the card; the spark feeds the subject.
     insider_headline = pack["headline"]
     insider_message = pack["message"]
     micro_challenge = pack["micro_challenge"]
     subject_spark = pack["subject_spark"]
-    chapter_title = pack.get("chapter_title") or ""
+    note_title = str(pack.get("note_title") or pack.get("lens_title") or "").strip()
     edition = rel_ctx["edition"]
     streak_days = rel_ctx["streak_days"]
     milestone_badge = rel_ctx.get("milestone_badge") or ""
@@ -5123,7 +5426,7 @@ def build_email_message(
         f"{sub_name} — Lucy Private Talent Briefing #{edition} · Day {streak_days} Streak ({date_str})",
         "Lucy, your personal headhunter: your daily reminder to check where to apply today.",
         "",
-        f"Us vs. Their Machine · Chapter {edition}: {chapter_title}" if chapter_title else f"Us vs. Their Machine · Chapter {edition}",
+        f"Lucy's note · {note_title}" if note_title else "Lucy's note",
         insider_headline,
         insider_message,
         "",
@@ -5228,11 +5531,7 @@ def build_email_message(
 
     preheader_core = f"{subject_spark} — " if subject_spark else ""
     preheader_esc = html.escape(f"{preheader_core}{insider_headline}: {insider_message}")
-    chapter_label = (
-        f"Us vs. The System &middot; Chapter {edition}: {email_text(chapter_title)}"
-        if chapter_title
-        else "Us vs. The System"
-    )
+    note_label = f"Lucy&rsquo;s note &middot; {email_text(note_title)}" if note_title else "Lucy&rsquo;s note"
     streak_label = f"&#128293; {streak_days}d Streak" if streak_days >= 2 else "Day 1 Live"
     date_label = f"{_EMAIL_WEEKDAYS[today.weekday()]}, {_IMAP_MONTHS[today.month - 1]} {today.day}"
     status_html = (
@@ -5247,7 +5546,7 @@ def build_email_message(
         )
         # Lucy's card: one inspiration and one 60-second action
         + email_lucy_card(
-            chapter_label,
+            note_label,
             email_text(insider_headline),
             email_text(insider_message),
             "&#127919; Today&rsquo;s 60-second play",
@@ -5559,7 +5858,9 @@ def send_email_digest(
     extra += f", {held_count} on hold for AI review" if held_count else ""
     print(
         f"  [{sub_name}] Sent {kind} #{rel_ctx['edition']} ({len(jobs_to_send)} new roles{extra}, "
-        f"{cv_detail}, briefing={b_tag}, angle #{pack['angle_number']}) -> subscriber '{sub_id}'."
+        f"{cv_detail}, briefing={b_tag}, lens '{pack.get('lens_title', '')}', shape {pack.get('shape', '')}, "
+        f"play {pack.get('move', '')}, closest recent note {int(100 * float(pack.get('closest_recent_note') or 0))}%) "
+        f"-> subscriber '{sub_id}'."
     )
     return True
 
