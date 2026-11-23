@@ -7,15 +7,15 @@ Processes web-form submissions (from `docs/onboard.html` via GitHub `repository_
   2. Structures & enriches the uploaded CV into `cvs/<subscriber_id>.md` using Free-Tier Gemini
      (`gemini-4-hydrogen` with automatic cascade & deterministic fallback), adding ATS-safe
      `*Company Profile: ...*` industry/scale context under every past employer.
-  3. Synthesizes calibrated `career_goal`, `title_include`, `upgrade_title_include`, and
-     `title_exclude` rules in `config.json` so the new subscriber automatically starts receiving
-     AI-validated daily matches.
-  4. Sends a polished, executive Confirmation Email from Lucy confirming their active radar blueprint.
+  3. Synthesizes a calibrated `career_goal` and title rules and stores them as
+     `subscribers/<subscriber_id>.json` (one file per person; `config.json` is never edited), so
+     the new subscriber automatically starts receiving AI-validated daily matches.
+  4. Sends a welcome and confirmation email from Lucy, in the same design as the daily briefing,
+     confirming their active radar blueprint.
 
 Standard library only (Python 3.9+, zero third-party packages).
 """
 import argparse
-import copy
 import html
 import json
 import os
@@ -24,7 +24,7 @@ import smtplib
 import ssl
 import sys
 import time
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from email.message import EmailMessage
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -108,93 +108,76 @@ SENIORITY_OPTIONS = [
     },
 ]
 
+# Each job area carries two title vocabularies (matched against the accent-folded, lower-case
+# title, so they are written without accents):
+#   keywords_re  words that place a title in this area ("supply chain", "ventas"). They are only
+#                ever used together with a level word: "one of my levels AND one of my areas".
+#   ic_titles    individual-contributor titles in this area that carry no level word, or that
+#                say "manager" without managing people ("account executive", "project manager").
+#                They are accepted on their own when Specialist or Senior / Lead is ticked.
 DOMAIN_OPTIONS = [
     {
         "id": "operations",
         "label": "Operations & Supply Chain",
         "hint": "Operations, Logistics, Manufacturing, Procurement, Quality",
-        "keywords_re": r"(operations|operaciones|supply chain|cadena de suministro|logistics|logistica|manufacturing|manufactura|plant|quality|calidad|procurement|compras|sourcing|planning|fulfillment)",
-        "standalone_inc": [
-            r"\b(operations|operaciones|supply chain|logistics|logistica|manufacturing|quality|procurement|compras)\b.*\b(director(a)?|head|vp|manager|gerente|lead|l[ií]der|specialist|analyst|coordinator|planner)\b",
-            r"\b(director(a)?|head|vp|general manager|manager|gerente|lead|l[ií]der)\b.*\b(operations|operaciones|supply chain|logistics|logistica|manufacturing|plant|quality|procurement|compras)\b",
-        ],
+        "keywords_re": r"(operations|operaciones|supply chain|cadena de suministro|logistics|logistica|manufacturing|manufactura|production|produccion|plant|planta|quality|calidad|procurement|compras|sourcing|abastecimiento|planning|planeacion|fulfillment|warehouse|almacen|inventory|inventarios?|distribution|distribucion|materials|materiales|transportation|transporte)",
+        "ic_titles": r"(buyer|comprador(a)?|planner|planeador(a)?|scheduler)",
     },
     {
         "id": "technology",
         "label": "Engineering, Data & IT",
         "hint": "Software, Data & Analytics, Cloud, IT, AI & Automation",
-        "keywords_re": r"(engineering|ingenieria|software|platform|cloud|data|analytics|business intelligence|\bbi\b|devops|sre|infrastructure|architecture|cybersecurity|security|\bai\b|machine learning|automation|automatizacion|rpa|low[- ]code|\bit\b|sistemas)",
-        "standalone_inc": [
-            r"\b(software|backend|frontend|full[- ]stack|cloud|data|analytics|devops|sre|platform|security|cybersecurity|machine learning|\bai\b|automation|rpa|systems)\b.*\b(engineer|developer|architect|scientist|analyst|manager|lead|director(a)?|head|vp|specialist|consultant)\b",
-            r"\b(director(a)?|head|vp|manager|gerente|lead|principal|staff|architect)\b.*\b(engineering|ingenieria|software|platform|cloud|data|analytics|infrastructure|security|\bit\b|technology|tecnologia|automation)\b",
-        ],
+        "keywords_re": r"(engineering|ingenieria|software|backend|frontend|full[- ]?stack|platform|cloud|data|datos|analytics|business intelligence|\bbi\b|devops|sre|infrastructure|infraestructura|architecture|arquitectura|cybersecurity|ciberseguridad|security|seguridad|\bai\b|\bia\b|machine learning|automation|automatizacion|rpa|low[- ]code|\bit\b|\bti\b|sistemas|systems|technology|tecnologia|\bqa\b|testing|erp|sap)",
+        "ic_titles": r"(data scientist|cientific[oa] de datos|programmer|programador(a)?|database administrator|\bdba\b|sysadmin|administrador(a)? de (sistemas|redes|bases de datos)|tester)",
     },
     {
         "id": "project_product",
         "label": "Project, Program & Product",
         "hint": "Project/Program Management, Product, PMO, Agile, Transformation",
-        "keywords_re": r"(project|proyecto|proyectos|program|programa|portfolio|portafolio|\bpmo\b|product|producto|agile|scrum|delivery|transformation|transformacion)",
-        "standalone_inc": [
-            r"\b(project|program|portfolio|product|technical program|delivery)\b.*\b(manager|lead|leader|director(a)?|head|vp|owner|coordinator|specialist|coach)\b",
-            r"\b(gerente|l[ií]der|director(a)?|coordinador(a)?)\b.*\b(proyecto|proyectos|programa|portafolio|producto|transformaci[oó]n)\b",
-            r"\b(\bpmo\b|scrum master|agile coach|agile delivery|digital transformation|business transformation)\b",
-        ],
+        "keywords_re": r"(projects?|proyectos?|programs?|programas?|portfolio|portafolio|\bpmo\b|product|producto|agile|scrum|delivery|transformation|transformacion|implementation|implementacion)",
+        "ic_titles": r"(project manager|program manager|product manager|technical program manager|product owner|scrum master|agile coach|gerente de proyectos?|lider de proyectos?|administrador(a)? de proyectos?)",
     },
     {
         "id": "sales_customer",
         "label": "Sales & Customer Success",
         "hint": "Sales, Account Management, Business Development, Customer Success / CX",
-        "keywords_re": r"(sales|ventas|comercial|commercial|account executive|account manager|\bkam\b|business development|\bbdr\b|\bsdr\b|customer success|\bcsm\b|customer experience|\bcx\b|renewals?|retention|revenue|channel|partner|alliances?)",
-        "standalone_inc": [
-            r"\b(account executive|sales executive|commercial executive|key account manager|\bkam\b|account manager|client partner|customer success manager|\bcsm\b)\b",
-            r"\b(sales|business development|commercial|customer success|client success|customer experience|\bcx\b|renewals?|partner|channel)\b.*\b(representative|specialist|executive|manager|lead|director(a)?|head|vp|consultant|coordinator)\b",
-            r"\b(ejecutiv[oa]|gerente|director(a)?|l[ií]der|representante|especialista)\b.*\b(ventas|comercial|cuentas|desarrollo de negocios|[eé]xito del cliente|experiencia del cliente)\b",
-        ],
+        "keywords_re": r"(sales|ventas|comercial|commercial|account executive|account manager|\bkam\b|key accounts?|cuentas clave|business development|desarrollo de negocios|\bbdr\b|\bsdr\b|customer success|client success|\bcsm\b|customer experience|\bcx\b|renewals?|retention|revenue|channel|partner|alliances?|alianzas|pre[- ]?sales|preventa)",
+        "ic_titles": r"(account executive|sales executive|commercial executive|key account manager|\bkam\b|account manager|client partner|customer success manager|\bcsm\b|ejecutiv[oa] (de )?(ventas|cuentas|comercial)|business development representative|sales development representative|\bbdr\b|\bsdr\b|inside sales|sales engineer|solutions? consultant)",
     },
     {
         "id": "strategy_process",
         "label": "Strategy, Consulting & Process",
         "hint": "Business Strategy, Process Improvement, Shared Services / GBS, Change",
-        "keywords_re": r"(strategy|estrategia|business operations|bizops|consulting|consultoria|process|procesos|continuous improvement|mejora continua|operational excellence|\bgbs\b|shared services|change management|gestion del cambio|enablement)",
-        "standalone_inc": [
-            r"\b(strategy|estrategia|business operations|bizops|process improvement|process excellence|operational excellence|continuous improvement|mejora continua|process mining|change management|gesti[oó]n del cambio|\bgbs\b|shared services)\b",
-            r"\b(business|process|management|strategy|transformation|operations)\b.*\b(consultant|consultor(a)?|strategist|analyst|analista|partner|manager|gerente|lead|director(a)?|head)\b",
-        ],
+        "keywords_re": r"(strategy|estrategia|business operations|bizops|consulting|consultoria|process|processes|procesos?|continuous improvement|mejora continua|operational excellence|excelencia operacional|\bgbs\b|global business services|shared services|servicios compartidos|change management|gestion del cambio|enablement|transformation|transformacion|lean|six sigma)",
+        "ic_titles": r"(management consultant|strategy consultant|business consultant|consultor(a)? de (negocios|procesos|estrategia)|business analyst|analista de negocios?|black belt|green belt)",
     },
     {
         "id": "finance_legal",
         "label": "Finance, Accounting & Legal",
         "hint": "Finance, FP&A, Accounting, Audit, Tax, Treasury, Legal & Compliance",
-        "keywords_re": r"(finance|finanzas|financial|\bfp&a\b|accounting|contabilidad|controller|contralor|audit|auditoria|tax|impuestos|treasury|tesoreria|legal|counsel|abogad[oa]|compliance|cumplimiento)",
-        "standalone_inc": [
-            r"\b(finance|finanzas|financial|\bfp&a\b|accounting|controller|audit|tax|treasury|legal|compliance)\b.*\b(analyst|specialist|manager|gerente|lead|director(a)?|head|vp|counsel|partner|officer)\b",
-            r"\b(director(a)?|head|vp|manager|gerente|lead|analista|especialista|contralor)\b.*\b(finanzas|finance|contabilidad|auditor[ií]a|impuestos|tesorer[ií]a|legal|cumplimiento)\b",
-        ],
+        "keywords_re": r"(finance|finanzas|financial|financier[oa]|\bfp&a\b|accounting|contabilidad|contable|controller|controllership|contraloria|contralor(a)?|audit|auditoria|tax|impuestos|fiscal|treasury|tesoreria|legal|counsel|abogad[oa]|juridic[oa]|compliance|cumplimiento|credit|credito|risk|riesgos?|payroll|nomina|billing|facturacion|accounts (payable|receivable)|cuentas por (pagar|cobrar))",
+        "ic_titles": r"(accountant|contador(a)?|auditor(a)?|controller|contralor(a)?|paralegal|abogad[oa]|legal counsel|treasurer|tesorer[oa]|bookkeeper)",
     },
     {
         "id": "people_hr",
         "label": "People, HR & Talent",
         "hint": "Human Resources, Talent Acquisition, People Operations, Learning & Development",
-        "keywords_re": r"(human resources|recursos humanos|\bhr\b|\bhrbp\b|people|talent|talento|recruiting|recruitment|reclutamiento|compensation|total rewards|learning|training|capacitacion)",
-        "standalone_inc": [
-            r"\b(human resources|recursos humanos|\bhr\b|\bhrbp\b|people|talent acquisition|talent management|recruiting|total rewards|learning)\b.*\b(specialist|partner|generalist|recruiter|manager|gerente|lead|director(a)?|head|vp|coordinator)\b",
-        ],
+        "keywords_re": r"(human resources|recursos humanos|\bhr\b|\brh\b|\bhrbp\b|people|talent|talento|recruiting|recruitment|reclutamiento|compensation|compensaciones|total rewards|learning|training|capacitacion|employee experience|labor relations|relaciones laborales|culture|cultura|organizational development|desarrollo organizacional)",
+        "ic_titles": r"(recruiter|reclutador(a)?|hr business partner|\bhrbp\b|people partner|talent acquisition partner|hr generalist|generalista de (rh|recursos humanos)|sourcer)",
     },
     {
         "id": "marketing",
         "label": "Marketing, Comms & Design",
         "hint": "Marketing, Growth, Brand, Communications, Content, UX / Product Design",
-        "keywords_re": r"(marketing|mercadotecnia|growth|brand|marca|communications|comunicacion|public relations|demand generation|content|design|dise[nñ]o|\bux\b|\bui\b|creative)",
-        "standalone_inc": [
-            r"\b(marketing|mercadotecnia|growth|brand|communications|comunicaci[oó]n|content|product design|\bux\b|\bui\b|creative)\b.*\b(specialist|strategist|designer|manager|gerente|lead|director(a)?|head|vp|coordinator)\b",
-        ],
+        "keywords_re": r"(marketing|mercadotecnia|growth|brand|marca|communications|comunicacion|comunicaciones|public relations|relaciones publicas|demand generation|content|contenido|design|designer|diseno|disenador(a)?|\bux\b|\bui\b|creative|creativ[oa]|social media|redes sociales|\bseo\b|\bsem\b|advertising|publicidad|e-?commerce)",
+        "ic_titles": r"(marketing manager|gerente de (marketing|mercadotecnia)|brand manager|product marketing manager|campaign manager|content manager|community manager|social media manager|copywriter|content strategist|ux researcher|ux writer|art director)",
     },
     {
         "id": "other",
         "label": "Other / Open (Guided by Free Text)",
         "hint": "Let the AI infer exact target roles from my CV and free-text description below",
         "keywords_re": r"",
-        "standalone_inc": [],
+        "ic_titles": r"",
     },
 ]
 
@@ -319,21 +302,25 @@ Treat the candidate's **FREE-TEXT DESCRIPTION** (`CANDIDATE FREE-TEXT FEEDBACK`)
 
 Produce:
 1. `career_goal`: A rich, specific 2-4 sentence Career North Star paragraph synthesizing what the candidate wrote in free text + their real CV background + target seniority + explicit role types/industries to exclude. (This paragraph is fed directly into the daily Gemini Candidate-Job Match Gate prompt to evaluate every single job opening and reject weak matches!)
-2. `extra_title_include`: Up to 12 Python case-insensitive regex patterns (using `\\b` word boundaries, covering both English and Spanish title variations where relevant) that capture the specific job titles, roles, and specialties described in their free-text feedback and CV. Never output wildcard-only patterns like `.*`.
-3. `extra_upgrade_include`: Up to 6 Python case-insensitive regex patterns (using `\\b` word boundaries) representing ambitious step-up / promotion titles for this candidate.
-4. `extra_title_exclude`: Up to 10 Python case-insensitive regex patterns (using `\\b` word boundaries) for roles the candidate asked to avoid in free text OR common false-positive titles unrelated to their craft.
+2. `target_titles`: Up to 12 job titles this candidate wants, written as plain phrases the way they appear in job postings (2 to 5 words each; add the Spanish form when the title is commonly posted in Spanish). Example: "process mining lead", "gerente de mejora continua".
+3. `focus_keywords`: Up to 12 short domain keywords (1 to 3 words) that appear in the titles of jobs in this candidate's field. Example: "process mining", "automation", "supply chain". Do not use seniority words (senior, manager, director, lead) or generic words (business, global, team).
+4. `step_up_titles`: Up to 6 plain phrases for ambitious step-up / promotion titles for this candidate.
+5. `avoid_titles`: Up to 10 plain words or short phrases that mark job titles the candidate asked to avoid in free text, or common false-positive titles unrelated to their craft. Example: "tax", "accounts payable", "maintenance technician".
+
+Rules for the four lists: plain lower-case words only (letters, digits, spaces and & / + . ' -). Never write regular expressions, wildcards, brackets or backslashes; anything that is not a plain phrase is discarded.
 
 Return ONLY valid JSON:
 {
   "career_goal": "2-4 sentence north-star career target and exclusions...",
-  "extra_title_include": ["\\\\bexample target role\\\\b"],
-  "extra_upgrade_include": ["\\\\bstep up role\\\\b"],
-  "extra_title_exclude": ["\\\\bunwanted role\\\\b"]
+  "target_titles": ["example target title"],
+  "focus_keywords": ["example keyword"],
+  "step_up_titles": ["example step up title"],
+  "avoid_titles": ["example unwanted title"]
 }"""
 
 
 # --------------------------------------------------------------------------
-# Validation, Slug Generation & Regex Safety Guards
+# Validation & Slug Generation
 # --------------------------------------------------------------------------
 
 def _clean_line(val, max_len=300):
@@ -455,25 +442,58 @@ def derive_subscriber_id(name, email, existing_subscribers=None):
     return f"sub_{int(time.time()) % 100000}", False
 
 
-def _safe_validate_regex(pat):
-    """Ensure a candidate regex compiles cleanly, is reasonably bounded, and does NOT match
-    arbitrary unrelated strings (blocks overly broad patterns like `.*` or `\\w+`)."""
-    if not isinstance(pat, str):
-        return None
-    s = pat.strip()
-    if len(s) < 4 or len(s) > 180:
-        return None
-    if s in (".*", ".+", "\\w+", "[a-z]+"):
-        return None
-    try:
-        compiled = re.compile(s, re.I)
-    except re.error:
-        return None
-    # Guard against match-everything patterns
-    for Canary in ("", "zzzzzxqjv", "12345", "unrelated random token xyz"):
-        if compiled.search(Canary):
-            return None
-    return s
+# --------------------------------------------------------------------------
+# Plain phrases -> title patterns
+# --------------------------------------------------------------------------
+#
+# The model never writes regular expressions. It returns plain phrases ("process mining lead"),
+# and the patterns are built here with every character escaped. A phrase can therefore only
+# match its own literal words: it cannot be invalid, match everything, or make matching slow.
+
+MAX_PHRASE_CHARS = 60
+MAX_PHRASE_WORDS = 6
+_PHRASE_CHARS_RE = re.compile(r"[a-z0-9 &/+.'#-]+")
+
+# Single words that say nothing about the job area. A "focus keyword" equal to one of these
+# would make the area test meaningless ("level AND manager").
+GENERIC_TITLE_WORDS = frozenset("""
+    senior sr junior jr lead leader lider manager gerente director directora head principal staff
+    specialist especialista analyst analista associate consultant consultor consultora engineer
+    ingeniero ingeniera coordinator coordinador coordinadora executive ejecutivo ejecutiva officer
+    vp chief global regional local business negocio negocios team equipo mexico latam remote
+    remoto hybrid professional general corporate role roles job jobs
+""".split())
+
+
+def clean_phrase(raw):
+    """Normalise one model-supplied phrase (lower-case, accents folded, single spaces).
+    Returns '' unless it is a short plain phrase containing at least one letter."""
+    if not isinstance(raw, str):
+        return ""
+    phrase = re.sub(r"\s+", " ", fj.norm(raw)).strip(" .-'/&")
+    if not 2 <= len(phrase) <= MAX_PHRASE_CHARS or len(phrase.split()) > MAX_PHRASE_WORDS:
+        return ""
+    if not _PHRASE_CHARS_RE.fullmatch(phrase) or not re.search(r"[a-z]", phrase):
+        return ""
+    return phrase
+
+
+def phrase_to_pattern(phrase):
+    """Pattern source matching `phrase` as whole words in a normalised job title. Words may be
+    separated by spaces, '-' or '/'. Every character of the phrase is escaped."""
+    return r"(?<!\w)" + r"[\s/-]+".join(re.escape(word) for word in phrase.split()) + r"(?!\w)"
+
+
+def clean_phrases(raw_list, limit, drop=frozenset()):
+    """Clean a model-supplied list into at most `limit` distinct phrases, leaving out `drop`."""
+    phrases = []
+    for raw in raw_list if isinstance(raw_list, list) else []:
+        phrase = clean_phrase(raw)
+        if phrase and phrase not in drop and phrase not in phrases:
+            phrases.append(phrase)
+        if len(phrases) >= limit:
+            break
+    return phrases
 
 
 # --------------------------------------------------------------------------
@@ -559,6 +579,10 @@ def _render_canonical_cv_markdown(cv_struct, fallback_name, fallback_email):
     return text_out
 
 
+# Heading used by the offline parser when it cannot separate employers (plain-text uploads).
+PLACEHOLDER_EMPLOYER = "Experience listed in uploaded CV"
+
+
 def structure_master_cv_deterministic(raw_cv_text, name, email):
     """Offline/fallback parser that converts plain-text or Markdown CV text into clean, ATS-safe
     canonical Markdown (`cvs/<id>.md`) while preserving existing structure or extracting bullets."""
@@ -594,8 +618,11 @@ def structure_master_cv_deterministic(raw_cv_text, name, email):
                     if co_meta.get("description"):
                         sanitized_lines.append(f"*Company Profile: {fj.sanitize_ats_text(co_meta['description'])}*")
                     elif last_company_name:
+                        # Nothing is known about this employer beyond what the CV says, so the
+                        # line only restates that (name and place); it never invents a description.
+                        place = ", ".join(part for part in parts[1:2] if part)
                         sanitized_lines.append(
-                            f"*Company Profile: {last_company_name} — enterprise organization where candidate delivered core operational and domain initiatives.*"
+                            f"*Company Profile: {last_company_name}{', ' + place if place else ''}.*"
                         )
             elif ln.startswith("*") and ln.endswith("*") and not ln.startswith("**"):
                 inner = fj.sanitize_ats_text(ln.strip("*"))
@@ -612,7 +639,10 @@ def structure_master_cv_deterministic(raw_cv_text, name, email):
             else:
                 sanitized_lines.append(fj.sanitize_ats_text(ln))
         out = "\n".join(sanitized_lines).strip() + "\n"
-        return out
+        if not cv_problems(out, name, email):
+            return out
+        # The Markdown did not follow the expected employer / role / bullet layout closely
+        # enough to tailor from, so treat the upload as plain text instead of rejecting it.
 
     # Plain-text CV fallback: segment into summary, skills, experience bullets, and education
     non_empty = [fj.sanitize_ats_text(ln) for ln in lines if fj.sanitize_ats_text(ln)]
@@ -633,18 +663,22 @@ def structure_master_cv_deterministic(raw_cv_text, name, email):
         "core_competencies": [
             {"category": "Core Profile & Strengths", "items": ", ".join(w[:48] for w in summary_lines[:2]) or "Leadership, Strategy, Execution"}
         ],
+        # Employers, roles and dates cannot be told apart without the model, so the whole
+        # history goes under one clearly-labelled placeholder heading. Nothing is assumed about
+        # the person: no seniority, no location, no languages. A sign-up stored in this form
+        # gets no tailored CVs (see `register_subscriber_in_codebase`).
         "experience": [
             {
-                "company": "Prior Experience Portfolio",
-                "location": "Mexico",
-                "company_profile": "Enterprise and domain experience extracted from uploaded candidate resume.",
-                "role": "Senior Professional",
-                "dates": "Career History",
-                "bullets": bullet_lines[:10] or ["Delivered measurable operational and functional outcomes across prior roles."],
+                "company": PLACEHOLDER_EMPLOYER,
+                "location": "",
+                "company_profile": "Employers were not separated when this CV was imported. The points below are taken from the uploaded text.",
+                "role": "Experience summary",
+                "dates": "see uploaded CV",
+                "bullets": bullet_lines[:10] or summary_lines[:3],
             }
         ],
         "education": [],
-        "languages": ["English", "Spanish"],
+        "languages": [],
     }
     return _render_canonical_cv_markdown(cv_struct, name, email)
 
@@ -672,7 +706,14 @@ def structure_master_cv_markdown(raw_cv_text, name, email, api_key=None, model=f
                 validator=lambda p: isinstance(p, dict) and isinstance(p.get("experience"), list) and len(p.get("experience")) > 0,
             )
             if parsed:
-                return _render_canonical_cv_markdown(parsed, name, email), str(parsed.get("_llm_model") or model)
+                cv_md = _render_canonical_cv_markdown(parsed, name, email)
+                problems = cv_problems(cv_md, name, email)
+                if not problems:
+                    return cv_md, str(parsed.get("_llm_model") or model)
+                fj.gha_annotate(
+                    "warning",
+                    "Onboarding CV from Gemini was not usable (" + "; ".join(problems) + "); using the offline parser.",
+                )
         except Exception as e:
             fj.gha_annotate("warning", f"Onboarding CV Gemini structuring fallback ({type(e).__name__}: {e})")
     return structure_master_cv_deterministic(raw_cv_text, name, email), "deterministic-fallback"
@@ -682,60 +723,130 @@ def structure_master_cv_markdown(raw_cv_text, name, email, api_key=None, model=f
 # Smart Radar Rule & Career-Goal Synthesis
 # --------------------------------------------------------------------------
 
+# Levels whose titles are numerous on every board. A level word alone ("senior", "manager") is
+# never enough for them: the title must also name one of the subscriber's job areas or a
+# keyword from their own goals. Director and executive titles are rare enough to go straight
+# to the AI review.
+VOLUME_LEVELS = ("specialist", "senior", "manager")
+# Levels that also want individual-contributor titles carrying no level word at all.
+IC_LEVELS = ("specialist", "senior")
+
+# Typical title words per level. An "avoid" phrase that matches one of these for a ticked level
+# is ignored, so the model can never exclude the very level the subscriber asked for.
+LEVEL_PROBE_TITLES = {
+    "specialist": ("analyst", "analista", "specialist", "engineer"),
+    "senior": ("senior", "lead", "principal"),
+    "manager": ("manager", "gerente"),
+    "director": ("director", "head of"),
+    "executive": ("vp", "vice president", "general manager"),
+}
+
+NOISE_EXCLUDE_UNLESS_SALES = r"\b(call center agent|telemarketing|retail store|cashier|promotor de cambaceo)\b"
+NOISE_EXCLUDE_UNLESS_SPECIALIST = r"\b(junior|jr\.?|entry[- ]level|trainee)\b"
+
+
+def _add_unique(target, patterns):
+    """Append each non-empty pattern that is not in `target` yet (order preserved)."""
+    for pattern in patterns:
+        if pattern and pattern not in target:
+            target.append(pattern)
+
+
+def build_title_rules(levels, domains, phrases=None):
+    """Turn the form's level and job-area choices, plus plain phrases derived from the free
+    text and CV, into a subscriber's title rules.
+
+    A title is accepted when it
+      (a) contains one of the target-title phrases, or
+      (b) is a director / executive title and that level was ticked, or
+      (c) is a level-less individual-contributor title of a ticked area (Specialist or Senior
+          ticked), or
+      (d) contains BOTH a word of a ticked volume level (specialist, senior, manager) AND a
+          word of a ticked area or a focus keyword.
+    Rule (d) is what keeps "Senior Tax Accountant" away from someone who ticked Senior and
+    asked for marketing roles.
+
+    When a volume level is ticked and nothing narrows it (no area, no phrases), the level words
+    are accepted on their own and `rule_breadth` is "broad"; otherwise it is "focused".
+
+    `phrases` holds the model's lists (`target_titles`, `focus_keywords`, `step_up_titles`,
+    `avoid_titles`). Anything in them that is not a plain phrase is ignored."""
+    phrases = phrases if isinstance(phrases, dict) else {}
+    specific_domains = [d for d in domains if d in DOMAIN_BY_ID and d != "other"]
+    target_phrases = clean_phrases(phrases.get("target_titles"), 12)
+    focus_phrases = clean_phrases(phrases.get("focus_keywords"), 12, drop=GENERIC_TITLE_WORDS)
+    step_up_phrases = clean_phrases(phrases.get("step_up_titles"), 6)
+    avoid_phrases = clean_phrases(phrases.get("avoid_titles"), 10)
+
+    include = [phrase_to_pattern(p) for p in target_phrases]        # rule (a)
+    level_group = []                                                # rule (d), first half
+    upgrade = []
+    for level_id in levels:
+        level = SENIORITY_BY_ID[level_id]
+        _add_unique(upgrade, level["up"])
+        _add_unique(level_group if level_id in VOLUME_LEVELS else include, level["inc"])  # rule (b)
+    _add_unique(upgrade, [phrase_to_pattern(p) for p in step_up_phrases])
+
+    area_group = []                                                 # rule (d), second half
+    wants_ic_titles = any(level_id in IC_LEVELS for level_id in levels)
+    for domain_id in specific_domains:
+        domain = DOMAIN_BY_ID[domain_id]
+        _add_unique(area_group, [rf"\b{domain['keywords_re']}\b"])
+        if wants_ic_titles and domain.get("ic_titles"):
+            _add_unique(include, [rf"\b{domain['ic_titles']}\b"])       # rule (c)
+    _add_unique(area_group, [phrase_to_pattern(p) for p in focus_phrases])
+
+    title_all_of = []
+    breadth = "focused"
+    if level_group and area_group:
+        title_all_of = [level_group, area_group]
+    elif level_group and not target_phrases:
+        # Nothing narrows the level words (no area ticked, no phrases derived), so accept them
+        # alone rather than drop the levels the subscriber asked for.
+        _add_unique(include, level_group)
+        breadth = "broad"
+
+    exclude = list(BASE_TITLE_EXCLUDES)
+    if "sales_customer" not in specific_domains:
+        _add_unique(exclude, [NOISE_EXCLUDE_UNLESS_SALES])
+    if "specialist" not in levels:
+        _add_unique(exclude, [NOISE_EXCLUDE_UNLESS_SPECIALIST])
+    wanted = target_phrases + focus_phrases + [
+        probe for level_id in levels for probe in LEVEL_PROBE_TITLES.get(level_id, ())
+    ]
+    for phrase in avoid_phrases:
+        pattern = phrase_to_pattern(phrase)
+        if not any(re.search(pattern, text) for text in wanted):
+            _add_unique(exclude, [pattern])
+
+    return {
+        "title_include": include,
+        "title_all_of": title_all_of,
+        "upgrade_title_include": upgrade,
+        "title_exclude": exclude,
+        "interest_phrases": target_phrases + [p for p in focus_phrases if p not in target_phrases],
+        "rule_breadth": breadth,
+    }
+
+
 def synthesize_subscriber_profile(validated, structured_cv_md, api_key=None, model=fj.DEFAULT_LLM_MODEL):
-    """Build `career_goal`, `title_include`, `upgrade_title_include`, `title_exclude`, and location
-    settings from broad agnostic checkbox signals + primary free-text feedback + structured CV."""
+    """Build the profile fields of a subscriber record (career goal, title rules, locations)
+    from the form's broad choices, the free-text description and the structured CV.
+
+    Gemini, when available, writes the career goal and returns plain phrases; the title
+    patterns themselves are always built in code (`build_title_rules`). Returns
+    `(profile_fields, rule_source)` where `rule_source` is the model name or "deterministic"."""
     levels = validated["levels"]
     domains = validated["domains"]
     locations = validated["locations"]
     free_text = validated["free_text"]
 
-    title_include = []
-    upgrade_include = []
-    title_exclude = list(BASE_TITLE_EXCLUDES)
-
-    def _add_unique(target_list, patterns):
-        for p in patterns:
-            valid = _safe_validate_regex(p)
-            if valid and valid not in target_list:
-                target_list.append(valid)
-
     specific_domains = [d for d in domains if d in DOMAIN_BY_ID and d != "other"]
-
-    # 1. Broad deterministic guardrails from selected levels + general areas
-    for lv_id in levels:
-        lv = SENIORITY_BY_ID[lv_id]
-        _add_unique(upgrade_include, lv["up"])
-        if lv_id in ("executive", "director") or not specific_domains:
-            _add_unique(title_include, lv["inc"])
-
-    for dom_id in specific_domains:
-        dom = DOMAIN_BY_ID[dom_id]
-        _add_unique(title_include, dom["standalone_inc"])
-        kw = dom["keywords_re"]
-        if kw and any(l in levels for l in ("manager", "senior", "specialist")):
-            _add_unique(title_include, [
-                rf"\b(senior manager|sr\.? manager|manager|gerente|lead|l[ií]der|principal|architect|specialist|especialista|consultant|analyst|analista)\b.*\b{kw}\b",
-                rf"\b{kw}\b.*\b(senior manager|sr\.? manager|manager|gerente|lead|l[ií]der|principal|architect|specialist|especialista|consultant|analyst|analista)\b",
-            ])
-
-    if not title_include:
-        for lv_id in levels:
-            _add_unique(title_include, SENIORITY_BY_ID[lv_id]["inc"])
-
-    # Agnostic baseline noise exclusions
-    if "sales_customer" not in specific_domains:
-        _add_unique(title_exclude, [
-            r"\b(call center agent|telemarketing|retail store|cashier|promotor de cambaceo)\b",
-        ])
-    if "specialist" not in levels:
-        _add_unique(title_exclude, [r"\b(junior|jr\.?|entry[- ]level|trainee)\b"])
-
-    # 2. Baseline career_goal combining broad selections + candidate's exact free-text feedback
     level_labels = [SENIORITY_BY_ID[k]["label"] for k in levels if k in SENIORITY_BY_ID]
-    domain_labels = [DOMAIN_BY_ID[k]["label"] for k in specific_domains if k in DOMAIN_BY_ID]
+    domain_labels = [DOMAIN_BY_ID[k]["label"] for k in specific_domains]
     loc_labels = [LOCATION_BY_ID[k]["label"] for k in locations if k in LOCATION_BY_ID]
 
+    # Baseline career goal from the form alone; replaced by Gemini's richer version when available.
     goal_parts = [
         f"Targeting {', '.join(level_labels)} roles"
         + (f" in {', '.join(domain_labels)}" if domain_labels else "")
@@ -745,9 +856,9 @@ def synthesize_subscriber_profile(validated, structured_cv_md, api_key=None, mod
         goal_parts.append(f"Candidate goal & preferences: {fj.sanitize_ats_text(free_text)}")
     career_goal = " ".join(goal_parts)[:1200]
 
-    # 3. Primary AI Calibration: Gemini turns candidate's free-text + CV into bespoke rules & Match Gate prompt
-    api_key = (api_key if api_key is not None else os.environ.get("GEMINI_API_KEY") or "").strip()
+    phrases = {}
     rule_source = "deterministic"
+    api_key = (api_key if api_key is not None else os.environ.get("GEMINI_API_KEY") or "").strip()
     if api_key:
         prompt = (
             f"CANDIDATE NAME: {validated['name']}\n"
@@ -774,12 +885,19 @@ def synthesize_subscriber_profile(validated, structured_cv_md, api_key=None, mod
                 ai_goal = fj.sanitize_ats_text(parsed.get("career_goal") or "")
                 if len(ai_goal) >= 40:
                     career_goal = ai_goal[:1400]
-                _add_unique(title_include, parsed.get("extra_title_include") or [])
-                _add_unique(upgrade_include, parsed.get("extra_upgrade_include") or [])
-                _add_unique(title_exclude, parsed.get("extra_title_exclude") or [])
+                phrases = parsed
                 rule_source = str(parsed.get("_llm_model") or model)
         except Exception as e:
             fj.gha_annotate("warning", f"Onboarding Gemini profile calibration fallback ({type(e).__name__}: {e})")
+
+    rules = build_title_rules(levels, domains, phrases)
+    if rules["rule_breadth"] == "broad":
+        fj.gha_annotate(
+            "warning",
+            f"Title rules for {validated['name']} are broad (level words only): no job area was ticked and "
+            "no keywords could be derived from the free text and CV. Every matching role still goes "
+            "through the AI review, but many will be off-target.",
+        )
 
     sub_entry = {
         "name": validated["name"],
@@ -791,9 +909,7 @@ def synthesize_subscriber_profile(validated, structured_cv_md, api_key=None, mod
         "max_tailored_cvs": 3,
         "min_match_score": 70,
         "career_goal": career_goal,
-        "title_include": title_include,
-        "upgrade_title_include": upgrade_include,
-        "title_exclude": title_exclude,
+        **rules,
         "include_remote_mexico": "remote_mx" in locations,
         "include_country_only": "mx_country" in locations,
     }
@@ -803,24 +919,124 @@ def synthesize_subscriber_profile(validated, structured_cv_md, api_key=None, mod
 
 
 # --------------------------------------------------------------------------
-# Codebase Registration (cvs/<id>.md + config.json + docs/onboard.html)
+# Codebase Registration (cvs/<id>.md + subscribers/<id>.json)
 # --------------------------------------------------------------------------
 
-def register_subscriber_in_codebase(validated, root=ROOT, api_key=None, model=fj.DEFAULT_LLM_MODEL):
-    """Create/update `cvs/<id>.md` and `config.json` for the onboarded subscriber.
-    Returns a result dict suitable for confirmation emailing and GitHub Actions telemetry."""
-    root = Path(root).resolve()
-    cfg_path = root / "config.json"
-    cfg = fj.load_json(cfg_path, None)
-    if not isinstance(cfg, dict):
-        cfg = copy.deepcopy(fj.DEFAULTS)
+_VALIDATION_SAMPLE_JOB = {
+    "title": "Director, Digital Transformation & Operations",
+    "company": "Flex",
+    "location": "Guadalajara, Jalisco, Mexico",
+    "team": "Global Operations",
+}
 
-    subs = cfg.setdefault("subscribers", [])
-    sub_id, updated_existing = derive_subscriber_id(validated["name"], validated["email"], subs)
+
+def cv_problems(cv_md, name="Candidate", email=""):
+    """Reasons a structured master CV would break CV tailoring or the checks the shared
+    test-suite runs on every subscriber's CV. Returns [] when the CV is usable."""
+    problems = []
+    if fj.ATS_ILLEGAL_CHARS_RE.search(cv_md):
+        problems.append("the CV contains characters that ATS portals reject")
+    if not fj.extract_cv_company_profiles(cv_md):
+        problems.append("no employer in the CV has a '*Company Profile: ...*' line")
+        return problems
+    try:
+        sub_stub = {"name": name or "Candidate", "recipient_email": email}
+        tailored_cv = fj.tailor_cv_deterministic(dict(_VALIDATION_SAMPLE_JOB), cv_md, sub_stub)["cv"]
+        contexts = [exp["company_context"] for exp in tailored_cv.get("experience") or [] if exp.get("company_context")]
+        if not contexts:
+            problems.append("no role with bullet points was found under an employer that has a Company Profile")
+            return problems
+        # The employer context must survive into all three formats a tailored CV is sent in.
+        snippet = contexts[0][:32]
+        docx_text = fj.extract_docx_text(fj.render_minimalist_cv_docx(tailored_cv, _VALIDATION_SAMPLE_JOB))
+        pdf_text = fj.extract_pdf_text(fj.render_minimalist_cv_pdf(tailored_cv, _VALIDATION_SAMPLE_JOB))
+        html_text = fj.render_minimalist_cv_html(tailored_cv, _VALIDATION_SAMPLE_JOB)
+        if (
+            snippet not in docx_text
+            or fj.pdf_safe_text(snippet[:20]) not in pdf_text
+            or html.escape(snippet) not in html_text
+        ):
+            problems.append("an employer's Company Profile does not survive into the tailored CV formats")
+        if fj.ATS_ILLEGAL_CHARS_RE.search(docx_text) or fj.ATS_ILLEGAL_CHARS_RE.search(pdf_text):
+            problems.append("a CV tailored from it would contain characters that ATS portals reject")
+    except Exception as e:
+        problems.append(f"a tailored CV could not be built from it ({type(e).__name__}: {e})")
+    return problems
+
+
+def profile_problems(sub_record, cv_md):
+    """Reasons a new subscriber profile must not be stored. Returns [] when it is safe.
+
+    A stored profile is loaded by every later daily run and by the test-suite that runs before
+    each of them, so one bad profile would otherwise stop the daily email for everybody."""
+    problems = cv_problems(cv_md, sub_record.get("name"), sub_record.get("recipient_email") or "")
+    if not str(sub_record.get("career_goal") or "").strip():
+        problems.append("the profile has no career goal")
+    pattern_lists = [
+        (key, sub_record.get(key) or [])
+        for key in ("title_include", "title_exclude", "upgrade_title_include")
+    ] + [
+        (f"title_all_of[{idx}]", group)
+        for idx, group in enumerate(sub_record.get("title_all_of") or [])
+    ]
+    for label, patterns in pattern_lists:
+        for pattern in patterns:
+            try:
+                re.compile(pattern, re.I)
+            except (re.error, TypeError) as e:
+                problems.append(f"{label} pattern {pattern!r} is not a valid pattern ({e})")
+                continue
+            if fj.has_nested_quantifier(pattern):
+                problems.append(f"{label} pattern {pattern!r} could make title matching extremely slow")
+    if not sub_record.get("title_include") and not sub_record.get("title_all_of"):
+        problems.append("the profile has no title rule, so it could never match a role")
+    return problems
+
+
+def subscriber_file_path(root, sub_id):
+    """Absolute path of `subscribers/<id>.json`. Raises ValueError for an id that is not a
+    plain file name, which also rules out any path outside the `subscribers/` folder."""
+    if not isinstance(sub_id, str) or not fj.SUBSCRIBER_ID_RE.fullmatch(sub_id):
+        raise ValueError(
+            f"Subscriber id {sub_id!r} cannot be used as a file name. Rename it in config.json to "
+            "lower-case letters, digits and underscores (2 to 30 characters, starting with a letter)."
+        )
+    base = (Path(root) / fj.SUBSCRIBERS_DIR).resolve()
+    path = (base / f"{sub_id}.json").resolve()
+    path.relative_to(base)
+    return path
+
+
+def _write_text_atomic(path, text):
+    """Write a text file through a sibling temp file so a crash never leaves it half-written."""
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, path)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+
+
+def register_subscriber_in_codebase(validated, root=ROOT, api_key=None, model=fj.DEFAULT_LLM_MODEL):
+    """Create or update one subscriber: `cvs/<id>.md` and `subscribers/<id>.json`.
+
+    Only those two files are written and both belong to this subscriber alone, so two sign-ups
+    can never overwrite each other and config.json is never edited. Nothing is written unless
+    the profile passes `profile_problems`. Re-submitting with the same email updates the same
+    id and stamps `profile_updated_at`, which makes the next daily run forget AI rejections made
+    under the old profile.
+
+    Returns a result dict for the confirmation email and the run summary."""
+    root = Path(root).resolve()
+    cfg = fj.load_config(root) if (root / "config.json").is_file() else dict(fj.CFG_DEFAULTS)
+    sub_id, updated_existing = derive_subscriber_id(
+        validated["name"], validated["email"], cfg.get("subscribers") or []
+    )
+    record_path = subscriber_file_path(root, sub_id)
 
     # Path-traversal boundary verification on cvs/<sub_id>.md
     cvs_dir = (root / "cvs").resolve()
-    cvs_dir.mkdir(parents=True, exist_ok=True)
     cv_rel_path = f"cvs/{sub_id}.md"
     cv_abs_path = (root / cv_rel_path).resolve()
     cv_abs_path.relative_to(cvs_dir)
@@ -836,29 +1052,29 @@ def register_subscriber_in_codebase(validated, root=ROOT, api_key=None, model=fj
         "id": sub_id,
         **sub_profile,
         "cv_file": cv_rel_path,
+        "profile_updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
 
-    # Write CV file atomically
-    tmp_cv = cv_abs_path.with_suffix(".md.tmp")
-    tmp_cv.write_text(cv_md, encoding="utf-8")
-    tmp_cv.replace(cv_abs_path)
+    # Without the model the offline parser may have put the whole history under a placeholder
+    # heading. Matching still works from that text, but a CV tailored from it would show the
+    # placeholder to employers, so tailoring stays off until the person submits again.
+    tailored_cvs_enabled = f"### {PLACEHOLDER_EMPLOYER}" not in cv_md
+    if not tailored_cvs_enabled:
+        sub_record["max_tailored_cvs"] = 0
+        fj.gha_annotate(
+            "warning",
+            f"The CV for {sub_record['name']} was imported without employer structure (Gemini was not "
+            "available), so tailored CVs are switched off for this subscriber until they submit the form again.",
+        )
 
-    # Insert or update subscriber in config.json
-    replaced = False
-    for idx, existing in enumerate(subs):
-        if isinstance(existing, dict) and existing.get("id") == sub_id:
-            subs[idx] = sub_record
-            replaced = True
-            break
-    if not replaced:
-        subs.append(sub_record)
+    problems = profile_problems(sub_record, cv_md)
+    if problems:
+        raise ValueError("This sign-up cannot be stored: " + "; ".join(problems) + ".")
 
-    fj.write_json(cfg_path, cfg)
-
-    # Refresh docs/onboard.html if docs/ exists
-    docs_dir = root / "docs"
-    if docs_dir.exists():
-        (docs_dir / "onboard.html").write_text(render_onboard_page(cfg), encoding="utf-8")
+    cvs_dir.mkdir(parents=True, exist_ok=True)
+    record_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_text_atomic(cv_abs_path, cv_md)
+    fj.write_json(record_path, sub_record)
 
     employers_indexed = []
     for ln in cv_md.splitlines():
@@ -873,6 +1089,7 @@ def register_subscriber_in_codebase(validated, root=ROOT, api_key=None, model=fj
         "name": sub_record["name"],
         "email": sub_record["recipient_email"],
         "cv_file": cv_rel_path,
+        "record_file": f"{fj.SUBSCRIBERS_DIR}/{sub_id}.json",
         "career_goal": sub_record["career_goal"],
         "levels": validated["levels"],
         "domains": validated["domains"],
@@ -880,8 +1097,10 @@ def register_subscriber_in_codebase(validated, root=ROOT, api_key=None, model=fj
         "language": validated["language"],
         "free_text": validated["free_text"],
         "employers_indexed": employers_indexed,
-        "title_include_count": len(sub_record["title_include"]),
+        "title_include_count": len(sub_record["title_include"]) + sum(len(g) for g in sub_record["title_all_of"]),
         "title_exclude_count": len(sub_record["title_exclude"]),
+        "rule_breadth": sub_record["rule_breadth"],
+        "tailored_cvs_enabled": tailored_cvs_enabled,
         "cv_model": cv_model_used,
         "rule_model": rule_model_used,
         "onboarded_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
@@ -892,21 +1111,41 @@ def register_subscriber_in_codebase(validated, root=ROOT, api_key=None, model=fj
 # Professional Confirmation Email from Lucy
 # --------------------------------------------------------------------------
 
+CV_NOT_STRUCTURED_NOTE = (
+    "Note: your CV could not be fully structured this time, so tailored CVs are switched off for now. "
+    "Your matches are not affected. Submit the form again with the same email address in a few hours to enable them."
+)
+
+
 def build_onboarding_confirmation_email(result, sender_email, board_count=109):
-    """Build a polished executive welcome & confirmation email (HTML + plain text) from Lucy."""
+    """Build the welcome and confirmation email (plain text and HTML) from Lucy.
+
+    The HTML part is assembled from the same building blocks as the daily briefing
+    (`fj.email_*`), so the two look alike: Lucy's dark card (what she does and what happens
+    next), then one card with the subscriber's radar settings.
+
+    When the CV could not be structured (`tailored_cvs_enabled` is False) the email says so in
+    an amber note and makes no promise of tailored CVs anywhere else."""
     recipient = result["email"]
     name = result["name"]
     first_name = (name or "Partner").split()[0]
     sub_id = result["subscriber_id"]
     is_update = bool(result.get("updated_existing"))
+    cvs_on = result.get("tailored_cvs_enabled") is not False
 
     level_labels = ", ".join(SENIORITY_BY_ID[k]["label"] for k in result.get("levels") or [] if k in SENIORITY_BY_ID) or "Leadership"
     domain_labels = ", ".join(DOMAIN_BY_ID[k]["label"] for k in result.get("domains") or [] if k in DOMAIN_BY_ID) or "Cross-Functional Leadership"
     loc_labels = " + ".join(LOCATION_BY_ID[k]["label"] for k in result.get("locations") or [] if k in LOCATION_BY_ID) or "Jalisco + Remote Mexico"
-    employers = result.get("employers_indexed") or []
-    emp_txt = ", ".join(employers[:6]) + (f" (+{len(employers) - 6} more)" if len(employers) > 6 else "")
-    if not emp_txt:
+    language = result.get("language") or "English"
+    career_goal = result.get("career_goal") or ""
+    # The placeholder heading stands in for employers that could not be told apart; it is not one.
+    employers = [e for e in (result.get("employers_indexed") or []) if e != PLACEHOLDER_EMPLOYER]
+    if employers:
+        emp_txt = ", ".join(employers[:6]) + (f" (+{len(employers) - 6} more)" if len(employers) > 6 else "")
+    elif cvs_on:
         emp_txt = "Master CV structured & ATS-sanitized"
+    else:
+        emp_txt = "Not identified yet (your work history is stored as one block)"
 
     action_word = "Updated & Recalibrated" if is_update else "Active"
     msg = EmailMessage()
@@ -915,6 +1154,11 @@ def build_onboarding_confirmation_email(result, sender_email, board_count=109):
     msg["To"] = recipient
     msg["Reply-To"] = sender_email
 
+    briefing_step = (
+        "3. Tailored CVs & Rationale: When genuine matches land, you receive a concise morning briefing explaining why each role fits your trajectory—with ATS-ready Microsoft Word (.docx) CVs pre-built for your top picks."
+        if cvs_on
+        else "3. Rationale: When genuine matches land, you receive a concise morning briefing explaining why each role fits your trajectory."
+    )
     plain_lines = [
         f"Welcome aboard, {first_name}.",
         "",
@@ -925,120 +1169,114 @@ def build_onboarding_confirmation_email(result, sender_email, board_count=109):
         f"- Target Seniority: {level_labels}",
         f"- Functional Domains: {domain_labels}",
         f"- Geographic Scope: {loc_labels}",
-        f"- Briefing Language: {result.get('language', 'English')}",
+        f"- Briefing Language: {language}",
         f"- CV Employers Indexed & Enriched: {emp_txt}",
         "",
         "YOUR CAREER NORTH STAR (AI MATCH GATE)",
-        result.get("career_goal", ""),
+        career_goal,
         "",
         "WHAT HAPPENS NEXT",
         f"1. Daily Market Sweep: Every morning I scan {board_count} verified employer career portals across Workday, Greenhouse, SmartRecruiters, Oracle HCM, Eightfold, Lever, Ashby, BambooHR, and Workable.",
         "2. AI Fit Validation: Each candidate opening is reviewed by Gemini against your Career North Star, your real CV experience, and the company's industry profile. Roles that aren't a strong fit are filtered out automatically.",
-        "3. Tailored CVs & Rationale: When genuine matches land, you receive a concise morning briefing explaining why each role fits your trajectory—with ATS-ready Microsoft Word (.docx) CVs pre-built for your top picks.",
+        briefing_step,
+    ]
+    if not cvs_on:
+        plain_lines += ["", CV_NOT_STRUCTURED_NOTE]
+    plain_lines += [
         "",
         "Shoulder to shoulder,",
         "Lucy · Personal Headhunter (Jobs Sentinel)",
     ]
     msg.set_content("\n".join(plain_lines))
 
-    first_esc = html.escape(first_name)
-    sub_id_esc = html.escape(sub_id)
-    levels_esc = html.escape(level_labels)
-    domains_esc = html.escape(domain_labels)
-    locs_esc = html.escape(loc_labels)
-    lang_esc = html.escape(result.get("language") or "English")
-    emp_esc = html.escape(emp_txt)
-    goal_esc = html.escape(result.get("career_goal") or "")
-    status_badge = html.escape("PROFILE RECALIBRATED" if is_update else "RADAR LIVE & ARMED")
+    # HTML part, from the shared building blocks. Every value from the sign-up goes through
+    # `fj.email_text`, which escapes it and lets an over-long word wrap on a phone.
+    first_esc = fj.email_text(first_name)
+    sub_id_esc = fj.email_text(sub_id)
+    bright = f'style="color:{fj.EMAIL_ON_DARK};"'
 
-    html_body = f"""<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Welcome to Jobs Sentinel</title>
-</head>
-<body style="margin:0;padding:28px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:#18181b;background-color:#f4f4f5;-webkit-font-smoothing:antialiased;">
-  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">Your private AI job radar ({sub_id_esc}) is active across {board_count} employer boards — only verified matches + ATS-ready CVs.</div>
+    status_html = (
+        f'<span style="display:inline-block;padding:3px 10px;border:1px solid {fj.EMAIL_GREEN_LINE};border-radius:999px;'
+        f"background-color:{fj.EMAIL_GREEN_SOFT};color:{fj.EMAIL_GREEN_DEEP};font-size:10px;font-weight:800;"
+        f'letter-spacing:0.6px;line-height:1.5;">&#9679; '
+        + fj.email_text("PROFILE RECALIBRATED" if is_update else "RADAR LIVE & ARMED")
+        + "</span>"
+    )
+    cv_word = "structured master CV" if cvs_on else "master CV"
+    dek_html = (
+        f'I&rsquo;m <strong style="color:{fj.EMAIL_INK};">Lucy</strong>, your private AI headhunter. Your onboarding profile '
+        f'(<code style="padding:1px 6px;border-radius:4px;background-color:{fj.EMAIL_PAGE};font-size:12px;color:{fj.EMAIL_INK};">{sub_id_esc}</code>) '
+        f"and {cv_word} are now committed to the Jobs Sentinel codebase."
+    )
+    message_html = (
+        f"Every morning I sweep <strong {bright}>{board_count} verified employer career portals</strong> across 9 ATS platforms, "
+        "evaluate candidate openings with Gemini against your Career North Star and CV, "
+        + (
+            f"discard weak fits automatically, and attach <strong {bright}>ATS-ready Word (.docx) CVs</strong> "
+            "for your strongest opportunities."
+            if cvs_on
+            else "and discard weak fits automatically."
+        )
+    )
+    briefing_contents = (
+        "each employer&rsquo;s industry, the reason the role fits, and tailored CVs for your top picks"
+        if cvs_on
+        else "each employer&rsquo;s industry and the reason the role fits"
+    )
+    next_html = (
+        "Starting with the next scheduled sweep, you&rsquo;ll receive your daily <em>Lucy Private Talent Briefing</em> "
+        'whenever genuine, never-before-sent matches pass our AI <span style="white-space:nowrap;">review&mdash;</span>'
+        f"complete with {briefing_contents}. "
+        "You can update your CV or preferences anytime using the onboarding form with this same email address."
+    )
 
-  <div style="max-width:640px;margin:0 auto;background-color:#ffffff;border:1px solid #e4e4e7;border-radius:14px;padding:30px 28px 24px;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin-bottom:12px;">
-      <tr>
-        <td align="left" style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:1.3px;color:#059669;">
-          &#10022; Lucy &middot; Personal Headhunter
-        </td>
-        <td align="right">
-          <span style="display:inline-block;background-color:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;font-size:10px;font-weight:800;padding:3px 9px;border-radius:999px;letter-spacing:0.6px;">&#9679; {status_badge}</span>
-        </td>
-      </tr>
-    </table>
+    def _setting_row(label, value, last=False, colour=fj.EMAIL_INK):
+        """One 'label: value' line of the radar settings."""
+        rule = "" if last else f"border-bottom:1px solid {fj.EMAIL_LINE};"
+        return (
+            f'<tr><td width="38%" valign="top" style="padding:9px 10px 9px 0;{rule}font-family:{fj.EMAIL_FONT};'
+            f'font-size:12.5px;line-height:20px;font-weight:600;color:{fj.EMAIL_MUTE};">{label}</td>'
+            f'<td valign="top" style="padding:9px 0;{rule}font-family:{fj.EMAIL_FONT};font-size:13.5px;line-height:20px;'
+            f'color:{colour};{fj.EMAIL_WRAP}">{fj.email_text(value)}</td></tr>'
+        )
 
-    <h1 style="margin:0 0 6px;font-size:24px;font-weight:800;letter-spacing:-0.5px;color:#09090b;line-height:1.25;">
-      Welcome to your unfair advantage, {first_esc}.
-    </h1>
-    <div style="font-size:13.5px;color:#52525b;margin-bottom:18px;line-height:1.55;">
-      I&rsquo;m <strong style="color:#18181b;">Lucy</strong>, your private AI headhunter. Your onboarding profile (<code style="background-color:#f4f4f5;padding:1px 6px;border-radius:4px;font-size:12px;color:#09090b;">{sub_id_esc}</code>) and structured master CV are now committed to the Jobs Sentinel codebase.
-    </div>
+    settings_html = (
+        f'<table {fj.EMAIL_TABLE} style="border-collapse:collapse;margin:8px 0 0;">'
+        + _setting_row("Target Seniority", level_labels)
+        + _setting_row("Functional Domains", domain_labels)
+        + _setting_row("Geographic Scope", loc_labels)
+        + _setting_row("Briefing Language", language)
+        + _setting_row("CV Employers Enriched", emp_txt, last=True, colour=fj.EMAIL_INK if cvs_on else fj.EMAIL_AMBER)
+        + "</table>"
+    )
+    blueprint_html = fj.email_card(
+        fj.email_panel("Career North Star (AI Match Gate Prompt)", fj.email_text(career_goal), margin_top=0)
+        + settings_html
+    )
 
-    <!-- Dark Obsidian Partner Welcome Card -->
-    <div style="background-color:#09090b;color:#fafafa;border-radius:11px;padding:18px 20px;margin-bottom:20px;">
-      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1.4px;color:#34d399;margin-bottom:6px;">
-        &#9889; Us vs. Their Machine &middot; Onboarding Confirmed
-      </div>
-      <div style="font-size:16px;font-weight:800;color:#ffffff;margin-bottom:7px;line-height:1.3;">
-        Zero Job-Board Noise. Only Verified Matches Built Around Your Track Record.
-      </div>
-      <div style="font-size:13px;color:#d4d4d8;line-height:1.58;">
-        Every morning I sweep <strong style="color:#ffffff;">{board_count} verified employer career portals</strong> across 9 ATS platforms, evaluate candidate openings with Gemini against your Career North Star and CV, discard weak fits automatically, and attach <strong style="color:#ffffff;">ATS-ready Word (.docx) CVs</strong> for your strongest opportunities.
-      </div>
-    </div>
-
-    <!-- Calibrated Blueprint Card -->
-    <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.1px;color:#09090b;border-bottom:2px solid #09090b;padding-bottom:6px;margin-bottom:12px;">
-      &#127919; Your Calibrated Radar Blueprint
-    </div>
-
-    <div style="background-color:#fafafa;border:1px solid #e4e4e7;border-left:3px solid #059669;border-radius:8px;padding:12px 15px;margin-bottom:14px;">
-      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:#059669;margin-bottom:4px;">Career North Star (AI Match Gate Prompt)</div>
-      <div style="font-size:12.8px;color:#18181b;line-height:1.55;">{goal_esc}</div>
-    </div>
-
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-size:12.8px;margin-bottom:20px;">
-      <tr>
-        <td style="padding:8px 10px;border-bottom:1px solid #e4e4e7;color:#71717a;width:36%;font-weight:600;">Target Seniority</td>
-        <td style="padding:8px 10px;border-bottom:1px solid #e4e4e7;color:#18181b;font-weight:600;">{levels_esc}</td>
-      </tr>
-      <tr>
-        <td style="padding:8px 10px;border-bottom:1px solid #e4e4e7;color:#71717a;font-weight:600;">Functional Domains</td>
-        <td style="padding:8px 10px;border-bottom:1px solid #e4e4e7;color:#18181b;">{domains_esc}</td>
-      </tr>
-      <tr>
-        <td style="padding:8px 10px;border-bottom:1px solid #e4e4e7;color:#71717a;font-weight:600;">Geographic Scope</td>
-        <td style="padding:8px 10px;border-bottom:1px solid #e4e4e7;color:#18181b;">{locs_esc}</td>
-      </tr>
-      <tr>
-        <td style="padding:8px 10px;border-bottom:1px solid #e4e4e7;color:#71717a;font-weight:600;">Briefing Language</td>
-        <td style="padding:8px 10px;border-bottom:1px solid #e4e4e7;color:#18181b;">{lang_esc}</td>
-      </tr>
-      <tr>
-        <td style="padding:8px 10px;color:#71717a;font-weight:600;">CV Employers Enriched</td>
-        <td style="padding:8px 10px;color:#0f766e;font-weight:600;">{emp_esc}</td>
-      </tr>
-    </table>
-
-    <!-- What Happens Next -->
-    <div style="padding:14px 16px;background-color:#fafafa;border:1px solid #e4e4e7;border-radius:9px;font-size:12.5px;color:#27272a;line-height:1.55;">
-      <strong style="color:#09090b;">What happens next:</strong> Starting with the next scheduled sweep, you&rsquo;ll receive your daily <em>Lucy Private Talent Briefing</em> whenever genuine, never-before-sent matches pass our AI review—complete with company industry profiles, match rationales, and tailored CVs. You can update your CV or preferences anytime using the onboarding form with this same email address.
-    </div>
-
-    <div style="margin-top:16px;padding-top:12px;border-top:1px solid #e4e4e7;font-size:11.5px;color:#71717a;text-align:center;">
-      Shoulder to shoulder, always. &mdash; <strong style="color:#18181b;">Lucy</strong> &middot; Jobs Sentinel
-    </div>
-  </div>
-</body>
-</html>
-"""
-    msg.add_alternative(html_body, subtype="html")
+    preheader = (
+        f"Your private AI job radar ({sub_id}) is active across {board_count} employer boards — only verified matches"
+        + (" + ATS-ready CVs." if cvs_on else ".")
+    )
+    content_html = (
+        fj.email_masthead(status_html)
+        + fj.email_greeting(f"Welcome to your unfair advantage, {first_esc}.", dek_html)
+        + fj.email_lucy_card(
+            "Us vs. Their Machine &middot; Onboarding Confirmed",
+            "Zero Job-Board Noise. Only Verified Matches Built Around Your Track Record.",
+            message_html,
+            "What happens next",
+            next_html,
+        )
+        + ("" if cvs_on else fj.email_note(fj.email_text(CV_NOT_STRUCTURED_NOTE), "warn"))
+        + fj.email_section("Your Calibrated Radar Blueprint", blueprint_html)
+        + fj.email_footer([
+            f'Shoulder to shoulder, always. &mdash; <strong style="color:{fj.EMAIL_INK};">Lucy</strong> &middot; Jobs Sentinel'
+        ])
+    )
+    msg.add_alternative(
+        fj.email_document("Welcome to Jobs Sentinel", html.escape(preheader), content_html), subtype="html"
+    )
     return msg
 
 
@@ -1066,7 +1304,9 @@ def send_onboarding_confirmation_email(result, board_count=109):
                     server.login(smtp_user, smtp_password)
                     server.send_message(msg)
             else:
-                with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30) as server:
+                # Explicit context: without one smtplib does not verify the server certificate,
+                # and this connection carries the mail password.
+                with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30, context=ssl.create_default_context()) as server:
                     server.login(smtp_user, smtp_password)
                     server.send_message(msg)
             print(f"  [Onboarding:{result['subscriber_id']}] Sent confirmation email -> {result['email']}")
@@ -1502,7 +1742,7 @@ def run_local_onboarding_server(host="127.0.0.1", port=8080, root=ROOT, send_ema
         def do_GET(self):  # noqa: N802
             path = self.path.split("?", 1)[0]
             if path in ("/", "/onboard", "/onboard.html"):
-                cfg = fj.load_config() if (root / "config.json").exists() else fj.DEFAULTS
+                cfg = fj.load_config(root) if (root / "config.json").is_file() else dict(fj.CFG_DEFAULTS)
                 html_bytes = render_onboard_page(cfg, local_server=True).encode("utf-8")
                 self._send(200, html_bytes, "text/html; charset=utf-8")
                 return
@@ -1533,7 +1773,7 @@ def run_local_onboarding_server(host="127.0.0.1", port=8080, root=ROOT, send_ema
                 if send_email:
                     emailed = send_onboarding_confirmation_email(res, board_count=len(companies) or 109)
                 msg_txt = (
-                    f"Welcome aboard, {res['name']}! Profile '{res['subscriber_id']}' is now saved in config.json and {res['cv_file']}"
+                    f"Welcome aboard, {res['name']}! Profile '{res['subscriber_id']}' is now saved in {res['record_file']} and {res['cv_file']}"
                     + (f", and Lucy sent a confirmation email to {res['email']}." if emailed else " (set GMAIL_USER & GMAIL_APP_PASSWORD to send confirmation emails).")
                 )
                 out = json.dumps({"ok": True, "subscriber_id": res["subscriber_id"], "emailed": emailed, "message": msg_txt}).encode("utf-8")
@@ -1604,13 +1844,14 @@ def main(argv=None):
 
     print(
         f"Onboarded subscriber '{result['subscriber_id']}' ({result['name']} <{result['email']}>) -> "
-        f"{result['cv_file']} + config.json ({result['title_include_count']} include rules, "
-        f"CV={result['cv_model']}, rules={result['rule_model']})."
+        f"{result['cv_file']} + {result['record_file']} ({result['title_include_count']} title rules, "
+        f"{result['rule_breadth']}, CV={result['cv_model']}, rules={result['rule_model']})."
     )
     fj.gha_summary(
         f"### Candidate Onboarded · `{result['subscriber_id']}`\n"
         f"- **Candidate**: {result['name']} (`{result['email']}`)\n"
         f"- **Master CV**: `{result['cv_file']}` (structured via `{result['cv_model']}`)\n"
+        f"- **Profile**: `{result['record_file']}` (title rules: {result['rule_breadth']})\n"
         f"- **Career North Star**: {result['career_goal']}\n"
         f"- **Employers Enriched**: {', '.join(result['employers_indexed']) or 'N/A'}"
     )
