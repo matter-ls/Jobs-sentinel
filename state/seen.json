@@ -3,22 +3,22 @@
   "workday:Flex:WD228976": {
    "first_seen": "2026-11-08",
    "baseline": true,
-   "last_seen": "2026-11-22"
+   "last_seen": "2026-11-23"
   },
   "workday:Flex:WD230884": {
    "first_seen": "2026-11-08",
    "baseline": true,
-   "last_seen": "2026-11-22"
+   "last_seen": "2026-11-23"
   },
   "workday:Flex:WD231552": {
    "first_seen": "2026-11-08",
    "baseline": true,
-   "last_seen": "2026-11-22"
+   "last_seen": "2026-11-23"
   },
   "workday:Flex:WD229135": {
    "first_seen": "2026-11-08",
    "baseline": true,
-   "last_seen": "2026-11-22"
+   "last_seen": "2026-11-23"
   },
   "workday:Jabil:J2470435": {
    "first_seen": "2026-11-08",
@@ -28,7 +28,7 @@
   "workday:Avnet:JR-023909": {
    "first_seen": "2026-11-08",
    "baseline": true,
-   "last_seen": "2026-11-22"
+   "last_seen": "2026-11-23"
   },
   "workday:HP Inc.:3165460": {
    "first_seen": "2026-11-08",
@@ -43,32 +43,32 @@
   "ashby:Kueski:e1261953-7bcc-45db-a54e-fc2e0bdfbc89": {
    "first_seen": "2026-11-08",
    "baseline": true,
-   "last_seen": "2026-11-22"
+   "last_seen": "2026-11-23"
   },
   "workday:Citi:26996393": {
    "first_seen": "2026-11-08",
    "baseline": true,
-   "last_seen": "2026-11-22"
+   "last_seen": "2026-11-23"
   },
   "oracle_hcm:JPMorgan Chase:210802450": {
    "first_seen": "2026-11-08",
    "baseline": true,
-   "last_seen": "2026-11-22"
+   "last_seen": "2026-11-23"
   },
   "greenhouse:Flexport:7651413": {
    "first_seen": "2026-11-08",
    "baseline": true,
-   "last_seen": "2026-11-22"
+   "last_seen": "2026-11-23"
   },
   "workday:Flex:WD234211": {
    "first_seen": "2026-11-14",
    "baseline": false,
-   "last_seen": "2026-11-22"
+   "last_seen": "2026-11-23"
   },
   "greenhouse:Paystand:7830346003": {
    "first_seen": "2026-11-17",
    "baseline": false,
-   "last_seen": "2026-11-22"
+   "last_seen": "2026-11-23"
   }
  },
  "initialized": true,
@@ -148,22 +148,22 @@
     "workday:Flex:WD228976": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Flex:WD230884": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Flex:WD231552": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Flex:WD229135": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Jabil:J2470435": {
      "first_seen": "2026-11-08",
@@ -173,17 +173,17 @@
     "workday:Avnet:JR-023909": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Micron:JR114201": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:HP Inc.:3167635": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:HP Inc.:3165460": {
      "first_seen": "2026-11-08",
@@ -203,39 +203,39 @@
     "ashby:Kueski:e1261953-7bcc-45db-a54e-fc2e0bdfbc89": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Citi:26996393": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "oracle_hcm:JPMorgan Chase:210802450": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "greenhouse:Flexport:7651413": {
      "first_seen": "2026-11-08",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Flex:WD234211": {
      "first_seen": "2026-11-14",
      "baseline": false,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "greenhouse:Paystand:7830346003": {
      "first_seen": "2026-11-17",
      "baseline": false,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     }
    },
    "initialized": true,
    "relationship": {
-    "edition": 18,
-    "streak_days": 15,
-    "last_briefing_date": "2026-11-22",
+    "edition": 19,
+    "streak_days": 16,
+    "last_briefing_date": "2026-11-23",
     "total_roles_surfaced": 17,
     "total_cvs_tailored": 8,
     "recent_angle_ids": [
@@ -256,7 +256,8 @@
      21,
      22,
      23,
-     25
+     25,
+     27
     ],
     "recent_headlines": [
      "Turn Ambition Into Pipeline Today.",
@@ -276,10 +277,10 @@
      "Real Security Is Knowing Your Own Market Value.",
      "A silent radar still maps the whole board.",
      "A silent grid still feeds our momentum.",
-     "Sunday stillness protects our strategic advantage"
+     "Sunday stillness protects our strategic advantage",
+     "A silent grid protects our negotiation strength"
     ],
     "recent_story_beats": [
-     "Ed. #7 (2026-11-13): Quiet day: Lucy sent no roles, kept the streak honest and asked Lucas for one pipeline-hygiene move.",
      "Ed. #8 (2026-11-14): Lucy framed 'Six Seconds, One Decision' around Flex (Director, Design, Molding & Engineering) and asked Lucas for one 60-second application.",
      "Ed. #9 (2026-11-15): Quiet day: Lucy sent no roles, kept the streak honest and asked Lucas for one pipeline-hygiene move.",
      "Ed. #10 (2026-11-16): Quiet day: Lucy sent no roles, kept the streak honest and asked Lucas for one pipeline-hygiene move.",
@@ -290,9 +291,10 @@
      "Ed. #15 (2026-11-21): Edition fifteen embraced a quiet market day, keeping the fourteen-day streak alive and focusing Lucas on LinkedIn profile hygiene.",
      "Ed. #16 (2026-11-21): Edition sixteen navigated a quiet Saturday market, maintaining the fourteen-day streak and focusing on profile hygiene.",
      "Ed. #17 (2026-11-21): Edition seventeen maintained our fourteen-day streak through a quiet Saturday sweep, keeping Lucas focused on pipeline hygiene.",
-     "Ed. #18 (2026-11-22): Lucas and Lucy maintain operational calm during a quiet market, leveraging existing pipeline momentum and reinforcing critical process hygiene."
+     "Ed. #18 (2026-11-22): Lucas and Lucy maintain operational calm during a quiet market, leveraging existing pipeline momentum and reinforcing critical process hygiene.",
+     "Ed. #19 (2026-11-23): Edition nineteen maintained operational calm during a quiet market sweep, reinforcing Lucas in his executive posture."
     ],
-    "last_micro_challenge": "Spend sixty seconds reviewing your thirteen active applications and update your master tracker for one; that is how we maintain institutional control over this process.",
+    "last_micro_challenge": "Spend sixty seconds today reviewing your master tracker to ensure your thirteen active applications are fully up to date.",
     "last_spotlight_company": "Paystand",
     "last_briefing_source": "gemini",
     "recent_spotlight_keys": []
