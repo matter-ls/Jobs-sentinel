@@ -76,8 +76,11 @@
   "lucas": {
    "emailed": {
     "workday:Avnet:JR-023909": {
-     "date": "2026-11-08",
-     "sig": "avnet|mexico country manager shared services|"
+     "date": "2026-11-23",
+     "sig": "avnet|mexico country manager shared services|",
+     "title": "Mexico Country Manager, Shared Services",
+     "company": "Avnet",
+     "industry": "Electronic Components Distribution & Supply Chain"
     },
     "workday:Citi:26996393": {
      "date": "2026-11-08",
@@ -120,8 +123,11 @@
      "sig": "kueski|director of product management customer products platform|product"
     },
     "greenhouse:Flexport:7651413": {
-     "date": "2026-11-08",
-     "sig": "flexport|country manager mexico|"
+     "date": "2026-11-23",
+     "sig": "flexport|country manager mexico|",
+     "title": "Country Manager, Mexico",
+     "company": "Flexport",
+     "industry": "Global FreightTech, Customs, Ocean/Air Forwarding & Supply Chain Cloud"
     },
     "workday:HP Inc.:3167635": {
      "date": "2026-11-09",
@@ -233,11 +239,11 @@
    },
    "initialized": true,
    "relationship": {
-    "edition": 20,
+    "edition": 21,
     "streak_days": 16,
     "last_briefing_date": "2026-11-23",
-    "total_roles_surfaced": 17,
-    "total_cvs_tailored": 8,
+    "total_roles_surfaced": 19,
+    "total_cvs_tailored": 10,
     "recent_angle_ids": [
      26,
      28,
@@ -258,7 +264,8 @@
      23,
      25,
      27,
-     30
+     30,
+     14
     ],
     "recent_headlines": [
      "Turn Ambition Into Pipeline Today.",
@@ -280,10 +287,10 @@
      "A silent grid still feeds our momentum.",
      "Sunday stillness protects our strategic advantage",
      "A silent grid protects our negotiation strength",
-     "Take a calm hour to choose your next move."
+     "Take a calm hour to choose your next move.",
+     "Every time you choose a role, your story gets sharper."
     ],
     "recent_story_beats": [
-     "Ed. #9 (2026-11-15): Quiet day: Lucy sent no roles, kept the streak honest and asked Lucas for one pipeline-hygiene move.",
      "Ed. #10 (2026-11-16): Quiet day: Lucy sent no roles, kept the streak honest and asked Lucas for one pipeline-hygiene move.",
      "Ed. #11 (2026-11-17): Lucy framed 'The First Fifteen Applicants' around Paystand (Vice President of Product) and asked Lucas for one 60-second application.",
      "Ed. #12 (2026-11-18): Quiet day: Lucy sent no roles, kept the streak honest and asked Lucas for one pipeline-hygiene move.",
@@ -294,29 +301,34 @@
      "Ed. #17 (2026-11-21): Edition seventeen maintained our fourteen-day streak through a quiet Saturday sweep, keeping Lucas focused on pipeline hygiene.",
      "Ed. #18 (2026-11-22): Lucas and Lucy maintain operational calm during a quiet market, leveraging existing pipeline momentum and reinforcing critical process hygiene.",
      "Ed. #19 (2026-11-23): Edition nineteen maintained operational calm during a quiet market sweep, reinforcing Lucas in his executive posture.",
-     "Ed. #20 (2026-11-23): Edition twenty marked a quiet Monday sweep, encouraging Lucas to use unhurried attention across his thirteen open roles."
+     "Ed. #20 (2026-11-23): Edition twenty marked a quiet Monday sweep, encouraging Lucas to use unhurried attention across his thirteen open roles.",
+     "Ed. #21 (2026-11-23): Edition twenty-one reached sixteen days of momentum, framing the Avnet shared services role as a strategic repetition for Lucas."
     ],
-    "last_micro_challenge": "Reply to this email with one specific role title you would love to see on our radar this week.",
-    "last_spotlight_company": "Paystand",
+    "last_micro_challenge": "Open the Avnet posting for Mexico Country Manager, review the attached tailored CV, and submit your application now before your first meeting of the day.",
+    "last_spotlight_company": "Avnet",
     "last_briefing_source": "gemini",
     "recent_spotlight_keys": [],
     "recent_shape_ids": [
-     7
+     7,
+     6
     ],
     "recent_move_ids": [
-     "tune_radar"
+     "tune_radar",
+     "apply_now"
     ],
     "recent_messages": [
-     "Lucas, we swept 109 portals overnight and found zero new matches. With 13 open roles already on your board from our 20 briefings, use this quiet Monday hour to move deliberately. Unhurried attention is your edge."
+     "Lucas, we swept 109 portals overnight and found zero new matches. With 13 open roles already on your board from our 20 briefings, use this quiet Monday hour to move deliberately. Unhurried attention is your edge.",
+     "Good morning Lucas. Briefing number twenty-one brings us to sixteen days of unbroken velocity, with nineteen roles surfaced and ten tailored CVs built together so far. When Avnet looks at your background in global operations technology, they see fifteen years of standing up complex process intelligence inside Fortune 500 networks. Deciding which role fits is just another repetition that helps you articulate exactly what you are for."
     ],
     "recent_plays": [
-     "Reply to this email with one specific role title you would love to see on our radar this week."
+     "Reply to this email with one specific role title you would love to see on our radar this week.",
+     "Open the Avnet posting for Mexico Country Manager, review the attached tailored CV, and submit your application now before your first meeting of the day."
     ],
     "last_variety": {
-     "lens": "A quiet hour is an advantage",
-     "shape": "brief",
-     "play": "tune_radar",
-     "closest_recent_note": 0.0
+     "lens": "Reps sharpen the story",
+     "shape": "mirror",
+     "play": "apply_now",
+     "closest_recent_note": 0.03
     }
    },
    "rejected_matches": {}
