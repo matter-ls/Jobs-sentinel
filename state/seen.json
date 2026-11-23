@@ -233,7 +233,7 @@
    },
    "initialized": true,
    "relationship": {
-    "edition": 19,
+    "edition": 20,
     "streak_days": 16,
     "last_briefing_date": "2026-11-23",
     "total_roles_surfaced": 17,
@@ -257,7 +257,8 @@
      22,
      23,
      25,
-     27
+     27,
+     30
     ],
     "recent_headlines": [
      "Turn Ambition Into Pipeline Today.",
@@ -278,10 +279,10 @@
      "A silent radar still maps the whole board.",
      "A silent grid still feeds our momentum.",
      "Sunday stillness protects our strategic advantage",
-     "A silent grid protects our negotiation strength"
+     "A silent grid protects our negotiation strength",
+     "Take a calm hour to choose your next move."
     ],
     "recent_story_beats": [
-     "Ed. #8 (2026-11-14): Lucy framed 'Six Seconds, One Decision' around Flex (Director, Design, Molding & Engineering) and asked Lucas for one 60-second application.",
      "Ed. #9 (2026-11-15): Quiet day: Lucy sent no roles, kept the streak honest and asked Lucas for one pipeline-hygiene move.",
      "Ed. #10 (2026-11-16): Quiet day: Lucy sent no roles, kept the streak honest and asked Lucas for one pipeline-hygiene move.",
      "Ed. #11 (2026-11-17): Lucy framed 'The First Fifteen Applicants' around Paystand (Vice President of Product) and asked Lucas for one 60-second application.",
@@ -292,12 +293,31 @@
      "Ed. #16 (2026-11-21): Edition sixteen navigated a quiet Saturday market, maintaining the fourteen-day streak and focusing on profile hygiene.",
      "Ed. #17 (2026-11-21): Edition seventeen maintained our fourteen-day streak through a quiet Saturday sweep, keeping Lucas focused on pipeline hygiene.",
      "Ed. #18 (2026-11-22): Lucas and Lucy maintain operational calm during a quiet market, leveraging existing pipeline momentum and reinforcing critical process hygiene.",
-     "Ed. #19 (2026-11-23): Edition nineteen maintained operational calm during a quiet market sweep, reinforcing Lucas in his executive posture."
+     "Ed. #19 (2026-11-23): Edition nineteen maintained operational calm during a quiet market sweep, reinforcing Lucas in his executive posture.",
+     "Ed. #20 (2026-11-23): Edition twenty marked a quiet Monday sweep, encouraging Lucas to use unhurried attention across his thirteen open roles."
     ],
-    "last_micro_challenge": "Spend sixty seconds today reviewing your master tracker to ensure your thirteen active applications are fully up to date.",
+    "last_micro_challenge": "Reply to this email with one specific role title you would love to see on our radar this week.",
     "last_spotlight_company": "Paystand",
     "last_briefing_source": "gemini",
-    "recent_spotlight_keys": []
+    "recent_spotlight_keys": [],
+    "recent_shape_ids": [
+     7
+    ],
+    "recent_move_ids": [
+     "tune_radar"
+    ],
+    "recent_messages": [
+     "Lucas, we swept 109 portals overnight and found zero new matches. With 13 open roles already on your board from our 20 briefings, use this quiet Monday hour to move deliberately. Unhurried attention is your edge."
+    ],
+    "recent_plays": [
+     "Reply to this email with one specific role title you would love to see on our radar this week."
+    ],
+    "last_variety": {
+     "lens": "A quiet hour is an advantage",
+     "shape": "brief",
+     "play": "tune_radar",
+     "closest_recent_note": 0.0
+    }
    },
    "rejected_matches": {}
   },
