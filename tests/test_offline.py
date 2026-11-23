@@ -780,7 +780,7 @@ class EndToEnd(unittest.TestCase):
 
     @patch("fetch_jobs.call_gemini_daily_motivation")
     def test_daily_insider_motivation_genai_and_vault(self, mock_daily_mot):
-        """Daily 'Us vs. The System' motivation renders via Gemini when available and falls back cleanly."""
+        """Lucy's note renders via Gemini when available and falls back cleanly to the built-in texts."""
         sub = {"name": "Luis Gallegos", "recipient_email": "luisgallegosp@gmail.com"}
         sample_jobs = [
             {"key": "k1", "title": "Senior Manager, Process Automation", "company": "Acme", "location": "Zapopan", "loc_class": "jalisco", "url": "https://example.com/2", "posted_at": "2026-11-05"},
@@ -793,7 +793,7 @@ class EndToEnd(unittest.TestCase):
             msg = fj.build_email_message(sample_jobs, 1, sub, date(2026, 11, 5), "sender@gmail.com")
         self.assertTrue(mock_daily_mot.called)
         html_part = msg.get_body(preferencelist=("html",)).get_content()
-        self.assertIn("Us vs. The System", html_part)
+        self.assertIn("Lucy&rsquo;s note", html_part)
         self.assertIn("Refuse the 3% Loyalty Tax.", html_part)
         self.assertIn("Good morning, Luis.", html_part)
 
@@ -804,135 +804,178 @@ class EndToEnd(unittest.TestCase):
             self.assertTrue(headline)
             self.assertIn("Luis", body)
 
-    def test_ai_partner_briefing_prompt_quality_gate_and_continuity(self):
-        """Lucy's daily briefing is AI-first: the prompt is grounded in real overnight facts, the
-        spotlight employer's ATS, the candidate's real craft and the story so far; every draft passes
-        a quality gate (forbidden dishonest vocabulary, placeholders, near-duplicate headlines) with
-        exactly one revision retry; the email renders the chapter, the inspiration and the 60-second
-        play; memory persists."""
+    def test_lucy_note_prompt_quality_gate_and_continuity(self):
+        """Lucy's note is AI-first: the prompt names today's lens, shape and play, the real
+        overnight facts, the candidate's real craft, the story so far and what not to repeat;
+        every draft passes a quality gate (forbidden vocabulary, placeholders, the retired
+        software-versus-candidate theme, repeated headlines, openings or plays, worn-out words,
+        invented attachments) with exactly one revision retry; the email renders the note's
+        title, the inspiration and the 60-second play; memory persists."""
         sub_luis = next(s for s in fj.get_subscribers(CFG) if s["id"] == "luis")
         top_job = {
             "key": "workday:Flex:JR1", "ats": "workday", "title": "Automation Program Lead", "company": "Flex",
             "location": "Zapopan, Jalisco, Mexico", "loc_class": "jalisco", "url": "https://flex.wd1.myworkdayjobs.com/x/JR1",
             "posted_at": "2026-11-08", "cv_filename": "CV_Luis_Gallegos_Flex_Automation_Program_Lead.docx",
         }
+        yesterday_note = ("Luis, momentum is a muscle and yesterday you used it: HPE's posting got a careful read and "
+                          "that leverage compounds. Tonight the sweep brought a role with real scope at Flex.")
         sub_state = {"relationship": {
             "edition": 6, "streak_days": 6, "last_briefing_date": "2026-11-07",
             "total_roles_surfaced": 40, "total_cvs_tailored": 12,
-            "recent_headlines": ["Their Robot Is Now Our Doorman"],
-            "recent_story_beats": ["Ed. #6 (2026-11-07): Lucy framed 'Speed Is A Status Signal' around HPE and asked Luis for one application."],
+            "recent_headlines": ["Momentum Is a Muscle"],
+            "recent_messages": [yesterday_note],
+            "recent_plays": ["Open HPE's portal and upload the attached CV before 10 AM."],
+            "recent_story_beats": ["Ed. #6 (2026-11-07): Lucy took the lens 'The first readers' around HPE and asked Luis for the play 'apply_now'."],
             "last_micro_challenge": "Open HPE's portal and upload the attached CV before 10 AM.",
             "last_spotlight_company": "HPE",
         }}
         rel_ctx = fj.peek_relationship_context(sub_state, 3, 2, date(2026, 11, 8), board_count=109, sub_id="luis")
         self.assertEqual(rel_ctx["edition"], 7)
         self.assertEqual(rel_ctx["last_spotlight_company"], "HPE")
+        lens = fj.LUCY_LENSES[rel_ctx["angle_id"]]
+        shape = fj.LUCY_SHAPES[rel_ctx["shape_id"]]
 
-        # 1. The prompt is fully grounded (facts, ATS intel, craft, continuity, avoid-list, arc, language)
+        # 1. The prompt is grounded (facts, craft, continuity, arc, language) and names today's
+        #    lens, shape and play plus what not to repeat; the retired theme is not in it
         snapshot = fj.extract_cv_identity_snapshot(sub_luis)
         self.assertIn("Identity:", snapshot)
         self.assertIn("Current chapter:", snapshot)
         self.assertNotIn("@", snapshot)
-        prompt = fj.compose_partner_briefing_prompt(
-            sub_luis, top_job, rel_ctx, date(2026, 11, 8),
-            fj.PARTNER_STORY_BEATS[rel_ctx["angle_id"]], fj.WEEKDAY_CADENCE[date(2026, 11, 8).weekday()],
-            snapshot, 2, 1, 3, 2, False, language="English",
+        prompt = fj.compose_lucy_note_prompt(
+            sub_luis, top_job, rel_ctx, date(2026, 11, 8), (lens[0], lens[1]), shape,
+            ("read_decide", fj.LUCY_PLAY_BY_ID["read_decide"][2]), snapshot, 2, 1, 3, 2, False,
+            language="English", liked=["Director, Platform at Gamma"],
         )
         for needle in (
             "Chapter II: Building the Habit", "Briefing edition together: #7", "Spotlight hiring employer: 'Flex'",
-            "Their screening tool for this role: Workday", "CV_Luis_Gallegos_Flex_Automation_Program_Lead.docx",
-            "Yesterday's spotlight employer: HPE", "Yesterday's micro-challenge:", "Speed Is A Status Signal",
-            "RECENT_HEADLINES_TO_AVOID: 'Their Robot Is Now Our Doorman'", "Language to write in: English",
-            "109 across 9 ATS platforms", "First name: Luis",
+            "CV_Luis_Gallegos_Flex_Automation_Program_Lead.docx", "Yesterday's spotlight employer: HPE",
+            "Yesterday's play: 'Open HPE's portal", f"Lens #{rel_ctx['angle_id'] + 1} '{lens[0]}': {lens[1]}",
+            f"Shape '{shape[0]}': {shape[1]}", "Play 'read_decide':", "Language to write in: English",
+            "Employer career portals swept: 109", "First name: Luis", "Roles they liked recently (they pressed Like): Director, Platform at Gamma",
+            "Recent headlines, never reuse or paraphrase: 'Momentum Is a Muscle'",
+            "Recent openings, start differently: 'momentum is a muscle'",
+            "=== DO NOT REPEAT (variety is the product) ===",
         ):
             self.assertIn(needle, prompt)
-        self.assertIn("Us vs. Their Machine", fj.DAILY_MOTIVATION_SYSTEM_PROMPT)
-        self.assertIn("FORBIDDEN vocabulary", fj.DAILY_MOTIVATION_SYSTEM_PROMPT)
+        self.assertIsNone(fj._BRIEFING_THEME_RE.search(prompt))
+        self.assertIn("NOT THE THEME", fj.DAILY_MOTIVATION_SYSTEM_PROMPT)
+        self.assertIn("VARIETY IS THE PRODUCT", fj.DAILY_MOTIVATION_SYSTEM_PROMPT)
+        self.assertNotIn("Us vs. Their Machine", fj.DAILY_MOTIVATION_SYSTEM_PROMPT)
         self.assertEqual(len(fj.PARTNER_STORY_BEATS), len(fj.DAILY_INSIDER_VAULT))
 
-        # 2. Quality gate: dishonest vocabulary, placeholders and near-duplicate headlines are rejected
+        # 2. Quality gate
         good = {
-            "subject_spark": "Flex Just Blinked", "chapter_title": "The Doorman Switches Sides",
-            "headline": "Flex Built A Gate. We Brought The Key.",
-            "message": "Luis, Flex runs its screening through an automated parser that ranks structure and keywords long before a human reads a name. Last night we rebuilt your automation and process-excellence record in that exact dialect, so the machine that was designed to say no now opens the door. Your Word CV is attached; the gate is already half open.",
-            "their_ai_vs_our_ai": "Workday parses your CV into fields and recruiters filter by exact skill terms; your attached CV uses a single clean column with your real RPA and Power Platform vocabulary so it parses perfectly.",
-            "connection_ps": "Seventh morning in a row together, Luis: 109 portals swept, HPE yesterday, Flex today, and I will keep the radar warm.",
-            "micro_challenge": "Open the Flex posting, upload CV_Luis_Gallegos_Flex_Automation_Program_Lead.docx, and hit submit before your first meeting.",
-            "partner_signoff": "Shoulder to shoulder. Lucy",
-            "story_beat": "Lucy framed Flex's parser as a doorman and sent Luis after the Automation Program Lead role.",
+            "subject_spark": "Flex Reads Carefully", "note_title": "The first readers",
+            "headline": "Flex Is Still Reading Every Application.",
+            "message": "Luis, Flex posted this role two days ago, which means the person hiring is still opening each application with real attention. Your automation programme work is exactly what the posting asks for, in their own words. Read the first three requirements and decide; the careful reader on their side deserves a careful answer from you.",
+            "micro_challenge": "Read the first three requirements in Flex's posting and decide in sixty seconds: apply with the attached CV, skip, or save for the weekend.",
+            "story_beat": "Lucy framed Flex's fresh posting as a careful reader and asked Luis to read and decide.",
         }
-        ok, _ = fj._briefing_pack_quality(good, "Luis", rel_ctx["recent_headlines"])
-        self.assertTrue(ok)
-        bad_vocab = dict(good, message=good["message"] + " We hack their system every night.")
-        ok, reason = fj._briefing_pack_quality(bad_vocab, "Luis", rel_ctx["recent_headlines"])
+        recent = dict(recent_headlines=rel_ctx["recent_headlines"], recent_messages=rel_ctx["recent_messages"],
+                      recent_plays=rel_ctx["recent_plays"])
+        ok, reason = fj._briefing_pack_quality(good, "Luis", **recent)
+        self.assertTrue(ok, reason)
+        rejected = {
+            "forbidden vocabulary": dict(good, message=good["message"] + " We hack their system every night."),
+            "retired software-versus-candidate theme": dict(good, message=good["message"] + " Their machine is our doorman now."),
+            "repeats a recent one": dict(good, headline="Momentum Is a Muscle"),
+            "template braces": dict(good, micro_challenge="Hello {first_name}"),
+            "opens exactly like a recent one": dict(good, message="Luis, momentum is a muscle and today " + good["message"][6:]),
+            "repeats a recent note": dict(good, message=yesterday_note + " Flex again today."),
+            "repeats a recent play": dict(good, micro_challenge="Open HPE's portal today and upload the attached CV before 10 AM."),
+            "pointed at roles below": dict(good, message=good["message"] + " The top card below is Flex."),
+        }
+        for expected, draft in rejected.items():
+            ok, reason = fj._briefing_pack_quality(draft, "Luis", quiet_day=(expected == "pointed at roles below"), **recent)
+            self.assertFalse(ok, expected)
+            self.assertIn(expected, reason)
+        # worn-out words: three recent notes leaning on the same images make them off limits
+        worn_notes = [f"Luis, leverage and momentum again, note {n}, posture is all." for n in range(3)]
+        self.assertEqual(fj.worn_words(worn_notes, skip=("Luis", "Flex")), ["leverage", "momentum", "posture"])
+        self.assertEqual(fj.worn_words(worn_notes[:2]), [])                   # twice is not yet worn
+        ok, reason = fj._briefing_pack_quality(dict(good, message=good["message"] + " Leverage and momentum, Luis."), "Luis",
+                                               worn=["leverage", "momentum"], **recent)
         self.assertFalse(ok)
-        self.assertIn("forbidden vocabulary", reason)
-        ok, reason = fj._briefing_pack_quality(dict(good, headline="Their Robot Is Now Our Doorman"), "Luis", rel_ctx["recent_headlines"])
+        self.assertIn("worn out lately (leverage, momentum)", reason)
+        # no CV today: a note that mentions one is refused
+        ok, reason = fj._briefing_pack_quality(good, "Luis", cv_attached=False, **recent)
         self.assertFalse(ok)
-        ok, reason = fj._briefing_pack_quality(dict(good, connection_ps="Hello {first_name}"), "Luis", [])
-        self.assertFalse(ok)
-        self.assertIn("template braces", reason)
+        self.assertIn("no CV is attached today", reason)
 
-        # 3. One revision round: first draft uses forbidden vocabulary -> rejected -> revised draft accepted
+        # 3. One revision round: first draft falls back on the old theme -> rejected -> revised draft accepted
         calls = []
 
         def scripted_gemini(prompt_text, **kwargs):
             calls.append(prompt_text)
             if len(calls) == 1:
-                return dict(good, headline="We Cheat Their Filter Daily")
+                return dict(good, headline="Their Robot Is Now Our Doorman")
             return dict(good)
 
         with patch.dict(os.environ, {"GEMINI_API_KEY": "valid-key"}), patch("fetch_jobs._invoke_gemini_json", side_effect=scripted_gemini):
             pack = fj.generate_daily_briefing_pack(sub_luis, top_job, 2, 1, 3, date(2026, 11, 8), rel_ctx=rel_ctx, cvs_today_count=2)
         self.assertEqual(len(calls), 2)
         self.assertIn("REVISION NOTE", calls[1])
-        self.assertIn("forbidden vocabulary", calls[1])
+        self.assertIn("retired software-versus-candidate theme", calls[1])
         self.assertEqual(pack["briefing_source"], "gemini")
         self.assertTrue(pack["briefing_revised"])
         self.assertEqual(pack["headline"], good["headline"])
-        self.assertEqual(pack["chapter_title"], "The Doorman Switches Sides")
-        self.assertEqual(pack["partner_signoff"], "Shoulder to shoulder. Lucy")
+        self.assertEqual(pack["note_title"], "The first readers")
         self.assertEqual(pack["spotlight_company"], "Flex")
+        self.assertEqual((pack["lens_title"], pack["shape"]), (lens[0], shape[0]))
+        self.assertIn(pack["move"], fj.LUCY_PLAY_BY_ID)
+        self.assertNotIn("their_ai_vs_our_ai", pack)
+        self.assertLess(pack["closest_recent_note"], 0.45)
 
-        # 4. The email shows two things from the pack, the inspiration (headline + message) and the
-        #    60-second play, under the chapter label. The intel, Lucy's connection note and the
-        #    sign-off are still written into the pack but are not shown (HTML + plain text)
+        # 4. The email shows the note's title, the inspiration and the play (HTML + plain text).
+        #    The draft mentions the attached CV, so a CV must really be attached for it to pass.
         with patch.dict(os.environ, {"GEMINI_API_KEY": "valid-key"}), patch("fetch_jobs._invoke_gemini_json", return_value=dict(good)):
-            msg = fj.build_email_message([dict(top_job)], 3, sub_luis, date(2026, 11, 8), "sender@gmail.com", sub_state=sub_state, board_count=109)
+            msg = fj.build_email_message([dict(top_job)], 3, sub_luis, date(2026, 11, 8), "sender@gmail.com", sub_state=sub_state,
+                                         board_count=109, attachments=[(top_job["cv_filename"], b"docx bytes")])
+            unattached = fj.build_email_message([dict(top_job)], 3, sub_luis, date(2026, 11, 8), "sender@gmail.com",
+                                                sub_state=sub_state, board_count=109)
+        self.assertNotIn(good["headline"], unattached.get_body(preferencelist=("plain",)).get_content())   # refused: no CV attached
         html_part = msg.get_body(preferencelist=("html",)).get_content()
         plain_part = msg.get_body(preferencelist=("plain",)).get_content()
-        self.assertIn("Chapter 7: The Doorman Switches Sides", html_part)
-        self.assertIn("Flex Built A Gate. We Brought The Key.", html_part)
+        self.assertIn("Lucy&rsquo;s note &middot; The first readers", html_part)
+        self.assertIn("Flex Is Still Reading Every Application.", html_part)
         self.assertEqual(html_part.count(fj.html.escape(good["message"])), 2)      # hidden preheader + Lucy's card
         self.assertIn("Today&rsquo;s 60-second play", html_part)
-        self.assertIn("Open the Flex posting, upload", html_part)
-        self.assertIn("Us vs. Their Machine · Chapter 7", plain_part)
+        self.assertIn("Read the first three requirements in Flex", html_part)
+        self.assertIn("Lucy's note · The first readers", plain_part)
         self.assertIn(good["message"], plain_part)
         self.assertIn("Today's 60-second play: " + good["micro_challenge"], plain_part)
         for part in (html_part, plain_part):
-            for dropped in ("Their AI vs. Our AI", "Corner:", "Shoulder to shoulder",
-                            good["their_ai_vs_our_ai"][:40], good["connection_ps"][:40]):
+            for dropped in ("Their AI vs. Our AI", "Corner:", "Shoulder to shoulder", "Us vs.", "Chapter 7"):
                 self.assertNotIn(dropped, part)
-        self.assertIn("Flex Just Blinked", html_part)          # subject spark lives in the preheader
+        self.assertIn("Flex Reads Carefully", html_part)          # subject spark lives in the preheader
         self.assertIn("1 new role for you · Flex", msg["Subject"])
 
-        # 5. Continuity memory persists story beats, last micro-challenge and last spotlight employer
+        # 5. Continuity memory persists story beats, the note, the play, the lens, shape and play type
         fj.commit_relationship_state(sub_state, rel_ctx, pack, [top_job], date(2026, 11, 8))
         rel = sub_state["relationship"]
         self.assertEqual(rel["edition"], 7)
         self.assertEqual(rel["last_spotlight_company"], "Flex")
         self.assertEqual(rel["last_briefing_source"], "gemini")
         self.assertTrue(rel["recent_story_beats"][-1].startswith("Ed. #7 (2026-11-08):"))
-        self.assertIn("doorman", rel["recent_story_beats"][-1])
+        self.assertIn("careful reader", rel["recent_story_beats"][-1])
         self.assertIn(good["headline"], rel["recent_headlines"])
+        self.assertEqual(rel["recent_messages"][-1], good["message"])
+        self.assertEqual(rel["recent_plays"][-1], good["micro_challenge"])
+        self.assertEqual(rel["recent_shape_ids"][-1], rel_ctx["shape_id"])
+        self.assertEqual(rel["recent_move_ids"][-1], pack["move"])
+        self.assertEqual(rel["last_variety"]["lens"], lens[0])
 
-        # 6. Two rejected drafts (or Gemini outage) fall back to the deterministic vault, never crash
+        # 6. Two rejected drafts (or a Gemini outage) fall back to the built-in note for the lens,
+        #    which is free of the retired theme and carries the same lens, shape and play
         with patch.dict(os.environ, {"GEMINI_API_KEY": "valid-key"}), patch("fetch_jobs._invoke_gemini_json", return_value=dict(good, message="We hack and cheat " * 6)):
             vault_pack = fj.generate_daily_briefing_pack(sub_luis, top_job, 2, 1, 3, date(2026, 11, 8), rel_ctx=rel_ctx, cvs_today_count=2)
         self.assertEqual(vault_pack["briefing_source"], "vault")
         self.assertIn("Luis", vault_pack["message"])
-        self.assertIn("Workday", vault_pack["their_ai_vs_our_ai"])
-        self.assertTrue(vault_pack["partner_signoff"].endswith("Lucy"))
+        self.assertIsNone(fj._BRIEFING_THEME_RE.search(vault_pack["headline"] + " " + vault_pack["message"]))
+        self.assertEqual(vault_pack["lens_title"], lens[0])
+        self.assertIn("Flex", vault_pack["micro_challenge"] + vault_pack["message"])
+        for key in ("their_ai_vs_our_ai", "connection_ps", "partner_signoff", "cadence_subline", "chapter_title"):
+            self.assertNotIn(key, vault_pack)
 
     def test_30_days_unique_dopamine_messages_and_anti_repeat(self):
         """Every single day across 30 consecutive days—and even multiple runs on the same day—
@@ -2116,8 +2159,7 @@ class EndToEnd(unittest.TestCase):
         self.assertIn(fj.html.escape(pack["micro_challenge"]), body)
         self.assertLess(body.index("Today&rsquo;s 60-second play"), body.index("Director, Platform &lt;Ops&gt;"))
         self.assertLess(plain.index("Today's 60-second play: "), plain.index("\n- "))
-        dropped = [pack["their_ai_vs_our_ai"], pack["connection_ps"], pack["partner_signoff"], pack["cadence_subline"],
-                   "Their AI vs. Our AI", "Corner:"]
+        dropped = ["Their AI vs. Our AI", "Corner:", "Shoulder to shoulder", "Us vs.", "Chapter "]
         for text in dropped:
             self.assertNotIn(fj.html.escape(text), body)
             self.assertNotIn(text, plain)
@@ -2235,7 +2277,7 @@ class EndToEnd(unittest.TestCase):
     def test_fallback_note_and_play_never_point_at_a_cv_that_is_not_there(self):
         """When Gemini does not write Lucy's note, built-in texts are used. On a day without a
         tailored CV neither the note nor the 60-second play may tell the reader to open or send
-        one; with a CV attached the note for the day's angle is used as before; and a quiet-day
+        one; with a CV attached the note for the day's lens is used as before; and a quiet-day
         play mentions a tailored CV only once one has been built for the subscriber."""
         from datetime import timedelta
 
@@ -2248,44 +2290,142 @@ class EndToEnd(unittest.TestCase):
         def rel(angle, edition, cvs_so_far=0):
             return {"edition": edition, "streak_days": 1, "total_roles_surfaced": 3, "total_cvs_tailored": cvs_so_far,
                     "recent_angle_ids": [], "recent_headlines": [], "recent_story_beats": [], "angle_id": angle,
-                    "board_count": 109, "milestone_badge": ""}
+                    "shape_id": edition % len(fj.LUCY_SHAPES), "seed": edition * 11, "board_count": 109, "milestone_badge": ""}
 
         def shown(pack):
             return " ".join(pack[k] for k in ("headline", "message", "micro_challenge"))
 
         # The built-in texts really do contain such claims, so the check below is not vacuous
-        self.assertGreaterEqual(sum(bool(claim.search(" ".join(note))) for note in fj.DAILY_INSIDER_VAULT), 10)
-        self.assertTrue(all(claim.search(play) for play in fj.DAILY_MICRO_CHALLENGES))
+        self.assertGreaterEqual(sum(bool(claim.search(" ".join(note))) for note in fj.DAILY_INSIDER_VAULT), 3)
+        self.assertTrue(any(claim.search(play) for play in fj.DAILY_MICRO_CHALLENGES))
         self.assertFalse(any(claim.search(play) for play in fj.DAILY_MICRO_CHALLENGES_NO_CV))
-        self.assertEqual(len(fj.QUIET_DAY_CHALLENGES_NO_CV), 4)
+        self.assertEqual(len(fj.QUIET_DAY_CHALLENGES) - len(fj.QUIET_DAY_CHALLENGES_NO_CV), 1)
 
-        # Every angle and every play slot on a day with roles
+        # Every lens and a run of editions on a day with roles
         for angle in range(len(fj.DAILY_INSIDER_VAULT)):
             for edition in range(1, 9):
                 without_cv = fj.generate_daily_briefing_pack(sub, job, 1, 1, 2, day, rel_ctx=rel(angle, edition), cvs_today_count=0)
                 self.assertIsNone(claim.search(shown(without_cv)), shown(without_cv))
                 with_cv = fj.generate_daily_briefing_pack(sub, job, 1, 1, 2, day, rel_ctx=rel(angle, edition, 1), cvs_today_count=1)
                 self.assertEqual(with_cv["headline"], fj.DAILY_INSIDER_VAULT[angle][0])
-                self.assertIsNotNone(claim.search(with_cv["micro_challenge"]))
 
-        # Skipping a note never makes a headline repeat while unused notes remain: 20 notes make
-        # no CV claim, and 20 CV-less days in a row use each of them once
+        # Skipping a note never makes a headline repeat while unused notes remain: 29 notes make
+        # no CV claim, and 29 CV-less days in a row use each of them once
         state, headlines = {}, []
-        for offset in range(20):
+        for offset in range(29):
             today = date(2026, 11, 1) + timedelta(days=offset)
             rel_ctx = fj.peek_relationship_context(state, 2, 0, today, board_count=109)
             pack = fj.generate_daily_briefing_pack(sub, job, 1, 1, 2, today, rel_ctx=rel_ctx, cvs_today_count=0)
             headlines.append(pack["headline"])
             fj.commit_relationship_state(state, rel_ctx, pack, [job], today)
-        self.assertEqual(len(set(headlines)), 20)
+        self.assertEqual(len(set(headlines)), 29)
 
-        # Quiet day: no tailored-CV play before the first CV exists; afterwards those plays are allowed
+        # Quiet day: no tailored-CV play before the first CV exists; afterwards that play is allowed
         before = [fj.generate_daily_briefing_pack(sub, None, 0, 0, 0, day, rel_ctx=rel(0, e), quiet_day=True)["micro_challenge"]
-                  for e in range(1, 13)]
+                  for e in range(1, 41)]
         after = [fj.generate_daily_briefing_pack(sub, None, 0, 0, 0, day, rel_ctx=rel(0, e, 3), quiet_day=True)["micro_challenge"]
-                 for e in range(1, 13)]
+                 for e in range(1, 41)]
         self.assertFalse(any(claim.search(play) for play in before))
         self.assertTrue(any(claim.search(play) for play in after))
+
+    def test_lucy_note_varies_lens_shape_and_play_and_quiet_days_do_not_repeat(self):
+        """Variety is enforced, not hoped for. Over a long run the lens never returns before
+        every lens was used, the shape and the play type never repeat within five days, a
+        stretch of quiet mornings cycles through all twenty quiet notes (the old rotation
+        alternated between two), the memory lists stay bounded, and a Gemini draft that repeats
+        yesterday's note is sent back for revision and then replaced by a fresh built-in note."""
+        from datetime import timedelta
+
+        sub = make_subscriber()
+        job = {"key": "k1", "title": "Director, Platform", "company": "Gamma", "location": "Remote - Mexico",
+               "url": "https://example.com/1", "posted_at": "2026-11-08"}
+
+        def run_days(n, quiet, cvs=0, start=date(2026, 11, 1), state=None):
+            state = {} if state is None else state
+            packs = []
+            for offset in range(n):
+                today = start + timedelta(days=offset)
+                rel_ctx = fj.peek_relationship_context(state, 0 if quiet else 2, cvs, today, board_count=109, sub_id="quentin")
+                pack = fj.generate_daily_briefing_pack(sub, None if quiet else job, 1, 1, 0 if quiet else 2, today, rel_ctx=rel_ctx,
+                                                       cvs_today_count=cvs, quiet_day=quiet, likes_available=True)
+                fj.commit_relationship_state(state, rel_ctx, pack, [] if quiet else [job], today)
+                packs.append(pack)
+            return packs, state
+
+        # 1. Sixty days with roles: lenses cycle through all 32 before any returns; shapes and
+        #    play types never repeat within a five-day window; no headline or play text repeats
+        #    within two weeks
+        packs, state = run_days(60, quiet=False, cvs=1)
+        lenses = [p["lens_number"] for p in packs]
+        self.assertEqual(len(set(lenses[:32])), 32)
+        self.assertEqual(len(set(lenses[32:64])), len(lenses[32:64]))
+        for i in range(len(packs)):
+            window = packs[max(0, i - 5):i]
+            self.assertNotIn(packs[i]["shape"], [p["shape"] for p in window], f"shape repeated within 5 days at day {i + 1}")
+            self.assertNotIn(packs[i]["move"], [p["move"] for p in window], f"play type repeated within 5 days at day {i + 1}")
+            self.assertNotIn(packs[i]["micro_challenge"], [p["micro_challenge"] for p in window])
+            self.assertNotIn(packs[i]["headline"], [p["headline"] for p in packs[max(0, i - 14):i]])
+        self.assertEqual(len(set(p["shape"] for p in packs)), len(fj.LUCY_SHAPES))
+        self.assertGreaterEqual(len(set(p["move"] for p in packs)), 8)
+        self.assertIn("like_signal", {p["move"] for p in packs})           # offered because Like buttons exist
+        rel = state["relationship"]
+        self.assertEqual((len(rel["recent_messages"]), len(rel["recent_plays"]), len(rel["recent_headlines"])), (14, 14, 30))
+        self.assertEqual((len(rel["recent_shape_ids"]), len(rel["recent_move_ids"])), (10, 10))
+        self.assertEqual(rel["last_variety"]["lens"], packs[-1]["lens_title"])
+        # ...and without Like buttons that play is never asked for
+        no_like_state = {}
+        for offset in range(20):
+            today = date(2026, 11, 1) + timedelta(days=offset)
+            rel_ctx = fj.peek_relationship_context(no_like_state, 2, 0, today, board_count=109, sub_id="quentin")
+            pack = fj.generate_daily_briefing_pack(sub, job, 1, 1, 2, today, rel_ctx=rel_ctx, likes_available=False)
+            self.assertNotEqual(pack["move"], "like_signal")
+            fj.commit_relationship_state(no_like_state, rel_ctx, pack, [job], today)
+
+        # 2. Twenty quiet mornings in a row use all twenty quiet notes, the plays never repeat
+        #    within five days, and none of them mentions a CV before one was ever built or
+        #    points at roles below
+        quiet_packs, _ = run_days(len(fj.QUIET_DAY_VAULT), quiet=True)
+        self.assertEqual(len({p["headline"] for p in quiet_packs}), len(fj.QUIET_DAY_VAULT))
+        self.assertGreaterEqual(len({p["move"] for p in quiet_packs}), 8)
+        for i in range(len(quiet_packs)):
+            self.assertNotIn(quiet_packs[i]["move"], [p["move"] for p in quiet_packs[max(0, i - 5):i]])
+        for p in quiet_packs:
+            self.assertIsNone(fj._TAILORED_CV_CLAIM_RE.search(p["headline"] + " " + p["message"] + " " + p["micro_challenge"]))
+            self.assertNotRegex(p["message"] + " " + p["micro_challenge"], r"\b(roles?|openings?|postings?) below\b")
+            self.assertIsNone(fj._BRIEFING_THEME_RE.search(p["headline"] + " " + p["message"]))
+        self.assertTrue(all(len(h) <= 46 for h, _ in fj.QUIET_DAY_VAULT + fj.HELD_DAY_VAULT + fj.DAILY_INSIDER_VAULT))
+
+        # 3. Gemini keeps sending yesterday's note: the first draft is sent back with the reason,
+        #    the second is refused too, and the built-in note for the day is used instead
+        state = {}
+        yesterday = {
+            "subject_spark": "A Careful Reader", "note_title": "The first readers",
+            "headline": "Gamma Is Still Reading Every Application.",
+            "message": "Quentin, Gamma posted this role two days ago, which means the person hiring is still opening each application with real attention. Your platform operations work is exactly what the posting asks for. Read the first three requirements and decide; a careful reader on their side deserves a careful answer from you.",
+            "micro_challenge": "Read the first three requirements in Gamma's posting and decide in sixty seconds: apply, skip, or save for the weekend.",
+            "story_beat": "Lucy framed Gamma's fresh posting as a careful reader and asked Quentin to read and decide.",
+        }
+        prompts = []
+
+        def same_note_every_day(prompt_text, **kwargs):
+            prompts.append(prompt_text)
+            return dict(yesterday, headline=yesterday["headline"] if len(prompts) == 1 else "Gamma Reads With Attention.")
+
+        day1 = date(2026, 11, 8)
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "valid-key"}), patch("fetch_jobs._invoke_gemini_json", side_effect=same_note_every_day):
+            rel_ctx = fj.peek_relationship_context(state, 2, 0, day1, board_count=109, sub_id="quentin")
+            first = fj.generate_daily_briefing_pack(sub, job, 1, 1, 2, day1, rel_ctx=rel_ctx)
+            fj.commit_relationship_state(state, rel_ctx, first, [job], day1)
+            self.assertEqual((first["briefing_source"], len(prompts)), ("gemini", 1))
+            rel_ctx = fj.peek_relationship_context(state, 2, 0, day1 + timedelta(days=1), board_count=109, sub_id="quentin")
+            second = fj.generate_daily_briefing_pack(sub, job, 1, 1, 2, day1 + timedelta(days=1), rel_ctx=rel_ctx)
+        self.assertEqual(len(prompts), 3)                                     # day 2: draft + one revision
+        self.assertIn("REVISION NOTE", prompts[2])
+        self.assertRegex(prompts[2], r"repeats a recent (note|play)|opens exactly like a recent one")
+        self.assertIn("Recent openings, start differently: 'gamma posted this role'", prompts[1])
+        self.assertEqual(second["briefing_source"], "vault")
+        self.assertNotEqual(second["headline"], first["headline"])
+        self.assertLess(fj._overlap(second["message"], first["message"]), 0.45)
 
     def test_welcome_email_shares_the_briefing_design_and_promises_only_what_is_switched_on(self):
         """The welcome email is assembled from the same parts as the daily briefing (frame,
@@ -2419,11 +2559,12 @@ class EndToEnd(unittest.TestCase):
         for claim in ("filtered out hundreds", "CV(s) armed", "custom CVs forged so far", "every CV attached below",
                       "latest tailored CV", "CV I tailored"):
             self.assertNotIn(claim, html1)
-        # Her connection note is no longer shown in the email, but the pack keeps it truthful
+        # The pack for such a day comes from the held-day texts and asks for no CV and no application
         paused_pack = fj.generate_daily_briefing_pack(subscriber_cfg, None, 0, 0, 0, date(2026, 11, 5),
                                                       quiet_day=True, held_count=held)
-        self.assertIn("the fit review did not run overnight, so I have nothing vetted to show you yet",
-                      paused_pack["connection_ps"])
+        self.assertIn(paused_pack["headline"], [h for h, _ in fj.HELD_DAY_VAULT])
+        self.assertIn(f"{held} new postings", paused_pack["message"])
+        self.assertEqual(fj.LUCY_PLAY_BY_ID[paused_pack["move"]][1], "quiet")
         state1 = sub_state(self.root)
         self.assertEqual(state1["emailed"], {})                   # held roles are not marked as sent...
         self.assertEqual(state1["rejected_matches"], {})          # ...nor as rejected
