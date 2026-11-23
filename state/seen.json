@@ -331,7 +331,25 @@
      "closest_recent_note": 0.03
     }
    },
-   "rejected_matches": {}
+   "rejected_matches": {},
+   "feedback": {
+    "likes": [
+     {
+      "key": "workday:Avnet:JR-023909",
+      "title": "Mexico Country Manager, Shared Services",
+      "company": "Avnet",
+      "industry": "Electronic Components Distribution & Supply Chain",
+      "date": "2026-11-23",
+      "note": ""
+     }
+    ],
+    "seen_ids": [
+     "<CAPtZqpK5KTzdgBzdFFcxUK1nd7=xTL46FFmWEoibmTqEJNUXqg@mail.gmail.com>"
+    ],
+    "pending_ack": [
+     "workday:Avnet:JR-023909"
+    ]
+   }
   },
   "monica": {
    "emailed": {
@@ -1655,7 +1673,7 @@
     "workday:Flex:WD230517": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Flex:WD229240": {
      "first_seen": "2026-11-09",
@@ -1675,27 +1693,27 @@
     "workday:Flex:WD232022": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Flex:WD233350": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Flex:WD232315": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Flex:WD232378": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Flex:WD232381": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Flex:WD232617": {
      "first_seen": "2026-11-09",
@@ -1705,17 +1723,17 @@
     "workday:Flex:WD230250": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Flex:WD230251": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Flex:WD230252": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Flex:WD228572": {
      "first_seen": "2026-11-09",
@@ -1725,17 +1743,17 @@
     "workday:Flex:WD231537": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Flex:WD231538": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Flex:WD231224": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Flex:WD228021": {
      "first_seen": "2026-11-09",
@@ -1745,17 +1763,17 @@
     "workday:Flex:WD230318": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Flex:WD229836": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Flex:WD229837": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Flex:WD229814": {
      "first_seen": "2026-11-09",
@@ -1765,17 +1783,17 @@
     "workday:Flex:WD224772": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Jabil:J2467745": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Jabil:J2470798": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Jabil:J2464258": {
      "first_seen": "2026-11-09",
@@ -1790,7 +1808,7 @@
     "workday:Jabil:J2467574": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Jabil:J2466768": {
      "first_seen": "2026-11-09",
@@ -1800,7 +1818,7 @@
     "workday:Jabil:J2467030": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Jabil:J2467028": {
      "first_seen": "2026-11-09",
@@ -1810,42 +1828,42 @@
     "workday:Jabil:J2467026": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Jabil:J2465480": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Jabil:J2463976": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Jabil:J2463973": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Jabil:J2461594": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Plexus:R043187": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Plexus:R043298": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Plexus:R043297": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Plexus:R043299": {
      "first_seen": "2026-11-09",
@@ -1855,7 +1873,7 @@
     "workday:Plexus:R043314": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Plexus:R043517": {
      "first_seen": "2026-11-09",
@@ -1870,7 +1888,7 @@
     "workday:Micron:JR114201": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Micron:JR110477": {
      "first_seen": "2026-11-09",
@@ -1880,12 +1898,12 @@
     "workday:Micron:JR104802": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:HP Inc.:3170287": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:HP Inc.:3169324": {
      "first_seen": "2026-11-09",
@@ -1895,77 +1913,77 @@
     "workday:HP Inc.:3164137": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:HP Inc.:3168031": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:HP Inc.:3169771": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:HP Inc.:3169719": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:HP Inc.:3170316": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:HP Inc.:3170076": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:HP Inc.:3170314": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:HP Inc.:3169367": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:HP Inc.:3165014": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:HP Inc.:3168886": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:HP Inc.:3165250": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:HP Inc.:3169264": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:HP Inc.:3168493": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:HP Inc.:3168723": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:HP Inc.:3167363": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Hewlett Packard Enterprise:1212304": {
      "first_seen": "2026-11-09",
@@ -1975,17 +1993,17 @@
     "workday:Hewlett Packard Enterprise:1215663": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Hewlett Packard Enterprise:1216388": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Hewlett Packard Enterprise:1216400": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Hewlett Packard Enterprise:1217234": {
      "first_seen": "2026-11-09",
@@ -1995,32 +2013,32 @@
     "workday:Hewlett Packard Enterprise:1218212": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "greenhouse:Toshiba Global Commerce Solutions:5285456007": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "greenhouse:Toshiba Global Commerce Solutions:5277588007": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Kyndryl:R-69264": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Ciena:R031786": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "greenhouse:Wizeline:7614922": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "greenhouse:Wizeline:7905176": {
      "first_seen": "2026-11-09",
@@ -2030,22 +2048,22 @@
     "smartrecruiters:Bosch:744000159934670": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Brown-Forman (Casa Herradura):JR-00010525": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Brown-Forman (Casa Herradura):JR-00010460": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Mondelēz International:R-180617": {
      "first_seen": "2026-11-09",
      "baseline": true,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "greenhouse:Backbase:8225999": {
      "first_seen": "2026-11-09",
@@ -2055,17 +2073,17 @@
     "workday:HP Inc.:3170313": {
      "first_seen": "2026-11-10",
      "baseline": false,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "smartrecruiters:Bosch:744000160925391": {
      "first_seen": "2026-11-10",
      "baseline": false,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "smartrecruiters:Continental:744000160884904": {
      "first_seen": "2026-11-10",
      "baseline": false,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Flex:WD234045": {
      "first_seen": "2026-11-11",
@@ -2080,17 +2098,17 @@
     "workday:Flex:WD234065": {
      "first_seen": "2026-11-13",
      "baseline": false,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Plexus:R043675": {
      "first_seen": "2026-11-13",
      "baseline": false,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Flex:WD233176": {
      "first_seen": "2026-11-14",
      "baseline": false,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Micron:JR116850": {
      "first_seen": "2026-11-14",
@@ -2100,54 +2118,74 @@
     "eightfold:Mercado Libre:45520687": {
      "first_seen": "2026-11-14",
      "baseline": false,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Avnet:JR-024968": {
      "first_seen": "2026-11-17",
      "baseline": false,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:HP Inc.:3170343": {
      "first_seen": "2026-11-17",
      "baseline": false,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:HP Inc.:3168461": {
      "first_seen": "2026-11-17",
      "baseline": false,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Flex:WD234177": {
      "first_seen": "2026-11-18",
      "baseline": false,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:HP Inc.:3170704": {
      "first_seen": "2026-11-19",
      "baseline": false,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Flex:WD234495": {
      "first_seen": "2026-11-20",
      "baseline": false,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Jabil:J2472689": {
      "first_seen": "2026-11-20",
      "baseline": false,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
     },
     "workday:Citi:261009273": {
      "first_seen": "2026-11-21",
      "baseline": false,
-     "last_seen": "2026-11-22"
+     "last_seen": "2026-11-23"
+    },
+    "workday:Jabil:J2472985": {
+     "first_seen": "2026-11-23",
+     "baseline": false,
+     "last_seen": "2026-11-23"
+    },
+    "workday:Hewlett Packard Enterprise:1218887": {
+     "first_seen": "2026-11-23",
+     "baseline": false,
+     "last_seen": "2026-11-23"
+    },
+    "workday:Hewlett Packard Enterprise:1209562": {
+     "first_seen": "2026-11-23",
+     "baseline": false,
+     "last_seen": "2026-11-23"
+    },
+    "smartrecruiters:Bosch:744000163290369": {
+     "first_seen": "2026-11-23",
+     "baseline": false,
+     "last_seen": "2026-11-23"
     }
    },
    "initialized": true,
    "relationship": {
-    "edition": 15,
-    "streak_days": 14,
-    "last_briefing_date": "2026-11-22",
+    "edition": 16,
+    "streak_days": 15,
+    "last_briefing_date": "2026-11-23",
     "total_roles_surfaced": 72,
     "total_cvs_tailored": 26,
     "recent_angle_ids": [
@@ -2165,7 +2203,8 @@
      11,
      13,
      15,
-     17
+     17,
+     4
     ],
     "recent_headlines": [
      "Beat the Crowd While They Procrastinate.",
@@ -2182,10 +2221,10 @@
      "Optionality Changes How You Walk Into Every Meeting.",
      "Another Team's Bottleneck Is Your Promotion.",
      "Stretch seats have less competition because most people self-reject.",
-     "Zero New Postings Means Our Radar Deepens"
+     "Zero New Postings Means Our Radar Deepens",
+     "A Day Late Beats Unchecked."
     ],
     "recent_story_beats": [
-     "Ed. #4 (2026-11-11): Lucy framed 'Posture Changes Outcomes' around HP Inc. (ITAD Business Analyst) and asked Luis for one 60-second application.",
      "Ed. #5 (2026-11-12): Lucy framed 'Their Filter, Our Front Door' around Jabil (Senior Information Technology Project Manager - SAP experience required) and asked Luis for one 60-second application.",
      "Ed. #6 (2026-11-13): Lucy framed 'Write Your Own Promotion Slip' around Plexus (Process Engineer Sr) and asked Luis for one 60-second application.",
      "Ed. #7 (2026-11-14): Lucy framed 'Their Robot, Our Translator' around Mercado Libre (Ingeniero Sr de Mejora Continua (CEDIS / Operaciones)) and asked Luis for one 60-second application.",
@@ -2196,12 +2235,31 @@
      "Ed. #12 (2026-11-19): Lucy framed 'Pipeline Beats Anxiety' around HP Inc. (IT Asset Management Process & Capability Lead) and asked Luis for one 60-second application.",
      "Ed. #13 (2026-11-20): Lucy framed 'The First Fifteen Applicants' around Jabil (Sr. Project Manager - Finance) and asked Luis for one 60-second application.",
      "Ed. #14 (2026-11-21): Lucy delivered briefing fourteen on a quiet Saturday, reminding Luis that stretch seats require no self-rejection and keeping the radar primed for Monday.",
-     "Ed. #15 (2026-11-22): Lucy delivered edition fifteen on a quiet Sunday, keeping the radar active while Luis refined his professional headline."
+     "Ed. #15 (2026-11-22): Lucy delivered edition fifteen on a quiet Sunday, keeping the radar active while Luis refined his professional headline.",
+     "Ed. #16 (2026-11-23): Review paused: Lucy held 4 new postings for the next run instead of sending unreviewed roles to Luis; play 'tune_radar'."
     ],
-    "last_micro_challenge": "Open LinkedIn and sharpen your professional headline to highlight your low-code architecture expertise while the market rests today.",
+    "last_micro_challenge": "Reply to this email with one role title you would love to see on your radar; I will tune the filters around it.",
     "last_spotlight_company": "Jabil",
-    "last_briefing_source": "gemini",
-    "recent_spotlight_keys": []
+    "last_briefing_source": "vault",
+    "recent_spotlight_keys": [],
+    "recent_shape_ids": [
+     0
+    ],
+    "recent_move_ids": [
+     "tune_radar"
+    ],
+    "recent_messages": [
+     "Luis, the radar swept 109 employer portals and found 4 new postings, but I could not finish the fit review. I would rather be a day late than fill your inbox with roles I have not vetted."
+    ],
+    "recent_plays": [
+     "Reply to this email with one role title you would love to see on your radar; I will tune the filters around it."
+    ],
+    "last_variety": {
+     "lens": "Wish lists, not checklists",
+     "shape": "spark",
+     "play": "tune_radar",
+     "closest_recent_note": 0.0
+    }
    },
    "rejected_matches": {
     "workday:Citi:261009273": {
