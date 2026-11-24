@@ -1,5 +1,23 @@
 [
  {
+  "key": "greenhouse:Toshiba Global Commerce Solutions:5301123007",
+  "company": "Toshiba Global Commerce Solutions",
+  "ats": "greenhouse",
+  "title": "Software Quality Director",
+  "location": "Guadalajara Office",
+  "team": "",
+  "url": "https://job-boards.greenhouse.io/toshibaglobalcommercesolutions/jobs/5301123007",
+  "posted_at": "2026-11-23",
+  "company_industry": "Retail Enterprise Hardware, POS Platforms & Commerce Software",
+  "company_description": "Global market-share leader in enterprise retail point-of-sale (POS) systems, self-checkout hardware, and unified retail commerce software, operating a major R&D, software, and operations center in Zapopan/Guadalajara.",
+  "loc_class": "jalisco",
+  "discovered_now": true,
+  "first_seen": "2026-11-24",
+  "baseline": false,
+  "is_new": true,
+  "eff_date": "2026-11-23"
+ },
+ {
   "key": "workday:Flex:WD234211",
   "company": "Flex",
   "ats": "workday",
